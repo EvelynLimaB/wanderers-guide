@@ -36,7 +36,7 @@ import { hideNotification, showNotification } from '@mantine/notifications';
 import { ObjectWithUUID } from '@operations/operation-utils';
 import { executeOperations } from '@operations/operations.main';
 import { makeRequest } from '@requests/request-manager';
-import { Character, InventoryItem, Item, ItemMetaGroupSchema, OperationCharacterResultPackage, Spell, Trait } from '@schemas/content';
+import { Character, InventoryItem, Item, ItemMetaCategorySchema, ItemMetaGroupSchema, OperationCharacterResultPackage, Spell, Trait } from '@schemas/content';
 import { Operation } from '@schemas/operations';
 import { lengthenLabels, labelToVariable } from '@variables/variable-utils';
 import { cloneDeep } from 'lodash-es';
@@ -389,7 +389,7 @@ async function createReferenceItem(
 
   try {
     const created = await upsertItem(item);
-    return created ? (created === true ? item : created) : null;
+    return created;
   } catch (error) {
     console.warn(`Could not create Pathbuilder reference item "${ref.name}":`, error);
     warnings.push(`item: failed to create Pathbuilder reference for "${ref.name}"`);
@@ -413,14 +413,14 @@ async function createReferenceSpell(
     availability: null,
     cast: '',
     traits: [],
-    defense: undefined,
-    cost: undefined,
-    trigger: undefined,
-    requirements: undefined,
-    range: undefined,
-    area: undefined,
-    targets: undefined,
-    duration: undefined,
+    defense: null,
+    cost: null,
+    trigger: null,
+    requirements: null,
+    range: null,
+    area: null,
+    targets: null,
+    duration: null,
     description:
       `Imported from Pathbuilder as a reference. Wanderer's Guide did not have a matching spell record at import time. Original spell key: ${spell.rawKey}`,
     heightened: {},
@@ -439,7 +439,7 @@ async function createReferenceSpell(
 
   try {
     const created = await upsertSpell(item);
-    return created ? (created === true ? item : created) : null;
+    return created;
   } catch {
     return null;
   }
@@ -554,10 +554,15 @@ async function createCustomItem(
                   : (baseDamage.die as string | null | undefined) ?? null,
               damageType: inferredDamageType,
             },
-            category:
-              (customFile.group ?? '').toLowerCase().includes('brawling')
-                ? 'unarmed_attack'
-                : (baseDamage.category as string | undefined) ?? '',
+            category: (() => {
+              const candidate =
+                (customFile.group ?? '').toLowerCase().includes('brawling')
+                  ? 'unarmed_attack'
+                  : baseDamage.category ?? '';
+              return ItemMetaCategorySchema.safeParse(candidate).success
+                ? (candidate as NonNullable<NonNullable<Item['meta_data']>['category']>)
+                : '';
+            })(),
             group: mapMetaGroup(customFile.group) ?? (inferredBaseWeapon?.meta_data?.group as string | undefined),
           }
         : {}),
