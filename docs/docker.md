@@ -23,6 +23,8 @@ docker compose up -d frontend
 The frontend image bakes PUBLIC_SUPABASE_URL and ANON_KEY into the Vite bundle
 at build time. After changing either value, rebuild the frontend image.
 
+The frontend build stage uses Node.js 22, matching the current Supabase client dependency requirement.
+
 Nginx only serves the SPA. It does not proxy /auth/v1, /rest/v1,
 /storage/v1, /functions/v1, or /realtime/v1 to a local Kong. Those
 requests go directly to PUBLIC_SUPABASE_URL.
