@@ -82,6 +82,9 @@ export type ResolvedSpell = {
   spellListIndex?: number;
   heighten: number;
   rawKey: string;
+  /** WG casting source id/name when json.php exposes the spellcasting entry. */
+  source?: string;
+  tradition?: string;
 };
 
 export type ResolvedCustomBuff = {
