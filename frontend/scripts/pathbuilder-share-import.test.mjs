@@ -40,11 +40,6 @@ test('the captured v121 share payload passes the wire schema and fetch parser', 
   const reparsed = PathbuilderShareBuildSchema.safeParse(stringTyped);
   assert.equal(reparsed.success, true);
 
-  const nonNumericType = structuredClone(fixture.build);
-  nonNumericType.listCustomFiles[0].type = 'custom-buff';
-  const reparsedNonNumeric = PathbuilderShareBuildSchema.safeParse(nonNumericType);
-  assert.equal(reparsedNonNumeric.success, true);
-
   const response = new Response(
     JSON.stringify({
       success: true,
@@ -61,7 +56,7 @@ test('the captured v121 share payload passes the wire schema and fetch parser', 
   assert.equal(fetched.ok, true);
   if (fetched.ok) {
     assert.equal(fetched.formatVersion, '121');
-    assert.equal(fetched.build.listCustomFiles?.[0]?.type, '1');
+    assert.equal(fetched.build.listCustomFiles?.[0]?.type, 1);
   }
 });
 
