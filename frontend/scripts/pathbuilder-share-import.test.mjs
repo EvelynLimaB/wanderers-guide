@@ -202,7 +202,7 @@ test('spells use spellName from the value, and flag the missing casting source',
 
   const source = resolved.unresolved.find((u) => u.kind === 'spell-source');
   assert.ok(source);
-  assert.match(source.reason, /json\\.php/);
+  assert.match(source.reason, /json\.php/);
 });
 
 test('active custom buffs resolve through the Custom File index', () => {
