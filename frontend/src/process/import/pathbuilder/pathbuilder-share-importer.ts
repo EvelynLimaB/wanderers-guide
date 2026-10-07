@@ -753,6 +753,9 @@ async function resolveSelections(
     ...resolved.feats.map((feat) => ({ name: feat.name, level: feat.level ?? 1 })),
     ...resolved.abilityBoosts.map((boost) => ({ name: lengthenLabels(boost.ability), level: boost.level })),
     ...resolved.skillIncreases.map((increase) => ({ name: increase.skill, level: increase.level })),
+    // Class/background/ancestry operations often ask for additional trained skills at level 1.
+    // The share payload records these independently from hashMapSkillIncreases.
+    ...resolved.trainedSkills.map((skill) => ({ name: skill, level: 1 })),
     ...resolved.specialSelections.map((special) => ({
       name: special.value,
       level: slotLevel.get(special.slot) ?? 1,
