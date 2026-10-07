@@ -42,8 +42,8 @@ export const PathbuilderCustomEffectSchema = z
   .object({
     effectType: z.number().nullish(),
     bonusAmount: z.number().nullish(),
-    reference: z.string().optional(),
-    proficiencyName: z.string().optional(),
+    reference: z.string().nullish(),
+    proficiencyName: z.string().nullish(),
   })
   .passthrough();
 export type PathbuilderCustomEffect = z.infer<typeof PathbuilderCustomEffectSchema>;
