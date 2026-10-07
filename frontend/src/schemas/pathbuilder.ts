@@ -57,20 +57,20 @@ export const PathbuilderCustomFileSchema = z
   .object({
     uniqueIdentifier: z.string(),
     type: z.number(),
-    name: z.string().optional(),
-    description: z.string().optional(),
-    itemLevel: z.number().optional(),
-    price: z.number().optional(),
-    hands: z.string().optional(),
-    src: z.string().optional(),
-    proficiencyType: z.number().optional(),
-    damage: z.number().optional(),
-    damageType: z.string().optional(),
-    group: z.string().optional(),
-    weaponTraits: z.string().optional(),
-    action0: z.number().optional(),
-    action0desc: z.string().optional(),
-    listCustomEffects: z.array(PathbuilderCustomEffectSchema).optional(),
+    name: z.string().nullish(),
+    description: z.string().nullish(),
+    itemLevel: z.number().nullish(),
+    price: z.number().nullish(),
+    hands: z.string().nullish(),
+    src: z.string().nullish(),
+    proficiencyType: z.number().nullish(),
+    damage: z.number().nullish(),
+    damageType: z.string().nullish(),
+    group: z.string().nullish(),
+    weaponTraits: z.string().nullish(),
+    action0: z.number().nullish(),
+    action0desc: z.string().nullish(),
+    listCustomEffects: z.array(PathbuilderCustomEffectSchema).nullish(),
   })
   .passthrough();
 export type PathbuilderCustomFile = z.infer<typeof PathbuilderCustomFileSchema>;
@@ -86,8 +86,8 @@ export const PathbuilderCustomFileEntrySchema = z
   .object({
     type: z.number(),
     json: z.string(),
-    timestamp: z.string().optional(),
-    uniqueIdentifier: z.string().optional(),
+    timestamp: z.string().nullish(),
+    uniqueIdentifier: z.string().nullish(),
   })
   .passthrough();
 export type PathbuilderCustomFileEntry = z.infer<typeof PathbuilderCustomFileEntrySchema>;
@@ -97,31 +97,31 @@ export type PathbuilderCustomFileEntry = z.infer<typeof PathbuilderCustomFileEnt
 export const PathbuilderPlayerWeaponSchema = z
   .object({
     weaponName: z.string(),
-    amount: z.number().optional(),
-    attackAbilityRef: z.number().optional(),
-    itemStriking: z.number().optional(),
-    potency: z.number().optional(),
-    listPropertyRunes: z.array(z.string()).optional(),
-    nameOverride: z.string().optional(),
-    use2H: z.boolean().optional(),
+    amount: z.number().nullish(),
+    attackAbilityRef: z.number().nullish(),
+    itemStriking: z.number().nullish(),
+    potency: z.number().nullish(),
+    listPropertyRunes: z.array(z.string()).nullish(),
+    nameOverride: z.string().nullish(),
+    use2H: z.boolean().nullish(),
   })
   .passthrough();
 export type PathbuilderPlayerWeapon = z.infer<typeof PathbuilderPlayerWeaponSchema>;
 
 export const PathbuilderArmorSchema = z
   .object({
-    armorName: z.string().optional(),
-    potency: z.number().optional(),
-    listPropertyRunes: z.array(z.string()).optional(),
+    armorName: z.string().nullish(),
+    potency: z.number().nullish(),
+    listPropertyRunes: z.array(z.string()).nullish(),
   })
   .passthrough();
 export type PathbuilderArmor = z.infer<typeof PathbuilderArmorSchema>;
 
 export const PathbuilderShieldSchema = z
   .object({
-    shieldName: z.string().optional(),
-    shieldDamage: z.number().optional(),
-    potency: z.number().optional(),
+    shieldName: z.string().nullish(),
+    shieldDamage: z.number().nullish(),
+    potency: z.number().nullish(),
   })
   .passthrough();
 export type PathbuilderShield = z.infer<typeof PathbuilderShieldSchema>;
@@ -129,25 +129,25 @@ export type PathbuilderShield = z.infer<typeof PathbuilderShieldSchema>;
 export const PathbuilderEquipmentEntrySchema = z
   .object({
     name: z.string(),
-    quantity: z.number().optional(),
-    inContainerID: z.string().optional(),
+    quantity: z.number().nullish(),
+    inContainerID: z.string().nullish(),
   })
   .passthrough();
 export type PathbuilderEquipmentEntry = z.infer<typeof PathbuilderEquipmentEntrySchema>;
 
 export const PathbuilderContainerSchema = z
   .object({
-    containerName: z.string().optional(),
-    backpack: z.boolean().optional(),
+    containerName: z.string().nullish(),
+    backpack: z.boolean().nullish(),
   })
   .passthrough();
 export type PathbuilderContainer = z.infer<typeof PathbuilderContainerSchema>;
 
 export const PathbuilderSpellEntrySchema = z
   .object({
-    spellList: z.number().optional(),
-    spellName: z.string().optional(),
-    heighten: z.number().optional(),
+    spellList: z.number().nullish(),
+    spellName: z.string().nullish(),
+    heighten: z.number().nullish(),
   })
   .passthrough();
 export type PathbuilderSpellEntry = z.infer<typeof PathbuilderSpellEntrySchema>;
@@ -158,53 +158,53 @@ export type PathbuilderSpellEntry = z.infer<typeof PathbuilderSpellEntrySchema>;
  */
 export const PathbuilderCharacterDataSchema = z
   .object({
-    characterName: z.string().optional(),
-    characterLevel: z.number().optional(),
-    ancestry: z.string().optional(),
-    className: z.string().optional(),
-    background: z.string().optional(),
-    heritage: z.string().optional(),
-    gender: z.string().optional(),
-    alignment: z.string().optional(),
-    deity: z.string().optional(),
-    age: z.string().optional(),
-    gold: z.number().optional(),
-    notes: z.string().optional(),
-    webID: z.string().optional(),
-    emailedBuildID: z.number().optional(),
+    characterName: z.string().nullish(),
+    characterLevel: z.number().nullish(),
+    ancestry: z.string().nullish(),
+    className: z.string().nullish(),
+    background: z.string().nullish(),
+    heritage: z.string().nullish(),
+    gender: z.string().nullish(),
+    alignment: z.string().nullish(),
+    deity: z.string().nullish(),
+    age: z.string().nullish(),
+    gold: z.number().nullish(),
+    notes: z.string().nullish(),
+    webID: z.string().nullish(),
+    emailedBuildID: z.number().nullish(),
 
-    classOptionalTrainedSkill: z.string().optional(),
-    listLanguages: z.array(z.string()).optional(),
+    classOptionalTrainedSkill: z.string().nullish(),
+    listLanguages: z.array(z.string()).nullish(),
     dialects: z.array(z.string().nullish()).optional(),
 
-    hashMapAbilityBoosts: z.record(z.string(), z.array(z.number())).optional(),
-    hashMapAncestryFreeBoostSelections: z.record(z.string(), z.number()).optional(),
-    hashMapSkillIncreases: z.record(z.string(), z.array(z.string())).optional(),
-    hashMapCustomSkillIncreases: z.record(z.string(), z.number()).optional(),
-    hashMapTrainedOnlySkillChoices: z.record(z.string(), z.array(z.string())).optional(),
+    hashMapAbilityBoosts: z.record(z.string(), z.array(z.number())).nullish(),
+    hashMapAncestryFreeBoostSelections: z.record(z.string(), z.number()).nullish(),
+    hashMapSkillIncreases: z.record(z.string(), z.array(z.string())).nullish(),
+    hashMapCustomSkillIncreases: z.record(z.string(), z.number()).nullish(),
+    hashMapTrainedOnlySkillChoices: z.record(z.string(), z.array(z.string())).nullish(),
 
-    hashMapFeatSelections: z.record(z.string(), z.string()).optional(),
-    hashMapSpecialSelections: z.record(z.string(), z.record(z.string(), z.string())).optional(),
+    hashMapFeatSelections: z.record(z.string(), z.string()).nullish(),
+    hashMapSpecialSelections: z.record(z.string(), z.record(z.string(), z.string())).nullish(),
 
-    listPlayerWeapons: z.array(PathbuilderPlayerWeaponSchema).optional(),
-    playerArmor: PathbuilderArmorSchema.optional(),
-    playerShieldNew: PathbuilderShieldSchema.optional(),
-    listPlayerEquipment: z.array(PathbuilderEquipmentEntrySchema).optional(),
-    hashMapEquipmentContainers: z.record(z.string(), PathbuilderContainerSchema).optional(),
+    listPlayerWeapons: z.array(PathbuilderPlayerWeaponSchema).nullish(),
+    playerArmor: PathbuilderArmorSchema.nullish(),
+    playerShieldNew: PathbuilderShieldSchema.nullish(),
+    listPlayerEquipment: z.array(PathbuilderEquipmentEntrySchema).nullish(),
+    hashMapEquipmentContainers: z.record(z.string(), PathbuilderContainerSchema).nullish(),
 
-    hashMapPlayerSpells: z.record(z.string(), PathbuilderSpellEntrySchema).optional(),
-    spentSpellPoints: z.number().optional(),
+    hashMapPlayerSpells: z.record(z.string(), PathbuilderSpellEntrySchema).nullish(),
+    spentSpellPoints: z.number().nullish(),
 
-    hashMapActiveCustomBuffs: z.record(z.string(), z.number()).optional(),
+    hashMapActiveCustomBuffs: z.record(z.string(), z.number()).nullish(),
 
-    freeArchetype: z.boolean().optional(),
-    ancestryParagon: z.boolean().optional(),
-    gradualAbilityBoost: z.boolean().optional(),
-    remastered: z.boolean().optional(),
-    useUpdatedSpells: z.boolean().optional(),
-    allowHalfHeritages: z.boolean().optional(),
-    listDisabledRulebooks: z.array(z.string()).optional(),
-    listOptInBooks: z.array(z.string()).optional(),
+    freeArchetype: z.boolean().nullish(),
+    ancestryParagon: z.boolean().nullish(),
+    gradualAbilityBoost: z.boolean().nullish(),
+    remastered: z.boolean().nullish(),
+    useUpdatedSpells: z.boolean().nullish(),
+    allowHalfHeritages: z.boolean().nullish(),
+    listDisabledRulebooks: z.array(z.string()).nullish(),
+    listOptInBooks: z.array(z.string()).nullish(),
   })
   .passthrough();
 export type PathbuilderCharacterData = z.infer<typeof PathbuilderCharacterDataSchema>;
@@ -221,9 +221,9 @@ export type PathbuilderShareBuild = z.infer<typeof PathbuilderShareBuildSchema>;
 export const PathbuilderShareResponseSchema = z
   .object({
     success: z.boolean(),
-    version: z.string().optional(),
-    build: z.string().optional(),
-    error: z.string().optional(),
+    version: z.string().nullish(),
+    build: z.string().nullish(),
+    error: z.string().nullish(),
   })
   .passthrough();
 export type PathbuilderShareResponse = z.infer<typeof PathbuilderShareResponseSchema>;
@@ -234,16 +234,16 @@ export type PathbuilderShareResponse = z.infer<typeof PathbuilderShareResponseSc
  */
 export const PathbuilderDerivedBuildSchema = z
   .object({
-    name: z.string().optional(),
+    name: z.string().nullish(),
     class: z.string().optional(),
-    ancestry: z.string().optional(),
-    heritage: z.string().optional(),
-    background: z.string().optional(),
+    ancestry: z.string().nullish(),
+    heritage: z.string().nullish(),
+    background: z.string().nullish(),
     level: z.number().optional(),
-    alignment: z.string().optional(),
-    deity: z.string().optional(),
-    gender: z.string().optional(),
-    age: z.string().optional(),
+    alignment: z.string().nullish(),
+    deity: z.string().nullish(),
+    gender: z.string().nullish(),
+    age: z.string().nullish(),
     money: z
       .object({
         cp: z.number().optional(),
