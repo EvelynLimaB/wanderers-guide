@@ -189,6 +189,9 @@ verify_jwt = false
 [functions.create-item]
 verify_jwt = false
 
+[functions.create-pathbuilder-import]
+verify_jwt = false
+
 
 [functions.create-language]
 verify_jwt = false
