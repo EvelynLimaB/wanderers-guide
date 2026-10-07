@@ -320,6 +320,21 @@ async function fetchTraitMap(): Promise<Map<string, number>> {
 }
 
 /** Convert one Pathbuilder Custom File to a WG Item while preserving the raw file in meta_data. */
+/**
+ * The Custom File discriminator is useful for identifying known Pathbuilder
+ * file kinds, but it is not a stable contract. Keep the original value in
+ * meta_data.pathbuilder.raw and only expose a numeric discriminator to the WG
+ * metadata schema when Pathbuilder actually provided one.
+ */
+function numericPathbuilderType(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  }
+  return undefined;
+}
+
 async function createCustomItem(
   customFile: PathbuilderCustomFile,
   sourceId: number,
@@ -390,7 +405,7 @@ async function createCustomItem(
       // re-export can work from the original rather than from our mapping.
       pathbuilder: {
         uniqueIdentifier: customFile.uniqueIdentifier,
-        type: customFile.type,
+        type: numericPathbuilderType(customFile.type),
         source: customFile.src ?? 'Custom',
         raw: customFile,
       },
