@@ -168,7 +168,7 @@ export function resolveWeapons(
       weapon.weaponName,
       customFiles,
       weapon.amount ?? 1,
-      weapon.nameOverride,
+      weapon.nameOverride ?? undefined,
       unresolved,
       'weapon'
     );
@@ -180,7 +180,7 @@ export function resolveWeapons(
       strikingLabel: STRIKING_LABELS[striking],
       runes: weapon.listPropertyRunes ?? [],
       twoHanded: weapon.use2H === true,
-      attackAbility: abilityAt(weapon.attackAbilityRef),
+      attackAbility: abilityAt(weapon.attackAbilityRef ?? undefined),
     } satisfies ResolvedWeapon;
   });
 }
@@ -331,9 +331,9 @@ export function resolveBuild(
   const customFiles = buildCustomFileIndex(build?.listCustomFiles);
 
   const { loose, containers } = resolveEquipment(cd, customFiles, unresolved);
-  const weapons = resolveWeapons(cd.listPlayerWeapons, customFiles, unresolved);
-  const buffs = resolveActiveCustomBuffs(cd.hashMapActiveCustomBuffs, customFiles, unresolved);
-  const spells = resolveSpells(cd.hashMapPlayerSpells as Record<string, unknown> | undefined, unresolved);
+  const weapons = resolveWeapons(cd.listPlayerWeapons ?? undefined, customFiles, unresolved);
+  const buffs = resolveActiveCustomBuffs(cd.hashMapActiveCustomBuffs ?? undefined, customFiles, unresolved);
+  const spells = resolveSpells(cd.hashMapPlayerSpells ?? undefined, unresolved);
 
   // Armor: `playerArmor` may carry runes/potency with no name at all, which is
   // what build 1596127 does. That is not an error we can fix here: the armor
@@ -387,16 +387,16 @@ export function resolveBuild(
       free_archetype: cd.freeArchetype === true,
       gradual_attribute_boosts: cd.gradualAbilityBoost === true,
     },
-    abilityBoosts: resolveAbilityBoosts(cd.hashMapAbilityBoosts),
-    skillIncreases: resolveSkillIncreases(cd.hashMapSkillIncreases),
+    abilityBoosts: resolveAbilityBoosts(cd.hashMapAbilityBoosts ?? undefined),
+    skillIncreases: resolveSkillIncreases(cd.hashMapSkillIncreases ?? undefined),
     trainedSkills: [
       ...new Set([
         ...(cd.classOptionalTrainedSkill ? [cd.classOptionalTrainedSkill] : []),
         ...(cd.hashMapTrainedOnlySkillChoices?.standardSelection ?? []),
       ]),
     ],
-    feats: resolveFeats(cd.hashMapFeatSelections),
-    specialSelections: resolveSpecialSelections(cd.hashMapSpecialSelections),
+    feats: resolveFeats(cd.hashMapFeatSelections ?? undefined),
+    specialSelections: resolveSpecialSelections(cd.hashMapSpecialSelections ?? undefined),
     weapons,
     armor,
     armorRunes: armorRaw?.listPropertyRunes ?? [],
