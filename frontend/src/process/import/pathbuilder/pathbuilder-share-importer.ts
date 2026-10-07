@@ -36,7 +36,7 @@ import { hideNotification, showNotification } from '@mantine/notifications';
 import { ObjectWithUUID } from '@operations/operation-utils';
 import { executeOperations } from '@operations/operations.main';
 import { makeRequest } from '@requests/request-manager';
-import { Character, ContentSource, InventoryItem, Item, ItemMetaGroupSchema, OperationCharacterResultPackage, Trait } from '@schemas/content';
+import { Character, InventoryItem, Item, ItemMetaGroupSchema, OperationCharacterResultPackage, Trait } from '@schemas/content';
 import { lengthenLabels, labelToVariable } from '@variables/variable-utils';
 import { cloneDeep } from 'lodash-es';
 
