@@ -29,18 +29,24 @@ const payload = {
 
 async function createStranger(): Promise<{ userId: string; jwt: string }> {
   const email = `pb-stranger-${crypto.randomUUID().slice(0, 8)}@wanderersguide.test`;
+  const password = 'test1234';
   const { data, error } = await admin.auth.admin.createUser({
     email,
-    password: 'test1234',
+    password,
     email_confirm: true,
   });
   if (error || !data?.user) throw error ?? new Error('failed to create stranger');
-  const { data: session, error: sessionError } = await admin.auth.admin.generateLink({
-    type: 'magiclink',
-    email,
+
+  const anon = createClient(SUPABASE_URL, ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
   });
-  if (sessionError) throw sessionError;
-  return { userId: data.user.id, jwt: session?.properties?.action_link ?? '' };
+  const { data: session, error: sessionError } = await anon.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (sessionError || !session?.session) throw sessionError ?? new Error('stranger sign-in failed');
+
+  return { userId: data.user.id, jwt: session.session.access_token };
 }
 
 Deno.test({
@@ -126,6 +132,53 @@ Deno.test({
     assertEquals(stored?.custom_files?.length, 1);
 
     await admin.from('pathbuilder_import').delete().eq('id', id);
+  },
+});
+
+Deno.test({
+  name: 'create-pathbuilder-import: another user cannot update the snapshot',
+  ignore: skip,
+  async fn() {
+    const owner = await seed();
+    const created = await callFunction(
+      'create-pathbuilder-import',
+      { id: -1, ...payload },
+      { token: owner.jwt }
+    );
+    const id = created.body?.data?.id;
+    assert(id, 'expected an id from the insert');
+
+    const stranger = await createStranger();
+    const attempted = await callFunction(
+      'create-pathbuilder-import',
+      {
+        id,
+        character_id: 999999,
+        character_data: { characterName: 'TAKEOVER' },
+        custom_files: [],
+      },
+      { token: stranger.jwt }
+    );
+
+    assertEquals(attempted.body?.status, 'fail');
+    assertEquals(
+      attempted.body?.data?.id,
+      'Import snapshot not found or not owned by the current user'
+    );
+
+    const { data: stored } = await admin
+      .from('pathbuilder_import')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    assertEquals(stored?.user_id, owner.userId);
+    assertEquals(stored?.character_id, null);
+    assertEquals(stored?.character_data?.characterName, 'Test Import');
+    assertEquals(stored?.custom_files?.length, 1);
+
+    await admin.from('pathbuilder_import').delete().eq('id', id);
+    await admin.auth.admin.deleteUser(stranger.userId);
   },
 });
 
