@@ -374,18 +374,44 @@ export function resolveBuild(
   const buffs = resolveActiveCustomBuffs(cd.hashMapActiveCustomBuffs ?? undefined, customFiles, unresolved);
   const spells = resolveSpells(cd.hashMapPlayerSpells ?? undefined, unresolved, options.derived);
 
-  // Armor: `playerArmor` may carry runes/potency with no name at all, which is
-  // what build 1596127 does. That is not an error we can fix here: the armor
-  // lives in a Custom Pack the share payload does not include.
+  // Armor: the share payload may contain only potency/runes or a Custom File UUID.
+  // json.php, when available, includes the resolved armor name, so prefer that as
+  // the lookup name while preserving the original Pathbuilder reference in raw.
   const armorRaw = cd.playerArmor;
+  const derivedArmor =
+    Array.isArray((options.derived as Record<string, unknown> | null | undefined)?.armor)
+      ? (
+          (options.derived as Record<string, unknown>).armor as Array<{ name?: string | null }>
+        )[0]
+      : undefined;
+  const derivedArmorName = derivedArmor?.name ?? undefined;
+
   let armor: ResolvedItemRef | undefined;
-  if (armorRaw?.armorName) {
-    armor = resolveRef(armorRaw.armorName, customFiles, 1, undefined, unresolved, 'armor');
+  const rawArmorName = armorRaw?.armorName;
+  const armorLookupName =
+    rawArmorName && isPathbuilderUuid(rawArmorName)
+      ? derivedArmorName ?? rawArmorName
+      : rawArmorName ?? derivedArmorName;
+
+  if (armorLookupName) {
+    const originalUnresolvedLength = unresolved.length;
+    armor = resolveRef(armorLookupName, customFiles, 1, undefined, unresolved, 'armor');
+    if (
+      rawArmorName &&
+      derivedArmorName &&
+      rawArmorName !== derivedArmorName &&
+      armor.kind === 'standard'
+    ) {
+      armor.raw = rawArmorName;
+    }
+    if (armor.kind === 'standard') {
+      unresolved.splice(originalUnresolvedLength);
+    }
   } else if (armorRaw && ((armorRaw.potency ?? 0) > 0 || (armorRaw.listPropertyRunes?.length ?? 0) > 0)) {
     unresolved.push({
       kind: 'armor',
       ref: JSON.stringify(armorRaw),
-      reason: 'playerArmor has runes/potency but no armorName, so the armor itself is not in listCustomFiles',
+      reason: 'playerArmor has runes/potency but no armor name in either the share payload or json.php',
     });
   }
 
