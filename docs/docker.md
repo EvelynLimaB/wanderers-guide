@@ -1,132 +1,88 @@
-# Self-hosting with Docker Compose (skeleton)
+# Docker Compose deployment
 
-> **Status:** community-supported skeleton, not a production deployment.
-> The codebase targets Supabase cloud; this stack stands up the equivalent
-> services locally so you can run the app on your own server.
+> The default Compose workflow serves the frontend only. The browser connects
+> directly to the Supabase endpoint in PUBLIC_SUPABASE_URL.
+> The bundled local Supabase stack remains available behind the self-hosted
+> profile for deployments that actually want to run Supabase alongside the app.
 
-## What's included
+## Default: external Supabase
 
-| Service     | Image                          | Purpose                               |
-| ----------- | ------------------------------ | ------------------------------------- |
-| `frontend`  | built locally from `frontend/` | The Vite/React app served by nginx    |
-| `kong`      | `kong:2.8.1`                   | API gateway (single entrypoint)       |
-| `auth`      | `supabase/gotrue`              | Authentication                        |
-| `rest`      | `postgrest/postgrest`          | REST over Postgres                    |
-| `storage`   | `supabase/storage-api`         | File storage                          |
-| `meta`      | `supabase/postgres-meta`       | Schema introspection (used by Studio) |
-| `functions` | `supabase/edge-runtime`        | Runs the Deno edge functions          |
-| `studio`    | `supabase/studio` (optional)   | Web UI for the database               |
-| `db`        | `supabase/postgres:15`         | Postgres + Supabase extensions        |
-
-What's **not** included: realtime, analytics/log-stream, image proxy,
-inbucket (mail sink), TLS termination, backups. Add as needed.
-
-## Quickstart
+Set PUBLIC_SUPABASE_URL to the URL that browsers can reach, for example a
+Tailscale hostname, and set ANON_KEY to the matching public anon key.
 
 ```bash
-# 1. Configuration
-cp .env.docker.example .env
+# 1. Put PUBLIC_SUPABASE_URL and ANON_KEY in .env.
 
-# 2. Generate a JWT secret (32+ chars)
-echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
+# 2. Build and start the frontend.
+docker compose build frontend
+docker compose up -d frontend
 
-# 3. Generate ANON_KEY and SERVICE_ROLE_KEY by signing JWTs with that secret.
-#    See https://supabase.com/docs/guides/self-hosting/docker#generate-api-keys
-#    Paste the resulting tokens into .env.
-
-# 4. Bring it up
-docker compose up -d
-
-# 5. Initialize the project schema and bundled content on a fresh database.
-#    This replaces the public schema. Do not run it over an existing installation.
-./data/create-db-docker.sh
-
-# 6. (Optional) Studio for inspecting the DB
-docker compose --profile studio up -d
-
-# 7. Open http://localhost:3000
+# 3. Open http://localhost:3000
 ```
 
-## Wiring notes
+The frontend image bakes PUBLIC_SUPABASE_URL and ANON_KEY into the Vite bundle
+at build time. After changing either value, rebuild the frontend image.
 
-- The frontend image installs the committed lockfile with `npm ci --legacy-peer-deps`,
-  matching CI. Commit `frontend/package-lock.json` whenever dependencies change.
-- `PUBLIC_SUPABASE_URL` is what the **browser** uses to reach kong. On
-  localhost that's `http://localhost:8000`. In a real deployment, proxy
-  this behind a TLS terminator and set it to your public URL.
-  `frontend/nginx.conf` reverse-proxies `/auth/v1`, `/rest/v1`, `/storage/v1`,
-  `/functions/v1` and `/pg/` to kong, so behind a proxy this is just the site
-  origin (no port, no path). It is baked into the bundle at **build** time, so
-  rebuild the frontend image after changing it.
-- Every published port is `${*_BIND:-127.0.0.1}:port`, so the stack is reachable
-  from the host and invisible to the LAN. Rootless Podman cannot bind ports below
-  1024, and nothing here needs to: the TLS terminator owns 443. Set
-  `FRONTEND_BIND=0.0.0.0` only if you deliberately want LAN access.
-- For a Tailscale Serve deployment (rootless Podman, single tailnet hostname,
-  loopback-only ports) see [tailscale-podman](/tailscale-podman).
-- Vite envs (`VITE_*`) are baked into the frontend bundle at build time.
-  After changing `PUBLIC_SUPABASE_URL` or `ANON_KEY`, rebuild:
-  ```bash
-  docker compose build frontend && docker compose up -d frontend
-  ```
-- `ANON_KEY` is intentionally public (it's the browser's API key).
-  Never bake `SERVICE_ROLE_KEY` into the frontend.
+Nginx only serves the SPA. It does not proxy /auth/v1, /rest/v1,
+/storage/v1, /functions/v1, or /realtime/v1 to a local Kong. Those
+requests go directly to PUBLIC_SUPABASE_URL.
+
+## Optional: self-hosted Supabase
+
+The repository still contains the minimal Supabase stack for deployments that
+need it, but those services are disabled by default so they cannot accidentally
+take over ports or intercept the external Supabase configuration.
+
+Start it explicitly with:
+
+```bash
+docker compose --profile self-hosted up -d
+```
+
+For this mode, PUBLIC_SUPABASE_URL must be a URL that the browser can reach
+and that points at the self-hosted Supabase API gateway. If the browser can reach
+the local machine directly, http://localhost:8000 is an option.
+
+The self-hosted services include:
+
+| Service | Purpose |
+| --- | --- |
+| kong | API gateway |
+| auth | Authentication |
+| rest | REST over Postgres |
+| storage | File storage |
+| meta | Schema introspection |
+| functions | Deno edge functions |
+| studio | Optional database UI |
+| db | Postgres + Supabase extensions |
+
+## Configuration notes
+
+- PUBLIC_SUPABASE_URL is the endpoint used by the browser. It is baked into
+  the frontend bundle at build time.
+- ANON_KEY is safe to expose to the browser. Never bake SERVICE_ROLE_KEY
+  into the frontend.
+- Published ports default to loopback. Set FRONTEND_BIND=0.0.0.0 only when
+  deliberate LAN access is required.
+- OAuth redirect URLs and Supabase Auth site URLs must match the public URL used
+  by the browser.
+- frontend/nginx.conf is intentionally a static SPA server. It does not
+  depend on a local Kong instance.
 
 ## Database setup and account recovery
 
-`data/create-db-docker.sh` loads the checked-in schema and sanitized content dump,
-installs the signup trigger, and applies the migrations. Starting Compose alone
-does not install the project tables or content. Initialize a fresh database before
-registering an account or creating characters.
+For a self-hosted database, data/create-db-docker.sh loads the checked-in
+schema and sanitized content dump and is intended for a fresh or disposable
+database. Do not use it to replace the public schema of an existing production
+database.
 
 If an existing installation reports **User not found** after login, verify that
-`data/auth-trigger.sql` is installed. The trigger creates profiles for new accounts.
-It does not repair accounts registered before the trigger was installed. Back up the
-database, then install the trigger and create only the missing profiles:
+data/auth-trigger.sql is installed. The trigger creates profiles for new
+accounts. It does not repair accounts registered before the trigger was installed.
 
-```bash
-docker compose exec -T db psql -U postgres -v ON_ERROR_STOP=1 < data/auth-trigger.sql
-docker compose exec -T db psql -U postgres -v ON_ERROR_STOP=1 <<'SQL'
-INSERT INTO public.public_user (user_id, display_name)
-SELECT id, COALESCE(
-  raw_user_meta_data ->> 'display_name',
-  raw_user_meta_data ->> 'name',
-  raw_user_meta_data ->> 'full_name',
-  split_part(email, '@', 1),
-  'Unknown User'
-)
-FROM auth.users AS account
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.public_user AS profile WHERE profile.user_id = account.id
-);
-SQL
-```
+## Known limitations of the bundled self-hosted skeleton
 
-Content searches also depend on the edge runtime configuration in
-`supabase/functions/main/index.ts`. Its CPU and worker timeout limits allow the
-larger content queries to finish. If a custom deployment returns empty selectors
-and logs CPU timeouts, update that configuration and restart the `functions`
-service. Do not reset an existing database to repair a runtime timeout.
-
-## Things you'll have to do yourself
-
-- **Database maintenance.** Back up your database and apply new migrations as the
-  repository changes. The bootstrap script replaces the public schema and is only
-  intended for a fresh or disposable database.
-- **OAuth providers.** Add `GOTRUE_EXTERNAL_<PROVIDER>_*` env vars to the `auth`
-  service. The provider's redirect URL must match
-  `${PUBLIC_SUPABASE_URL}/auth/v1/callback`.
-- **SMTP for email auth.** Add `GOTRUE_SMTP_*` env vars.
-- **TLS / public hostname.** Stand up a reverse proxy (Caddy, Traefik,
-  nginx) in front of `frontend:80` and `kong:8000`.
-- **Edge function secrets.** Add to the `functions` service environment.
-
-## Known limitations of this skeleton
-
-- No realtime channels (the supabase-js client just no-ops without it).
-- No image transformations (storage serves originals).
-- Studio is opt-in via the `studio` compose profile.
-- `docker/kong.yml` is a static minimal config; edit it for rate limiting,
-  custom CORS, or per-route auth.
-- Image tags are pinned to versions that worked at the time of writing.
-  Bump them deliberately.
+The bundled stack is intentionally incomplete compared with the full Supabase
+distribution. It does not include realtime, analytics/log-stream, image proxy,
+inbucket, TLS termination, or backups. Pin and upgrade the image versions
+deliberately.
