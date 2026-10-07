@@ -54,7 +54,11 @@ alter table public.pathbuilder_import enable row level security;
 -- those here would let a public character leak another user's import history.
 revoke all on public.pathbuilder_import from public;
 revoke all on public.pathbuilder_import from anon;
-grant select, insert, update, delete on public.pathbuilder_import to authenticated;
+
+-- The snapshot API is the sole write path. Authenticated clients may read their
+-- own snapshot history, but inserts/updates/deletes are service-role operations
+-- performed only after connect() has validated the caller's session.
+grant select on public.pathbuilder_import to authenticated;
 grant all on public.pathbuilder_import to service_role;
 
 drop policy if exists "pathbuilder_import_select_own" on public.pathbuilder_import;
@@ -63,20 +67,8 @@ create policy "pathbuilder_import_select_own" on public.pathbuilder_import
   using (auth.uid() = user_id);
 
 drop policy if exists "pathbuilder_import_insert_own" on public.pathbuilder_import;
-create policy "pathbuilder_import_insert_own" on public.pathbuilder_import
-  for insert to authenticated
-  with check (auth.uid() = user_id);
-
 drop policy if exists "pathbuilder_import_update_own" on public.pathbuilder_import;
-create policy "pathbuilder_import_update_own" on public.pathbuilder_import
-  for update to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
 drop policy if exists "pathbuilder_import_delete_own" on public.pathbuilder_import;
-create policy "pathbuilder_import_delete_own" on public.pathbuilder_import
-  for delete to authenticated
-  using (auth.uid() = user_id);
 
 comment on table public.pathbuilder_import is
   'Raw Pathbuilder 2e share-link payloads, kept so an imported character can be re-translated without re-fetching.';
