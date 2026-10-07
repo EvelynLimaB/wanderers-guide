@@ -33,11 +33,24 @@ export type PathbuilderAbility = (typeof PATHBUILDER_ABILITIES)[number];
 /** A Custom File UUID, which is how Pathbuilder references custom content. */
 export const PATHBUILDER_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Pathbuilder serializes numeric Custom File type discriminators as numbers or numeric strings. */
-const PathbuilderTypeSchema = z.union([
-  z.number(),
-  z.string().trim().regex(/^\d+$/).transform(Number),
-]);
+/**
+ * Custom File type is an opaque Pathbuilder discriminator. Different share
+ * payloads have serialized it as numbers, numeric strings, and other scalar
+ * values. We do not use this field to resolve content, so rejecting a share
+ * because a new Pathbuilder release changed this discriminator is unnecessary.
+ *
+ * Normalize numeric strings when possible, but otherwise preserve the wire value.
+ */
+const PathbuilderTypeSchema = z.preprocess(
+  (value) => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return /^\d+$/.test(trimmed) ? Number(trimmed) : trimmed;
+    }
+    return value;
+  },
+  z.unknown()
+);
 
 // ─── Custom Files ─────────────────────────────────────────────────────────────
 
@@ -62,7 +75,7 @@ export type PathbuilderCustomEffect = z.infer<typeof PathbuilderCustomEffectSche
 export const PathbuilderCustomFileSchema = z
   .object({
     uniqueIdentifier: z.string(),
-    type: PathbuilderTypeSchema,
+    type: PathbuilderTypeSchema.nullish(),
     name: z.string().nullish(),
     description: z.string().nullish(),
     itemLevel: z.number().nullish(),
@@ -90,7 +103,7 @@ export type PathbuilderCustomFile = z.infer<typeof PathbuilderCustomFileSchema>;
  */
 export const PathbuilderCustomFileEntrySchema = z
   .object({
-    type: PathbuilderTypeSchema,
+    type: PathbuilderTypeSchema.nullish(),
     json: z.string(),
     timestamp: z.string().nullish(),
     uniqueIdentifier: z.string().nullish(),
