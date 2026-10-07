@@ -90,7 +90,7 @@ test('level-1 ancestry/background boosts and trained-only skills are preserved',
     resolved.abilityBoosts
       .filter((boost) => boost.level === 1)
       .map((boost) => boost.ability),
-    ['con', 'str', 'dex', 'cha', 'wis', 'str']
+    ['con', 'str', 'dex', 'cha', 'con', 'str', 'wis']
   );
   assert.deepEqual(resolved.trainedSkills, ['Acrobatics', 'Stealth']);
 });
