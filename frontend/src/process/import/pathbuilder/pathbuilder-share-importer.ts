@@ -36,7 +36,7 @@ import { hideNotification, showNotification } from '@mantine/notifications';
 import { ObjectWithUUID } from '@operations/operation-utils';
 import { executeOperations } from '@operations/operations.main';
 import { makeRequest } from '@requests/request-manager';
-import { Character, ContentSource, InventoryItem, Item, OperationCharacterResultPackage, Trait } from '@schemas/content';
+import { Character, ContentSource, InventoryItem, Item, ItemMetaGroupSchema, OperationCharacterResultPackage, Trait } from '@schemas/content';
 import { lengthenLabels, labelToVariable } from '@variables/variable-utils';
 import { cloneDeep } from 'lodash-es';
 
@@ -383,7 +383,7 @@ async function createCustomItem(
               damageType: mapDamageType(customFile.damageType),
             },
             category: (customFile.group ?? '').toLowerCase().includes('brawling') ? 'unarmed_attack' : '',
-            group: (customFile.group ?? '').toLowerCase(),
+            group: mapMetaGroup(customFile.group),
           }
         : {}),
       // The verbatim Custom File, so the PT-BR translation layer and any future
@@ -408,6 +408,15 @@ async function createCustomItem(
   }
   return created;
 }
+/** Map Pathbuilder's free-form weapon group to WG's finite ItemMetaGroup vocabulary. */
+function mapMetaGroup(value: string | undefined): Item['meta_data']['group'] {
+  const normalized = (value ?? '').trim().toLowerCase();
+  if (!normalized) return undefined;
+  return ItemMetaGroupSchema.safeParse(normalized).success
+    ? (normalized as NonNullable<Item['meta_data']['group']>)
+    : undefined;
+}
+
 /** Pathbuilder uses single-letter damage types ("P"); WG spells them out. */
 function mapDamageType(value: string | undefined): string | undefined {
   switch ((value ?? '').toUpperCase()) {
