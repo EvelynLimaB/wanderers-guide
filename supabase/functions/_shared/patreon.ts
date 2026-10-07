@@ -1,5 +1,5 @@
 import * as patreon from 'patreon';
-import type { PublicUser } from './content';
+import type { PublicUser } from './content.d.ts';
 import _ from 'lodash';
 import { fetchData, updateData } from './helpers.ts';
 import { SupabaseClient, createClient } from '@supabase/supabase-js';

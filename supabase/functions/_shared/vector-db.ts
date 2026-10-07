@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ContentType, JSendResponse } from './content';
+import type { ContentType, JSendResponse } from './content.d.ts';
 import { convertContentTypeToTableName, fetchData } from './helpers.ts';
 import { consumeWorkBudget, fetchWorkText, parseRequest, populateRequest } from './costly-requests.ts';
 

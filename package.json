@@ -17,5 +17,8 @@
     "release:verify:functions": "node scripts/release.mjs check-remote-functions",
     "release:verify": "node scripts/release.mjs check-remote",
     "test:authorization": "docker compose exec -T db psql -U postgres -v ON_ERROR_STOP=1 -f - < supabase/tests/account-moderation-writes.sql"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.113.0"
   }
 }

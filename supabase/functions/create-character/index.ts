@@ -7,7 +7,7 @@ import {
   getPublicUser,
   fetchData,
 } from '../_shared/helpers.ts';
-import type { Character } from '../_shared/content';
+import type { Character } from '../_shared/content.d.ts';
 import { hasPatreonAccess } from '../_shared/patreon.ts';
 
 const CHARACTER_SLOT_CAP = 6;
