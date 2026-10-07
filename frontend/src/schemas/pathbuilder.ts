@@ -43,8 +43,8 @@ const PathbuilderNumericSchema = z.union([
 
 export const PathbuilderCustomEffectSchema = z
   .object({
-    effectType: z.number().optional(),
-    bonusAmount: z.number().optional(),
+    effectType: z.number().nullish(),
+    bonusAmount: z.number().nullish(),
     reference: z.string().optional(),
     proficiencyName: z.string().optional(),
   })
@@ -61,7 +61,8 @@ export type PathbuilderCustomEffect = z.infer<typeof PathbuilderCustomEffectSche
  */
 export const PathbuilderCustomFileSchema = z
   .object({
-    uniqueIdentifier: z.string(),
+    uniqueIdentifier: z.string().nullish(),
+    uniqueIdentiier: z.string().nullish(),
     type: PathbuilderNumericSchema,
     name: z.string().nullish(),
     description: z.string().nullish(),
@@ -78,7 +79,15 @@ export const PathbuilderCustomFileSchema = z
     action0desc: z.string().nullish(),
     listCustomEffects: z.array(PathbuilderCustomEffectSchema).nullish(),
   })
-  .passthrough();
+  .passthrough()
+  .transform((value) => ({
+    ...value,
+    uniqueIdentifier: value.uniqueIdentifier ?? value.uniqueIdentiier,
+  }))
+  .refine((value) => typeof value.uniqueIdentifier === 'string' && value.uniqueIdentifier.length > 0, {
+    path: ['uniqueIdentifier'],
+    message: 'Custom File must contain uniqueIdentifier or uniqueIdentiier',
+  });
 export type PathbuilderCustomFile = z.infer<typeof PathbuilderCustomFileSchema>;
 
 /**
