@@ -409,11 +409,11 @@ async function createCustomItem(
   return created;
 }
 /** Map Pathbuilder's free-form weapon group to WG's finite ItemMetaGroup vocabulary. */
-function mapMetaGroup(value: string | undefined): Item['meta_data']['group'] {
+function mapMetaGroup(value: string | undefined): NonNullable<Item['meta_data']>['group'] {
   const normalized = (value ?? '').trim().toLowerCase();
   if (!normalized) return undefined;
   return ItemMetaGroupSchema.safeParse(normalized).success
-    ? (normalized as NonNullable<Item['meta_data']['group']>)
+    ? (normalized as NonNullable<NonNullable<Item['meta_data']>['group']>)
     : undefined;
 }
 
