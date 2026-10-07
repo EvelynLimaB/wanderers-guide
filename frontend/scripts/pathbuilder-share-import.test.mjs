@@ -85,4 +85,23 @@ test('the BACKGROUND_ prefix is stripped but nothing else is mangled', () => {
   assert.equal(stripCategoryPrefix(undefined), undefined);
 });
 
+test('level-1 ancestry/background boosts and trained-only skills are preserved', () => {
+  assert.deepEqual(
+    resolved.abilityBoosts
+      .filter((boost) => boost.level === 1)
+      .map((boost) => boost.ability),
+    ['con', 'str', 'dex', 'cha', 'wis', 'str']
+  );
+  assert.deepEqual(resolved.trainedSkills, ['Acrobatics', 'Stealth']);
+});
+
+test('Pathbuilder keeps languages and active custom effects in the resolved payload', () => {
+  assert.deepEqual(resolved.languages, ['Common']);
+  assert.equal(resolved.activeCustomBuffs.length, 1);
+  assert.equal(resolved.activeCustomBuffs[0].name, 'ABP Spell Attack Bonus');
+  assert.equal(resolved.activeCustomBuffs[0].stacks, 1);
+  assert.equal(resolved.activeCustomBuffs[0].custom?.listCustomEffects?.[0]?.effectType, 8);
+  assert.equal(resolved.activeCustomBuffs[0].custom?.listCustomEffects?.[0]?.bonusAmount, 1);
+});
+
 test('rule variants map onto WG CharacterVariants keys', () => {
