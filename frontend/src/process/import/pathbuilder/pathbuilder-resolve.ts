@@ -13,7 +13,7 @@
  * discarded all of these, which is what destroyed custom items on import.
  */
 
-import { PATHBUILDER_ABILITIES, PATHBUILDER_UUID_RE } from '@schemas/pathbuilder';
+import { PATHBUILDER_ABILITIES, PATHBUILDER_UUID_RE, PathbuilderCustomFileSchema } from '@schemas/pathbuilder';
 import type {
   PathbuilderAbility,
   PathbuilderCharacterData,
@@ -60,17 +60,21 @@ export function parseCustomFileJson(entry: PathbuilderCustomFileEntry): Pathbuil
   }
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
 
+  // Normalize the two historical identifier spellings before validating the
+  // parsed Custom File. The envelope identifier is the final fallback.
   const parsed = value as Record<string, unknown>;
-  // Weapons misspell the identifier (`uniqueIdentiier`); buffs spell it correctly.
-  // The envelope's `uniqueIdentifier` is the fallback that always works.
-  const uniqueIdentifier =
-    (typeof parsed.uniqueIdentifier === 'string' && parsed.uniqueIdentifier) ||
-    (typeof parsed.uniqueIdentiier === 'string' && parsed.uniqueIdentiier) ||
-    entry.uniqueIdentifier ||
-    '';
-  if (!uniqueIdentifier) return null;
+  const normalized = {
+    ...parsed,
+    uniqueIdentifier:
+      (typeof parsed.uniqueIdentifier === 'string' && parsed.uniqueIdentifier) ||
+      (typeof parsed.uniqueIdentiier === 'string' && parsed.uniqueIdentiier) ||
+      entry.uniqueIdentifier ||
+      undefined,
+    type: parsed.type ?? entry.type,
+  };
 
-  return { ...(parsed as PathbuilderCustomFile), uniqueIdentifier, type: entry.type };
+  const validated = PathbuilderCustomFileSchema.safeParse(normalized);
+  return validated.success ? validated.data : null;
 }
 
 export function buildCustomFileIndex(entries: PathbuilderCustomFileEntry[] | undefined): Map<string, PathbuilderCustomFile> {
