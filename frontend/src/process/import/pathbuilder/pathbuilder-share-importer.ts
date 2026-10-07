@@ -802,48 +802,101 @@ async function resolveSelections(
  * `InventoryItem.container_contents` is recursive, so a Pathbuilder container
  * maps onto a WG container item whose contents are the child rows.
  */
+function findInventoryItem(
+  ref: ResolvedItemRef,
+  content: Awaited<ReturnType<typeof fetchContentPackage>>,
+  customItems: Map<string, Item>
+): Item | undefined {
+  if (ref.kind === 'custom' && ref.uuid) {
+    const custom = customItems.get(ref.uuid.toLowerCase());
+    if (custom) return custom;
+  }
+  if (ref.kind === 'standard') {
+    const found = findImportedItem(content.items, ref.name);
+    if (found) return found;
+    return customItems.get(`ref:${labelToVariable(ref.name)}`);
+  }
+  return undefined;
+}
+
+/** Apply Pathbuilder weapon rune state to a WG item without mutating the shared content cache. */
+function withPathbuilderRunes(
+  item: Item,
+  potency: number,
+  striking: number,
+  propertyNames: string[],
+  content: Awaited<ReturnType<typeof fetchContentPackage>>,
+  warnings: string[]
+): Item {
+  if (potency <= 0 && striking <= 0 && propertyNames.length === 0) return item;
+
+  const copy = cloneDeep(item);
+  const existing = copy.meta_data ?? ({ bulk: {} } as NonNullable<Item['meta_data']>);
+  const runes = { ...(existing.runes ?? {}) };
+
+  if (potency > 0) runes.potency = potency;
+  if (striking > 0) runes.striking = striking;
+
+  const properties = [];
+  for (const name of propertyNames) {
+    const rune = content.items.find((candidate) => labelToVariable(candidate.name) === labelToVariable(name));
+    if (rune) {
+      properties.push({ name: rune.name, id: rune.id, rune });
+    } else {
+      warnings.push(`rune: WG has no property rune "${name}"`);
+    }
+  }
+  if (properties.length > 0) runes.property = properties;
+
+  copy.meta_data = { ...existing, bulk: existing.bulk ?? {}, runes };
+  return copy;
+}
+
+/**
+ * Rebuild the inventory, including the container hierarchy and Pathbuilder rune state.
+ *
+ * Pathbuilder stores quantities on references, while WG represents inventory quantity
+ * by repeating InventoryItem rows. Expand each reference directly so duplicate names
+ * in different locations cannot accidentally steal one another's quantity.
+ */
 function buildInventory(
   resolved: ResolvedBuild,
   content: Awaited<ReturnType<typeof fetchContentPackage>>,
   customItems: Map<string, Item>,
   warnings: string[]
 ): InventoryItem[] {
-  const lookup = (ref: ResolvedItemRef): Item | undefined => {
-    if (ref.kind === 'custom' && ref.uuid) {
-      const custom = customItems.get(ref.uuid.toLowerCase());
-      if (custom) return custom;
-    }
-    if (ref.kind === 'unresolved') return undefined;
-    return content.items.find((item) => labelToVariable(item.name) === labelToVariable(ref.name));
-  };
-
-  const toInventoryItem = (ref: ResolvedItemRef): InventoryItem | undefined => {
-    const item = lookup(ref);
+  const toInventoryItems = (
+    ref: ResolvedItemRef,
+    itemOverride?: Item,
+    forceEquipped = false
+  ): InventoryItem[] => {
+    const item = itemOverride ?? findInventoryItem(ref, content, customItems);
     if (!item) {
-      warnings.push(`item: WG has no "${ref.name}"${ref.kind === 'custom' ? ' and the Custom File could not be created' : ''}`);
-      return undefined;
+      warnings.push(`item: could not resolve "${ref.name}"`);
+      return [];
     }
+
     const entry: InventoryItem = {
       id: crypto.randomUUID(),
       item,
       is_formula: false,
-      is_equipped: isItemEquippable(item),
+      is_equipped: forceEquipped || isItemEquippable(item),
       is_invested: isItemInvestable(item),
       is_implanted: isItemImplantable(item),
       container_contents: [],
     };
-    // Pathbuilder stacks (`quantity`) become repeated entries; WG has no quantity
-    // field on InventoryItem, and the FTC path dropped the count entirely.
-    return entry;
+
+    const quantity = Math.max(1, ref.quantity ?? 1);
+    return Array.from({ length: quantity }, (_, index) =>
+      index === 0 ? entry : { ...entry, id: crypto.randomUUID() }
+    );
   };
 
   const items: InventoryItem[] = [];
 
   for (const container of resolved.containers) {
-    const containerItem = content.items.find(
-      (item) => labelToVariable(item.name) === labelToVariable(container.name)
-    );
-    const contents = container.items.map(toInventoryItem).filter(Boolean) as InventoryItem[];
+    const containerItem = findImportedItem(content.items, container.name);
+    const contents = container.items.flatMap((ref) => toInventoryItems(ref));
     if (containerItem) {
       items.push({
         id: crypto.randomUUID(),
@@ -855,45 +908,61 @@ function buildInventory(
         container_contents: contents,
       });
     } else {
-      warnings.push(`container: WG has no "${container.name}", so its ${contents.length} item(s) were moved to the top level`);
+      // Keep the children visible even when WG lacks the container record.
+      warnings.push(
+        `container: WG has no "${container.name}", so its ${contents.length} item(s) were moved to the top level`
+      );
       items.push(...contents);
     }
   }
 
-  for (const ref of [...resolved.looseEquipment, ...resolved.weapons, ...(resolved.shield ? [resolved.shield] : [])]) {
-    const entry = toInventoryItem(ref);
-    if (entry) items.push(entry);
+  for (const weapon of resolved.weapons) {
+    const base = findInventoryItem(weapon, content, customItems);
+    if (!base) {
+      warnings.push(`item: could not resolve weapon "${weapon.name}"`);
+      continue;
+    }
+    const item = withPathbuilderRunes(
+      base,
+      weapon.potency,
+      weapon.striking,
+      weapon.runes,
+      content,
+      warnings
+    );
+    items.push(...toInventoryItems(weapon, item, true));
+  }
+
+  for (const ref of resolved.looseEquipment) {
+    items.push(...toInventoryItems(ref));
+  }
+
+  if (resolved.shield) {
+    items.push(...toInventoryItems(resolved.shield));
   }
 
   if (resolved.armor) {
-    const entry = toInventoryItem(resolved.armor);
-    if (entry) items.push(entry);
-  }
-  if (resolved.armorRunes.length > 0 && !resolved.armor) {
+    const armor = findInventoryItem(resolved.armor, content, customItems);
+    if (armor) {
+      const item = withPathbuilderRunes(
+        armor,
+        resolved.armorPotency,
+        0,
+        resolved.armorRunes,
+        content,
+        warnings
+      );
+      items.push(...toInventoryItems(resolved.armor, item, true));
+    } else {
+      warnings.push(`item: could not resolve armor "${resolved.armor.name}"`);
+    }
+  } else if (resolved.armorRunes.length > 0 || resolved.armorPotency > 0) {
     warnings.push(
       `armor: runes [${resolved.armorRunes.join(', ')}] and potency +${resolved.armorPotency} were recorded but there is no armor to attach them to`
     );
   }
 
-  // Pathbuilder quantities: emit one entry per unit so the count is not lost.
-  const expanded: InventoryItem[] = [];
-  for (const entry of items) {
-    const quantity = quantityFor(entry, resolved);
-    for (let index = 0; index < quantity; index++) {
-      expanded.push(index === 0 ? entry : { ...entry, id: crypto.randomUUID() });
-    }
-  }
-  return expanded;
+  return items;
 }
 
-/** Recover the Pathbuilder quantity for an inventory entry we just built. */
-function quantityFor(entry: InventoryItem, resolved: ResolvedBuild): number {
-  const name = labelToVariable(entry.item.name);
-  const refs = [
-    ...resolved.looseEquipment,
-    ...resolved.weapons,
-    ...resolved.containers.flatMap((container) => container.items),
-  ];
-  const match = refs.find((ref) => labelToVariable(ref.name) === name);
-  return Math.max(1, match?.quantity ?? 1);
-}
+
