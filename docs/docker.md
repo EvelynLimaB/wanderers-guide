@@ -54,6 +54,16 @@ docker compose --profile studio up -d
 - `PUBLIC_SUPABASE_URL` is what the **browser** uses to reach kong. On
   localhost that's `http://localhost:8000`. In a real deployment, proxy
   this behind a TLS terminator and set it to your public URL.
+  `frontend/nginx.conf` reverse-proxies `/auth/v1`, `/rest/v1`, `/storage/v1`,
+  `/functions/v1` and `/pg/` to kong, so behind a proxy this is just the site
+  origin (no port, no path). It is baked into the bundle at **build** time, so
+  rebuild the frontend image after changing it.
+- Every published port is `${*_BIND:-127.0.0.1}:port`, so the stack is reachable
+  from the host and invisible to the LAN. Rootless Podman cannot bind ports below
+  1024, and nothing here needs to: the TLS terminator owns 443. Set
+  `FRONTEND_BIND=0.0.0.0` only if you deliberately want LAN access.
+- For a Tailscale Serve deployment (rootless Podman, single tailnet hostname,
+  loopback-only ports) see [tailscale-podman](/tailscale-podman).
 - Vite envs (`VITE_*`) are baked into the frontend bundle at build time.
   After changing `PUBLIC_SUPABASE_URL` or `ANON_KEY`, rebuild:
   ```bash
@@ -71,8 +81,8 @@ registering an account or creating characters.
 
 If an existing installation reports **User not found** after login, verify that
 `data/auth-trigger.sql` is installed. The trigger creates profiles for new accounts.
-It does not repair accounts registered before the trigger was installed. Back up
-the database, then install the trigger and create only the missing profiles:
+It does not repair accounts registered before the trigger was installed. Back up the
+database, then install the trigger and create only the missing profiles:
 
 ```bash
 docker compose exec -T db psql -U postgres -v ON_ERROR_STOP=1 < data/auth-trigger.sql
@@ -103,8 +113,8 @@ service. Do not reset an existing database to repair a runtime timeout.
 - **Database maintenance.** Back up your database and apply new migrations as the
   repository changes. The bootstrap script replaces the public schema and is only
   intended for a fresh or disposable database.
-- **OAuth providers.** Add `GOTRUE_EXTERNAL_<PROVIDER>_*` env vars to the
-  `auth` service. The provider's redirect URL must match
+- **OAuth providers.** Add `GOTRUE_EXTERNAL_<PROVIDER>_*` env vars to the `auth`
+  service. The provider's redirect URL must match
   `${PUBLIC_SUPABASE_URL}/auth/v1/callback`.
 - **SMTP for email auth.** Add `GOTRUE_SMTP_*` env vars.
 - **TLS / public hostname.** Stand up a reverse proxy (Caddy, Traefik,
