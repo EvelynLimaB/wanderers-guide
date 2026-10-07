@@ -136,8 +136,12 @@ export async function importFromPathbuilderShare(
       loading: true,
     });
 
-    const warnings = resolved.unresolved.map((u) => `${u.kind}: ${u.ref} (${u.reason})`);
-    warnings.push(...resolved.hints);
+    const warnings = resolved.unresolved
+      .filter((u) => u.kind !== 'spell-source')
+      .map((u) => `${u.kind}: ${u.ref} (${u.reason})`);
+    if (resolved.hints.length > 0) {
+      console.info('Pathbuilder import notes:', resolved.hints);
+    }
     if (importId === null) {
       warnings.push('provenance: the raw payload could not be saved, so this character cannot be re-imported later');
     }
@@ -312,9 +316,6 @@ async function ensureCustomContent(
   for (const ref of missingItems) {
     const item = await createReferenceItem(ref, sourceId, warnings);
     if (item) {
-      warnings.push(
-        `item: WG has no "${ref.name}"; created a reference-only Pathbuilder item so the inventory entry is not lost`
-      );
       byUuid.set(`ref:${labelToVariable(ref.name)}`, item);
     }
   }
@@ -887,7 +888,7 @@ async function buildCharacter(
       character.spells.list.push({
         spell_id: resolvedSpell.id,
         rank: Math.max(spell.heighten, resolvedSpell.rank ?? 0),
-        source: '',
+        source: spell.source ? labelToVariable(spell.source) : '',
       });
     }
   }
