@@ -191,6 +191,9 @@ verify_jwt = false
 
 [functions.create-pathbuilder-import]
 verify_jwt = false
+[functions.create-pathbuilder-content-source]
+verify_jwt = false
+
 
 
 [functions.create-language]
