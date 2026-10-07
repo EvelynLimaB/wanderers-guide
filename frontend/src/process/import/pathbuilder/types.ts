@@ -7,7 +7,7 @@
  * validated.
  */
 
-import type { PathbuilderCustomFile } from '@schemas/pathbuilder';
+import type { PathbuilderAbility, PathbuilderCustomFile } from '@schemas/pathbuilder';
 
 export type {
   PathbuilderAbility,
