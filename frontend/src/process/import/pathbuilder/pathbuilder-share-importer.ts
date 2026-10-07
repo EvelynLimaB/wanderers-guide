@@ -367,7 +367,7 @@ async function createReferenceItem(
     size: 'MEDIUM',
     craft_requirements: null,
     usage: null,
-    operations: customEffectOperations(customFile, 1, warnings),
+    operations: [],
     content_source_id: sourceId,
     version: '1.0',
     meta_data: {
