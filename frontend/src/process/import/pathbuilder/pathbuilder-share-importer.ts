@@ -27,7 +27,7 @@
  *     a record of what Pathbuilder said, which is the whole point of keeping it.
  */
 
-import { upsertContentSource, upsertItem } from '@content/content-creation';
+import { createPathbuilderContentSource, upsertItem } from '@content/content-creation';
 import { defineDefaultSources, fetchContentPackage, fetchContentSources } from '@content/content-store';
 import { toMarkdown } from '@content/content-utils';
 import { findFirstSelection, findMatchingOption } from '@import/ftc/import-from-ftc';
@@ -267,25 +267,7 @@ async function ensureCustomContent(
 
   if (referenced.size === 0) return { sourceId: null, byUuid };
 
-  const source = await upsertContentSource({
-    id: -1,
-    created_at: '',
-    user_id: '',
-    name: `Pathbuilder Custom (build ${buildId})`,
-    foundry_id: null,
-    url: `https://pathbuilder2e.com/app.html?emailedBuildID=${buildId}`,
-    description: 'Custom content carried by a Pathbuilder 2e share link, imported verbatim.',
-    operations: [],
-    contact_info: '',
-    group: '',
-    require_key: false,
-    keys: null,
-    is_published: false,
-    deprecated: false,
-    artwork_url: '',
-    required_content_sources: [],
-    meta_data: null,
-  } satisfies ContentSource);
+  const source = await createPathbuilderContentSource(buildId);
 
   const sourceId = source?.id ?? null;
   if (sourceId === null || sourceId < 0) {
