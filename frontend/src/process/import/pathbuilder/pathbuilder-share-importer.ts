@@ -27,7 +27,7 @@
  *     a record of what Pathbuilder said, which is the whole point of keeping it.
  */
 
-import { createPathbuilderContentSource, upsertItem } from '@content/content-creation';
+import { createPathbuilderContentSource, upsertItem, upsertSpell } from '@content/content-creation';
 import { defineDefaultSources, fetchContentPackage, fetchContentSources } from '@content/content-store';
 import { toMarkdown } from '@content/content-utils';
 import { findFirstSelection, findMatchingOption } from '@import/ftc/import-from-ftc';
@@ -36,7 +36,7 @@ import { hideNotification, showNotification } from '@mantine/notifications';
 import { ObjectWithUUID } from '@operations/operation-utils';
 import { executeOperations } from '@operations/operations.main';
 import { makeRequest } from '@requests/request-manager';
-import { Character, InventoryItem, Item, ItemMetaGroupSchema, OperationCharacterResultPackage, Trait } from '@schemas/content';
+import { Character, InventoryItem, Item, ItemMetaGroupSchema, OperationCharacterResultPackage, Spell, Trait } from '@schemas/content';
 import { lengthenLabels, labelToVariable } from '@variables/variable-utils';
 import { cloneDeep } from 'lodash-es';
 
@@ -141,15 +141,24 @@ export async function importFromPathbuilderShare(
       warnings.push('provenance: the raw payload could not be saved, so this character cannot be re-imported later');
     }
 
-    let customSourceId: number | null = null;
-    let customItems = new Map<string, Item>();
-    if (!options.skipCustomContent && resolved.customFiles.size > 0) {
-      const custom = await ensureCustomContent(resolved, buildId, warnings);
-      customSourceId = custom.sourceId;
-      customItems = custom.byUuid;
-    }
+    const sources = await fetchContentSources('ALL-USER-ACCESSIBLE');
+    const enabledSourceIds = sources.map((source) => source.id);
+    const sourceView = defineDefaultSources('PAGE', enabledSourceIds);
+    const content = await fetchContentPackage(sourceView, { fetchSources: true });
 
-    const character = await buildCharacter(resolved, customItems, warnings);
+    const custom = !options.skipCustomContent
+      ? await ensureCustomContent(resolved, buildId, content, warnings)
+      : { sourceId: null, byUuid: new Map<string, Item>(), fallbackSpellsByName: new Map<string, Spell>() };
+    const customSourceId = custom.sourceId;
+    const customItems = custom.byUuid;
+
+    const character = await buildCharacter(
+      resolved,
+      content,
+      customItems,
+      custom.fallbackSpellsByName,
+      warnings
+    );
 
     if (importId !== null && character?.id) {
       // Second call to the same endpoint: upsertData takes the update path when a
@@ -246,12 +255,16 @@ async function insertImportRow(
 async function ensureCustomContent(
   resolved: ResolvedBuild,
   buildId: string,
+  content: Awaited<ReturnType<typeof fetchContentPackage>>,
   warnings: string[]
-): Promise<{ sourceId: number | null; byUuid: Map<string, Item> }> {
+): Promise<{
+  sourceId: number | null;
+  byUuid: Map<string, Item>;
+  fallbackSpellsByName: Map<string, Spell>;
+}> {
   const byUuid = new Map<string, Item>();
+  const fallbackSpellsByName = new Map<string, Spell>();
 
-  // Only materialize Custom Files the character actually references. A payload can
-  // carry files for gear the character no longer has.
   const referenced = new Map<string, PathbuilderCustomFile>();
   const consider = (ref: ResolvedItemRef | undefined) => {
     if (ref?.kind === 'custom' && ref.uuid && ref.custom) referenced.set(ref.uuid.toLowerCase(), ref.custom);
@@ -265,25 +278,171 @@ async function ensureCustomContent(
     if (buff.custom) referenced.set(buff.uuid.toLowerCase(), buff.custom);
   });
 
-  if (referenced.size === 0) return { sourceId: null, byUuid };
+  const standardRefs = [
+    ...resolved.weapons,
+    ...resolved.looseEquipment,
+    ...resolved.containers.flatMap((container) => container.items),
+    ...(resolved.armor ? [resolved.armor] : []),
+    ...(resolved.shield ? [resolved.shield] : []),
+  ].filter((ref) => ref.kind === 'standard');
 
-  const source = await createPathbuilderContentSource(buildId);
+  const missingItems = standardRefs.filter((ref) => !findImportedItem(content.items, ref.name));
+  const missingSpells = resolved.spells.filter(
+    (spell) => !content.spells.some((item) => labelToVariable(item.name) === labelToVariable(spell.name))
+  );
 
-  const sourceId = source?.id ?? null;
-  if (sourceId === null || sourceId < 0) {
-    warnings.push('custom content: could not create a content source, so Custom Files were not persisted as items');
-    return { sourceId, byUuid };
+  if (referenced.size === 0 && missingItems.length === 0 && missingSpells.length === 0) {
+    return { sourceId: null, byUuid, fallbackSpellsByName };
   }
 
-  // Trait names need WG trait ids; unresolved names are kept as display_traits.
-  const traits = await fetchTraitMap();
+  const source = await createPathbuilderContentSource(buildId);
+  const sourceId = source?.id ?? null;
+  if (sourceId === null || sourceId < 0) {
+    warnings.push(
+      'custom content: could not create the Pathbuilder import source, so custom/reference content was not persisted'
+    );
+    return { sourceId, byUuid, fallbackSpellsByName };
+  }
 
+  const traits = await fetchTraitMap();
   for (const [uuid, customFile] of referenced) {
     const item = await createCustomItem(customFile, sourceId, traits, warnings);
     if (item) byUuid.set(uuid, item);
   }
 
-  return { sourceId, byUuid };
+  for (const ref of missingItems) {
+    const item = await createReferenceItem(ref, sourceId, warnings);
+    if (item) {
+      warnings.push(
+        `item: WG has no "${ref.name}"; created a reference-only Pathbuilder item so the inventory entry is not lost`
+      );
+      byUuid.set(`ref:${labelToVariable(ref.name)}`, item);
+    }
+  }
+
+  for (const spell of missingSpells) {
+    const item = await createReferenceSpell(spell, sourceId);
+    if (item) {
+      warnings.push(
+        `spell: WG has no spell matching "${spell.name}"; created a reference-only Pathbuilder spell so the spell is not lost`
+      );
+      fallbackSpellsByName.set(labelToVariable(spell.name), item);
+    }
+  }
+
+  return { sourceId, byUuid, fallbackSpellsByName };
+}
+
+function findImportedItem(items: Item[], name: string): Item | undefined {
+  const candidates = [name, ...(PATHBUILDER_ITEM_ALIASES[labelToVariable(name)] ?? [])];
+  for (const candidate of candidates) {
+    const found = items.find((item) => labelToVariable(item.name) === labelToVariable(candidate));
+    if (found) return found;
+  }
+  return undefined;
+}
+
+const PATHBUILDER_ITEM_ALIASES: Record<string, string[]> = {
+  [labelToVariable('Rations')]: ['Rations (1 week)'],
+  [labelToVariable('Mask (Ordinary)')]: ['Ordinary Mask'],
+};
+
+async function createReferenceItem(
+  ref: ResolvedItemRef,
+  sourceId: number,
+  warnings: string[]
+): Promise<Item | null> {
+  const item = {
+    id: -1,
+    created_at: '',
+    name: ref.name,
+    price: null,
+    bulk: null,
+    level: 0,
+    rarity: 'COMMON',
+    traits: [],
+    description:
+      `Imported from Pathbuilder as a reference. Wanderer's Guide did not have a matching content record at import time. Original Pathbuilder reference: ${ref.raw}`,
+    group: 'GENERAL',
+    hands: null,
+    size: 'MEDIUM',
+    craft_requirements: null,
+    usage: null,
+    operations: [],
+    content_source_id: sourceId,
+    version: '1.0',
+    meta_data: {
+      bulk: {},
+      pathbuilder: {
+        uniqueIdentifier: crypto.randomUUID(),
+        type: 0,
+        source: 'Pathbuilder Reference',
+        raw: {
+          kind: ref.kind,
+          name: ref.name,
+          raw: ref.raw,
+          quantity: ref.quantity,
+        },
+      },
+    },
+  } satisfies Item;
+
+  try {
+    const created = await upsertItem(item);
+    return created ? (created === true ? item : created) : null;
+  } catch (error) {
+    console.warn(`Could not create Pathbuilder reference item "${ref.name}":`, error);
+    warnings.push(`item: failed to create Pathbuilder reference for "${ref.name}"`);
+    return null;
+  }
+}
+
+async function createReferenceSpell(
+  spell: ResolvedBuild['spells'][number],
+  sourceId: number
+): Promise<Spell | null> {
+  const keyParts = spell.rawKey.split('&');
+  const rankHint = Number(keyParts[1]);
+  const item = {
+    id: -1,
+    created_at: '',
+    name: spell.name,
+    rank: Number.isFinite(rankHint) && rankHint >= 0 ? rankHint : 0,
+    traditions: [],
+    rarity: 'COMMON',
+    availability: null,
+    cast: '',
+    traits: [],
+    defense: undefined,
+    cost: undefined,
+    trigger: undefined,
+    requirements: undefined,
+    range: undefined,
+    area: undefined,
+    targets: undefined,
+    duration: undefined,
+    description:
+      `Imported from Pathbuilder as a reference. Wanderer's Guide did not have a matching spell record at import time. Original spell key: ${spell.rawKey}`,
+    heightened: {},
+    meta_data: {
+      pathbuilder: {
+        raw: {
+          rawKey: spell.rawKey,
+          spellListIndex: spell.spellListIndex,
+          heighten: spell.heighten,
+        },
+      },
+    },
+    content_source_id: sourceId,
+    version: '1.0',
+  } satisfies Spell;
+
+  try {
+    const created = await upsertSpell(item);
+    return created ? (created === true ? item : created) : null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchTraitMap(): Promise<Map<string, number>> {
@@ -440,7 +599,9 @@ function mapDamageType(value: string | null | undefined): string | undefined {
  */
 async function buildCharacter(
   resolved: ResolvedBuild,
+  content: Awaited<ReturnType<typeof fetchContentPackage>>,
   customItems: Map<string, Item>,
+  fallbackSpellsByName: Map<string, Spell>,
   warnings: string[]
 ): Promise<Character | null> {
   const character = {
@@ -526,11 +687,7 @@ async function buildCharacter(
     // been fetched, so the object cannot satisfy Character at this point.
   } as unknown as Character;
 
-  const sources = await fetchContentSources('ALL-USER-ACCESSIBLE');
-  character.content_sources!.enabled = sources.map((source) => source.id);
-
-  const sv = defineDefaultSources('PAGE', character.content_sources?.enabled ?? []);
-  const content = await fetchContentPackage(sv, { fetchSources: true });
+  character.content_sources!.enabled = content.sources?.map((source) => source.id) ?? [];
 
   character.details!.class = content.classes.find((c) => labelToVariable(c.name) === labelToVariable(resolved.identity.className ?? ''));
   character.details!.background = content.backgrounds.find(
@@ -562,14 +719,13 @@ async function buildCharacter(
   };
   for (const spell of resolved.spells) {
     const found = content.spells.find((s) => labelToVariable(s.name) === labelToVariable(spell.name));
-    if (found) {
+    const resolvedSpell = found ?? fallbackSpellsByName.get(labelToVariable(spell.name));
+    if (resolvedSpell) {
       character.spells.list.push({
-        spell_id: found.id,
-        rank: Math.max(spell.heighten, found.rank ?? 1),
+        spell_id: resolvedSpell.id,
+        rank: Math.max(spell.heighten, resolvedSpell.rank ?? 0),
         source: '',
       });
-    } else {
-      warnings.push(`spell: WG has no spell matching "${spell.name}"`);
     }
   }
 
