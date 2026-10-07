@@ -1,185 +1,39 @@
-import { FTC, importFromFTC } from '@import/ftc/import-from-ftc';
-import { hideNotification, showNotification } from '@mantine/notifications';
-import { Session } from '@supabase/supabase-js';
-import { lengthenLabels } from '@variables/variable-utils';
+/**
+ * Entry point for "Import from Pathbuilder".
+ *
+ * This used to fetch `json.php`, squeeze the result through the FTC intermediate
+ * (`convertPathbuilderToFTC` -> `importFromFTC`) and look content up by name. The
+ * FTC shape can only express an item as `{ name, level? }`, so every Custom File
+ * was lost, quantities were dropped, containers were flattened and the raw
+ * payload was thrown away.
+ *
+ * It now delegates to `pathbuilder-share-importer`, which reads the share payload
+ * (`fetch_emailed.php`) directly. The legacy conversion is recoverable from git
+ * history if the two paths ever need comparing.
+ *
+ * The signature stays `string | number -> Character | null` so existing callers
+ * (CharactersPage) are unaffected. Callers that want the list of details that
+ * could not be mapped use `importFromPathbuilderShare` directly.
+ */
 
-export async function importFromPathbuilder(pathbuilderJsonId: number) {
-  showNotification({
-    id: `importing-${pathbuilderJsonId}`,
-    title: `Importing character`,
-    message: 'This may take a minute...',
-    autoClose: false,
-    withCloseButton: false,
-    loading: true,
-  });
+import { Character } from '@schemas/content';
 
-  const res = await fetch(`https://pathbuilder2e.com/json.php?id=${pathbuilderJsonId}`);
-  const json = await res.json();
+import { importFromPathbuilderShare } from './pathbuilder-share-importer';
 
-  if (json?.success) {
-    const ftc = convertPathbuilderToFTC(json.build);
-    console.log('Converted FTC:', ftc);
-    const character = await importFromFTC(ftc);
+export async function importFromPathbuilder(pathbuilderInput: string | number): Promise<Character | null> {
+  const result = await importFromPathbuilderShare(pathbuilderInput);
 
-    if (character) {
-      hideNotification(`importing-${pathbuilderJsonId}`);
-      showNotification({
-        title: 'Success',
-        message: `Imported "${character.name}"`,
-        icon: null,
-        autoClose: 3000,
-      });
-    } else {
-      hideNotification(`importing-${pathbuilderJsonId}`);
-      showNotification({
-        title: 'Import failed',
-        message: 'Error importing from Pathbuilder',
-        color: 'red',
-        icon: null,
-        autoClose: false,
-      });
-    }
-    return character;
-  } else {
-    hideNotification(`importing-${pathbuilderJsonId}`);
-    showNotification({
-      title: 'Import failed',
-      message: 'Error from Pathbuilder',
-      color: 'red',
-      icon: null,
-      autoClose: false,
-    });
+  if (!result.ok) {
+    console.error(`Pathbuilder import failed: ${result.error}`);
     return null;
   }
+
+  if (result.warnings.length > 0) {
+    console.warn(`Pathbuilder import left ${result.warnings.length} detail(s) unmapped:`, result.warnings);
+  }
+
+  return result.character;
 }
 
-function convertPathbuilderToFTC(build: Record<string, any>): FTC {
-  function convertAttributes(attributes: string[] | undefined, level: number) {
-    return (
-      attributes?.map((attr) => {
-        return {
-          name: lengthenLabels(attr),
-          level: level,
-        };
-      }) ?? []
-    );
-  }
-
-  function convertFeats(record: [string, null, string, number]) {
-    return {
-      name: record[0],
-      level: record[3],
-    };
-  }
-
-  function convertLores(record: [string, number]) {
-    return {
-      name: record[0],
-      level: record[1],
-    };
-  }
-
-  function convertSpells(spellCasters: any[]) {
-    let extractedSpells: { name: string; rank: number; source: string }[] = [];
-
-    for (const caster of spellCasters) {
-      // Extract from 'spells'
-      for (const spell of caster.spells) {
-        spell.list.forEach((spellName: string) => {
-          extractedSpells.push({ name: spellName, rank: spell.spellLevel, source: caster.name });
-        });
-      }
-      // Extract from 'prepared'
-      for (const prepared of caster.prepared) {
-        prepared.list.forEach((spellName: string) => {
-          extractedSpells.push({ name: spellName, rank: prepared.spellLevel, source: caster.name });
-        });
-      }
-    }
-
-    return extractedSpells;
-  }
-
-  const ftc = {
-    version: '1.0',
-    data: {
-      class: build.class,
-      background: build.background,
-      ancestry: build.ancestry,
-      name: build.name,
-      level: build.level,
-      experience: 0,
-      content_sources: 'ALL',
-      selections: [
-        ...convertAttributes(build.abilities.breakdown.ancestryFree, 1),
-        ...convertAttributes(build.abilities.breakdown.ancestryBoosts, 1),
-        ...convertAttributes(build.abilities.breakdown.backgroundBoosts, 1),
-        ...convertAttributes(build.abilities.breakdown.classBoosts, 1),
-        ...convertAttributes(build.abilities.breakdown.mapLevelledBoosts['1'], 1),
-        ...convertAttributes(build.abilities.breakdown.mapLevelledBoosts['5'], 5),
-        ...convertAttributes(build.abilities.breakdown.mapLevelledBoosts['10'], 10),
-        ...convertAttributes(build.abilities.breakdown.mapLevelledBoosts['15'], 15),
-        ...convertAttributes(build.abilities.breakdown.mapLevelledBoosts['20'], 20),
-        ...build.feats.map(convertFeats),
-        ...build.lores.map(convertLores),
-        {
-          name: build.heritage,
-          level: 1,
-        },
-      ],
-      items: [
-        ...build.equipment.map((data: [string, number, string, string]) => {
-          return {
-            name: data[0],
-            level: data[1],
-          };
-        }),
-        ...build.weapons.map((data: Record<string, any>) => {
-          return {
-            name: data.name,
-            level: undefined,
-          };
-        }),
-        ...build.armor.map((data: Record<string, any>) => {
-          return {
-            name: data.name,
-            level: undefined,
-          };
-        }),
-      ],
-      coins: {
-        cp: build.money.cp,
-        sp: build.money.sp,
-        gp: build.money.gp,
-        pp: build.money.pp,
-      },
-      spells: convertSpells(build.spellCasters),
-      conditions: [],
-      hp: undefined,
-      temp_hp: undefined,
-      hero_points: undefined,
-      stamina: undefined,
-      resolve: undefined,
-      info: {
-        notes: undefined,
-        appearance: undefined,
-        personality: undefined,
-        alignment: build.alignment,
-        beliefs: build.deity,
-        age: build.age,
-        height: undefined,
-        weight: undefined,
-        gender: build.gender,
-        pronouns: undefined,
-        faction: undefined,
-        reputation: undefined,
-        ethnicity: undefined,
-        nationality: undefined,
-        birthplace: undefined,
-        organized_play_id: undefined,
-      },
-    },
-  } satisfies FTC;
-
-  return ftc;
-}
+export { importFromPathbuilderShare };
+export type { PathbuilderImportOutcome } from './pathbuilder-share-importer';
