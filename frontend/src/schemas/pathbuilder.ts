@@ -33,6 +33,12 @@ export type PathbuilderAbility = (typeof PATHBUILDER_ABILITIES)[number];
 /** A Custom File UUID, which is how Pathbuilder references custom content. */
 export const PATHBUILDER_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Pathbuilder occasionally serializes numeric discriminator fields as strings. */
+const PathbuilderNumericSchema = z.union([
+  z.number(),
+  z.string().regex(/^\\d+$/).transform(Number),
+]);
+
 // ─── Custom Files ─────────────────────────────────────────────────────────────
 
 export const PathbuilderCustomEffectSchema = z
@@ -56,7 +62,7 @@ export type PathbuilderCustomEffect = z.infer<typeof PathbuilderCustomEffectSche
 export const PathbuilderCustomFileSchema = z
   .object({
     uniqueIdentifier: z.string(),
-    type: z.number(),
+    type: PathbuilderNumericSchema,
     name: z.string().nullish(),
     description: z.string().nullish(),
     itemLevel: z.number().nullish(),
@@ -84,7 +90,7 @@ export type PathbuilderCustomFile = z.infer<typeof PathbuilderCustomFileSchema>;
  */
 export const PathbuilderCustomFileEntrySchema = z
   .object({
-    type: z.number(),
+    type: PathbuilderNumericSchema,
     json: z.string(),
     timestamp: z.string().nullish(),
     uniqueIdentifier: z.string().nullish(),
