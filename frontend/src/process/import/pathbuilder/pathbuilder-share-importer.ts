@@ -263,17 +263,40 @@ async function ensureCustomContent(
   const needed = allCustom.filter((custom) => referenced.has(custom.uniqueIdentifier));
   if (needed.length === 0) return { sourceId: null, byUuid };
 
-  const source: ContentSource = {
+  const source = await upsertContentSource({
     id: -1,
+    created_at: '',
+    user_id: '',
     name: `Pathbuilder Custom (build ${buildId})`,
-    type: 'USER',
-    description: `Custom content imported from Pathbuilder build ${buildId}`,
-    is_public: false,
-    creator_id: '',
-    version: '1.0',
-    icon: '',
-    tags: [],
-  };
+    foundry_id: null,
+    url: `https://pathbuilder2e.com/app.html?emailedBuildID=${buildId}`,
+    description: 'Custom content carried by a Pathbuilder 2e share link, imported verbatim.',
+    operations: [],
+    contact_info: '',
+    group: '',
+    require_key: false,
+    keys: null,
+    is_published: false,
+    deprecated: false,
+    artwork_url: '',
+    required_content_sources: [],
+  } satisfies ContentSource);
+
+  const sourceId = source?.id ?? null;
+  if (sourceId === null || sourceId < 0) {
+    warnings.push('custom content: could not create a content source, so Custom Files were not persisted as items');
+    return { sourceId, byUuid };
+  }
+
+  // Trait names need WG trait ids; unresolved names are kept as display_traits.
+  const traits = await fetchTraitMap();
+
+  for (const [uuid, customFile] of referenced) {
+    const item = await createCustomItem(customFile, sourceId, traits, warnings);
+    if (item) byUuid.set(uuid, item);
+  }
+
+  return { sourceId, byUuid };
 
   try {
     const createdSource = await upsertContentSource(source);
@@ -298,34 +321,46 @@ async function ensureCustomContent(
 async function createCustomItem(
   customFile: PathbuilderCustomFile,
   sourceId: number,
+  traits: Map<string, number>,
   warnings: string[]
 ): Promise<Item | null> {
-  const isWeapon = customFile.type === 3;
   const rawTraits = (customFile.weaponTraits ?? '')
     .split(',')
     .map((trait) => trait.trim())
     .filter(Boolean);
 
-  const traits: Trait[] = [];
-  if (rawTraits.length > 0) {
-    const content = await fetchContentPackage(defineDefaultSources('PAGE', [sourceId]), { fetchSources: true });
-    for (const trait of rawTraits) {
-      const found = content.traits.find((candidate) => labelToVariable(candidate.name) === labelToVariable(trait));
-      if (found) traits.push(found);
-    }
+  const traitIds: number[] = [];
+  const unresolvedTraits: string[] = [];
+  for (const name of rawTraits) {
+    const id = traits.get(labelToVariable(name));
+    if (id !== undefined) traitIds.push(id);
+    else unresolvedTraits.push(name);
+  }
+  if (unresolvedTraits.length > 0) {
+    warnings.push(`custom item "${customFile.name}": traits not found in WG content: ${unresolvedTraits.join(', ')}`);
   }
 
-  const item: Item = {
+  const isWeapon =
+    customFile.damage !== undefined ||
+    (customFile.weaponTraits ?? '').length > 0 ||
+    customFile.group !== undefined;
+
+  // Pathbuilder descriptions are HTML-ish (<br>, <br><br>); WG content is markdown.
+  // toMarkdown is the same helper the custom-pack importer uses, so both Pathbuilder
+  // entry points normalize prose identically.
+  const description =
+    toMarkdown([customFile.description, customFile.action0desc].filter(Boolean).join('<br><br>')) ?? '';
+
+  const item = {
     id: -1,
     created_at: '',
-    name: customFile.name ?? customFile.uniqueIdentifier,
-    price: typeof customFile.price === 'number' ? String(customFile.price) : '0',
-    bulk: '0',
+    name: customFile.name ?? 'Unnamed Custom Item',
+    price: typeof customFile.price === 'number' ? { gp: customFile.price } : null,
+    bulk: null,
     level: customFile.itemLevel ?? 0,
-    rarity: 'UNCOMMON',
-    availability: null,
-    traits: traits.map((trait) => trait.id),
-    description: toMarkdown(customFile.description ?? ''),
+    rarity: /unique/i.test(customFile.weaponTraits ?? '') ? 'UNIQUE' : 'COMMON',
+    traits: traitIds,
+    description,
     group: isWeapon ? 'WEAPON' : 'GENERAL',
     hands: customFile.hands ?? null,
     size: 'MEDIUM',
@@ -335,6 +370,7 @@ async function createCustomItem(
     content_source_id: sourceId,
     version: '1.0',
     meta_data: {
+      // Kept as display text so nothing is lost when a trait has no WG id.
       display_traits: rawTraits,
       ...(isWeapon
         ? {
@@ -347,12 +383,14 @@ async function createCustomItem(
             group: (customFile.group ?? '').toLowerCase(),
           }
         : {}),
+      // The verbatim Custom File, so the PT-BR translation layer and any future
+      // re-export can work from the original rather than from our mapping.
       pathbuilder: {
         uniqueIdentifier: customFile.uniqueIdentifier,
         type: customFile.type,
         source: customFile.src ?? 'Custom',
         raw: customFile,
-      },
+      } as Record<string, unknown>,
     },
   } satisfies Item;
 
@@ -362,11 +400,11 @@ async function createCustomItem(
     return null;
   }
   if ((created.id ?? -1) < 0) {
+    // create-item answered `true` instead of the row, so we have no real id.
     warnings.push(`custom item "${item.name}": created without a returned id; it may need a manual re-link`);
   }
   return created;
 }
-
 /** Pathbuilder uses single-letter damage types ("P"); WG spells them out. */
 function mapDamageType(value: string | undefined): string | undefined {
   switch ((value ?? '').toUpperCase()) {
