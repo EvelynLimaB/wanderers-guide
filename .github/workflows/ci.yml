@@ -4,7 +4,9 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    branches:
+      - main
+      - feature/pathbuilder-1to1-import
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
