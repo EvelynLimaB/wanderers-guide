@@ -1,12 +1,15 @@
-import { Button, Group, Modal, NumberInput, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Button, Group, Modal, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useState } from 'react';
+
+import { extractBuildId } from './fetch-pathbuilder-share';
 
 export default function PathbuilderInputModal(props: {
   open: boolean;
-  onConfirm: (pathbuilderId: number) => void;
+  onConfirm: (pathbuilderInput: string) => void;
   onClose: () => void;
 }) {
-  const [pathbuilderId, setPathbuilderId] = useState<number>();
+  const [input, setInput] = useState('');
+  const buildId = extractBuildId(input);
 
   return (
     <Modal
@@ -16,27 +19,26 @@ export default function PathbuilderInputModal(props: {
       zIndex={1000}
     >
       <Stack style={{ position: 'relative' }} gap={20}>
-        <NumberInput
-          label='Pathbuilder 2e JSON ID'
-          placeholder='123456'
-          value={pathbuilderId}
-          onChange={(val) => setPathbuilderId(parseInt(`${val}`))}
+        <TextInput
+          label='Pathbuilder build ID or share link'
+          placeholder='123456 or https://pathbuilder2e.com/app.html?emailedBuildID=123456'
+          value={input}
+          onChange={(event) => setInput(event.currentTarget.value)}
+          error={input.trim() && !buildId ? 'Could not find a build ID in that' : undefined}
+          description={buildId && input.trim() !== buildId ? `Build ${buildId}` : undefined}
         />
-
         <Text fs='italic' fz='sm'>
-          Warning: Some selections may be missing after import. This can occur due to incomplete export data and name
-          changes due to Pathbuilder not complying with Paizo’s Community Use Policy.
+          Custom items are imported as homebrew content.
         </Text>
-
         <Group justify='flex-end'>
           <Button variant='default' onClick={props.onClose}>
             Cancel
           </Button>
           <Button
-            disabled={!pathbuilderId}
+            disabled={!buildId}
             onClick={() => {
-              if (!pathbuilderId) return;
-              props.onConfirm(pathbuilderId);
+              if (!buildId) return;
+              props.onConfirm(input.trim());
             }}
           >
             Import
