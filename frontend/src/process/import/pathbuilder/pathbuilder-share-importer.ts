@@ -289,7 +289,7 @@ async function ensureCustomContent(
 async function fetchTraitMap(): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   try {
-    const sources = await fetchContentSources('ALL-OFFICIAL-PUBLIC');
+    const sources = await fetchContentSources('ALL-USER-ACCESSIBLE');
     const sv = defineDefaultSources('PAGE', sources.map((source) => source.id));
     const content = await fetchContentPackage(sv, { fetchSources: true });
     for (const trait of (content.traits ?? []) as Trait[]) {
@@ -526,7 +526,7 @@ async function buildCharacter(
     // been fetched, so the object cannot satisfy Character at this point.
   } as unknown as Character;
 
-  const sources = await fetchContentSources('ALL-OFFICIAL-PUBLIC');
+  const sources = await fetchContentSources('ALL-USER-ACCESSIBLE');
   character.content_sources!.enabled = sources.map((source) => source.id);
 
   const sv = defineDefaultSources('PAGE', character.content_sources?.enabled ?? []);
