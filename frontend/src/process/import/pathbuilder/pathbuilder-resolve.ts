@@ -373,14 +373,14 @@ export function resolveBuild(
     identity: {
       name: cd.characterName ?? 'Unknown Wanderer',
       level: cd.characterLevel ?? 1,
-      ancestry: cd.ancestry,
-      heritage: cd.heritage,
-      className: cd.className,
-      background: stripCategoryPrefix(cd.background),
-      gender: cd.gender,
-      alignment: cd.alignment,
-      deity: cd.deity,
-      age: cd.age,
+      ancestry: cd.ancestry ?? undefined,
+      heritage: cd.heritage ?? undefined,
+      className: cd.className ?? undefined,
+      background: stripCategoryPrefix(cd.background ?? undefined),
+      gender: cd.gender ?? undefined,
+      alignment: cd.alignment ?? undefined,
+      deity: cd.deity ?? undefined,
+      age: cd.age ?? undefined,
     },
     variants: {
       ancestry_paragon: cd.ancestryParagon === true,
@@ -407,7 +407,7 @@ export function resolveBuild(
     spells,
     activeCustomBuffs: buffs,
     customFiles,
-    notes: cd.notes,
+    notes: cd.notes ?? undefined,
     // `characterData` only tracks `gold`; the derived payload has the full split.
     coins: derived?.money
       ? {
