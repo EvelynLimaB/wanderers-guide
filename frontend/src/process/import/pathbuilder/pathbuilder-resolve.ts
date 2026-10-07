@@ -456,8 +456,8 @@ export function resolveBuild(
       ...resolveAbilityBoosts(cd.hashMapAbilityBoosts ?? undefined),
       ...resolveAncestryFreeBoosts(cd.hashMapAncestryFreeBoostSelections ?? undefined),
       ...resolveBackgroundBoosts(
-        cd.backgroundBoostLimitedSelection,
-        cd.getBackgroundBoostFreeSelection
+        cd.backgroundBoostLimitedSelection ?? undefined,
+        cd.getBackgroundBoostFreeSelection ?? undefined
       ),
     ].sort((a, b) => a.level - b.level),
     skillIncreases: resolveSkillIncreases(cd.hashMapSkillIncreases ?? undefined),
