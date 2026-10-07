@@ -563,7 +563,7 @@ async function createCustomItem(
                 ? (candidate as NonNullable<NonNullable<Item['meta_data']>['category']>)
                 : '';
             })(),
-            group: mapMetaGroup(customFile.group) ?? (inferredBaseWeapon?.meta_data?.group as string | undefined),
+            group: mapMetaGroup(customFile.group) ?? inferredBaseWeapon?.meta_data?.group,
           }
         : {}),
       // The verbatim Custom File, so the PT-BR translation layer and any future
