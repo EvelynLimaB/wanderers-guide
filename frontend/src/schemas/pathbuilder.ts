@@ -255,6 +255,35 @@ export type PathbuilderShareResponse = z.infer<typeof PathbuilderShareResponseSc
  * The derived json.php shape. Optional enrichment: it is unavailable for many
  * shared builds, and the importer must produce a complete result without it.
  */
+export const PathbuilderDerivedSpellCasterSchema = z
+  .object({
+    name: z.string().nullish(),
+    magicTradition: z.string().nullish(),
+    spellcastingType: z.string().nullish(),
+    ability: z.string().nullish(),
+    proficiency: z.number().nullish(),
+    focusPoints: z.number().nullish(),
+    innate: z.boolean().nullish(),
+    perDay: z.array(z.number()).nullish(),
+    spells: z.array(z.unknown()).nullish(),
+    prepared: z.array(z.unknown()).nullish(),
+    blendedSpells: z.array(z.unknown()).nullish(),
+  })
+  .passthrough();
+
+export const PathbuilderDerivedArmorSchema = z
+  .object({
+    name: z.string().nullish(),
+    qty: z.number().nullish(),
+    prof: z.string().nullish(),
+    pot: z.number().nullish(),
+    res: z.string().nullish(),
+    display: z.string().nullish(),
+    runes: z.array(z.string()).nullish(),
+    worn: z.boolean().nullish(),
+  })
+  .passthrough();
+
 export const PathbuilderDerivedBuildSchema = z
   .object({
     name: z.string().nullish(),
@@ -275,6 +304,13 @@ export const PathbuilderDerivedBuildSchema = z
         pp: z.number().optional(),
       })
       .optional(),
+    resistances: z.array(z.string()).nullish(),
+    armor: z.array(PathbuilderDerivedArmorSchema).nullish(),
+    spellCasters: z.array(PathbuilderDerivedSpellCasterSchema).nullish(),
+    focusPoints: z.number().nullish(),
+    focus: z.record(z.string(), z.unknown()).nullish(),
+    familiars: z.array(z.unknown()).nullish(),
+    pets: z.array(z.unknown()).nullish(),
   })
   .passthrough();
 export type PathbuilderDerivedBuild = z.infer<typeof PathbuilderDerivedBuildSchema>;
