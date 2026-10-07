@@ -40,6 +40,14 @@ test('the captured v121 share payload passes the wire schema and fetch parser', 
   const reparsed = PathbuilderShareBuildSchema.safeParse(stringTyped);
   assert.equal(reparsed.success, true);
 
+  // The type discriminator is opaque and has drifted between Pathbuilder
+  // payloads. Preserve unexpected scalar/object values instead of rejecting
+  // the entire share before we can resolve the actual Custom File JSON.
+  const driftedType = structuredClone(fixture.build);
+  driftedType.listCustomFiles[5].type = { kind: 'custom-content' };
+  const driftedParsed = PathbuilderShareBuildSchema.safeParse(driftedType);
+  assert.equal(driftedParsed.success, true);
+
   const response = new Response(
     JSON.stringify({
       success: true,
