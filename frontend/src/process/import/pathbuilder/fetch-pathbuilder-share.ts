@@ -108,8 +108,14 @@ export async function fetchPathbuilderShare(
 
   const parsed = PathbuilderShareBuildSchema.safeParse(innerJson);
   if (!parsed.success) {
+    const details = parsed.error.issues
+      .map((issue) => `${issue.path.join('.')} ${issue.message}`)
+      .join('; ');
     console.warn(`Pathbuilder build did not match the schema for build ${buildId}:`, parsed.error.issues);
-    return { ok: false, error: 'Pathbuilder build payload did not match the expected shape' };
+    return {
+      ok: false,
+      error: `Pathbuilder build payload did not match the expected shape${details ? ` (${details})` : ''}`,
+    };
   }
 
   return { ok: true, build: parsed.data, formatVersion: envelope.data.version ?? undefined };
