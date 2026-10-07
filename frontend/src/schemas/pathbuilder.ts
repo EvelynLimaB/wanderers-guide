@@ -217,10 +217,12 @@ export type PathbuilderCharacterData = z.infer<typeof PathbuilderCharacterDataSc
 
 // ─── envelopes ────────────────────────────────────────────────────────────────
 
-export const PathbuilderShareBuildSchema = z.object({
-  characterData: PathbuilderCharacterDataSchema,
-  listCustomFiles: z.array(PathbuilderCustomFileEntrySchema).optional(),
-});
+export const PathbuilderShareBuildSchema = z
+  .object({
+    characterData: PathbuilderCharacterDataSchema,
+    listCustomFiles: z.array(PathbuilderCustomFileEntrySchema).optional(),
+  })
+  .passthrough();
 export type PathbuilderShareBuild = z.infer<typeof PathbuilderShareBuildSchema>;
 
 /** Response body of POST /app/fetch_emailed.php. build is still a string here. */
