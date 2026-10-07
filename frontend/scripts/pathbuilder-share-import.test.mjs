@@ -51,6 +51,11 @@ test('the captured v121 share payload passes the wire schema and fetch parser', 
   const reparsed = PathbuilderShareBuildSchema.safeParse(stringTyped);
   assert.equal(reparsed.success, true);
 
+  const nonNumericType = structuredClone(fixture.build);
+  nonNumericType.listCustomFiles[0].type = 'custom-buff';
+  const reparsedNonNumeric = PathbuilderShareBuildSchema.safeParse(nonNumericType);
+  assert.equal(reparsedNonNumeric.success, true);
+
   const response = new Response(
     JSON.stringify({
       success: true,
