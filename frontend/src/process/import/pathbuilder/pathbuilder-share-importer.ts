@@ -343,9 +343,9 @@ async function createCustomItem(
   }
 
   const isWeapon =
-    customFile.damage !== undefined ||
+    typeof customFile.damage === 'number' ||
     (customFile.weaponTraits ?? '').length > 0 ||
-    customFile.group !== undefined;
+    typeof customFile.group === 'string';
 
   // Pathbuilder descriptions are HTML-ish (<br>, <br><br>); WG content is markdown.
   // toMarkdown is the same helper the custom-pack importer uses, so both Pathbuilder
@@ -409,7 +409,7 @@ async function createCustomItem(
   return created;
 }
 /** Map Pathbuilder's free-form weapon group to WG's finite ItemMetaGroup vocabulary. */
-function mapMetaGroup(value: string | undefined): NonNullable<Item['meta_data']>['group'] {
+function mapMetaGroup(value: string | null | undefined): NonNullable<Item['meta_data']>['group'] {
   const normalized = (value ?? '').trim().toLowerCase();
   if (!normalized) return undefined;
   return ItemMetaGroupSchema.safeParse(normalized).success
@@ -418,7 +418,7 @@ function mapMetaGroup(value: string | undefined): NonNullable<Item['meta_data']>
 }
 
 /** Pathbuilder uses single-letter damage types ("P"); WG spells them out. */
-function mapDamageType(value: string | undefined): string | undefined {
+function mapDamageType(value: string | null | undefined): string | undefined {
   switch ((value ?? '').toUpperCase()) {
     case 'P':
       return 'piercing';
