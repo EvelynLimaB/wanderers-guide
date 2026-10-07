@@ -301,21 +301,34 @@ export function resolveSpecialSelections(selections: Record<string, Record<strin
  * payload does. Without it we cannot name the tradition/source, so record that
  * rather than guessing.
  */
-export function resolveSpells(spells: Record<string, unknown> | undefined, unresolved: UnresolvedRef[]): ResolvedSpell[] {
+export function resolveSpells(
+  spells: Record<string, unknown> | undefined,
+  unresolved: UnresolvedRef[],
+  derived?: Record<string, unknown> | null
+): ResolvedSpell[] {
   const out: ResolvedSpell[] = [];
+  const spellCasters = Array.isArray(derived?.spellCasters) ? derived.spellCasters : [];
+
   for (const [rawKey, value] of Object.entries(spells ?? {})) {
     const entry = (value ?? {}) as { spellName?: string; spellList?: number; heighten?: number };
     const name = entry.spellName ?? rawKey.split('&')[0];
     if (!name) continue;
-    out.push({ name, spellListIndex: entry.spellList, heighten: entry.heighten ?? 0, rawKey });
-    if (typeof entry.spellList === 'number') {
-      unresolved.push({
-        kind: 'spell-source',
-        ref: `${name} (spellList ${entry.spellList})`,
-        reason: 'spellList is an index into spellcasting entries, which the share payload omits; fetch json.php to name the source',
-      });
-    }
+
+    const caster =
+      typeof entry.spellList === 'number' && entry.spellList >= 0
+        ? (spellCasters[entry.spellList] as { name?: string; magicTradition?: string } | undefined)
+        : undefined;
+
+    out.push({
+      name,
+      spellListIndex: entry.spellList,
+      heighten: entry.heighten ?? 0,
+      rawKey,
+      source: caster?.name ?? undefined,
+      tradition: caster?.magicTradition ?? undefined,
+    });
   }
+
   return out;
 }
 
@@ -359,7 +372,7 @@ export function resolveBuild(
   const { loose, containers } = resolveEquipment(cd, customFiles, unresolved);
   const weapons = resolveWeapons(cd.listPlayerWeapons ?? undefined, customFiles, unresolved);
   const buffs = resolveActiveCustomBuffs(cd.hashMapActiveCustomBuffs ?? undefined, customFiles, unresolved);
-  const spells = resolveSpells(cd.hashMapPlayerSpells ?? undefined, unresolved);
+  const spells = resolveSpells(cd.hashMapPlayerSpells ?? undefined, unresolved, options.derived);
 
   // Armor: `playerArmor` may carry runes/potency with no name at all, which is
   // what build 1596127 does. That is not an error we can fix here: the armor
