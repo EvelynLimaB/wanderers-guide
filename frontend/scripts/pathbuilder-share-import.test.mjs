@@ -13,7 +13,8 @@ import {
   resolveBuild,
   stripCategoryPrefix,
 } from '../src/process/import/pathbuilder/pathbuilder-resolve.ts';
-import { extractBuildId } from '../src/process/import/pathbuilder/fetch-pathbuilder-share.ts';
+import { extractBuildId, fetchPathbuilderShare } from '../src/process/import/pathbuilder/fetch-pathbuilder-share.ts';
+import { PathbuilderShareBuildSchema } from '../src/schemas/pathbuilder.ts';
 import { PathbuilderShareBuildSchema } from '../src/schemas/pathbuilder.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -38,6 +39,36 @@ test('the captured share payload passes the wire schema, including string Custom
   stringTyped.listCustomFiles[0].type = '1';
   const reparsed = PathbuilderShareBuildSchema.safeParse(stringTyped);
   assert.equal(reparsed.success, true);
+});
+
+test('the captured v121 share payload passes the wire schema and fetch parser', async () => {
+  const parsed = PathbuilderShareBuildSchema.safeParse(fixture.build);
+  assert.equal(parsed.success, true);
+
+  const stringTyped = structuredClone(fixture.build);
+  stringTyped.listCustomFiles[0].type = '1';
+
+  const reparsed = PathbuilderShareBuildSchema.safeParse(stringTyped);
+  assert.equal(reparsed.success, true);
+
+  const response = new Response(
+    JSON.stringify({
+      success: true,
+      version: '121',
+      build: JSON.stringify(stringTyped),
+    }),
+    { status: 200, headers: { 'content-type': 'application/json' } }
+  );
+
+  const fetched = await fetchPathbuilderShare('1596127', {
+    fetchImpl: async () => response,
+  });
+
+  assert.equal(fetched.ok, true);
+  if (fetched.ok) {
+    assert.equal(fetched.formatVersion, '121');
+    assert.equal(fetched.build.listCustomFiles?.[0]?.type, 1);
+  }
 });
 
 test('identity is read from characterData, not from a derived sheet', () => {
