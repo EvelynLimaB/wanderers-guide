@@ -198,6 +198,8 @@ export const PathbuilderCharacterDataSchema = z
 
     hashMapAbilityBoosts: z.record(z.string(), z.array(z.number())).nullish(),
     hashMapAncestryFreeBoostSelections: z.record(z.string(), z.number()).nullish(),
+    backgroundBoostLimitedSelection: z.number().nullish(),
+    getBackgroundBoostFreeSelection: z.number().nullish(),
     hashMapSkillIncreases: z.record(z.string(), z.array(z.string())).nullish(),
     hashMapCustomSkillIncreases: z.record(z.string(), z.number()).nullish(),
     hashMapTrainedOnlySkillChoices: z.record(z.string(), z.array(z.string())).nullish(),
