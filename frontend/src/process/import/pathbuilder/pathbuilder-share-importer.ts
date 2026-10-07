@@ -158,6 +158,7 @@ export async function importFromPathbuilderShare(
       content,
       customItems,
       custom.fallbackSpellsByName,
+      customSourceId,
       warnings
     );
 
@@ -751,6 +752,7 @@ async function buildCharacter(
   content: Awaited<ReturnType<typeof fetchContentPackage>>,
   customItems: Map<string, Item>,
   fallbackSpellsByName: Map<string, Spell>,
+  customSourceId: number | null,
   warnings: string[]
 ): Promise<Character | null> {
   const character = {
@@ -845,7 +847,10 @@ async function buildCharacter(
     character.custom_operations = importedOperations;
   }
 
-  character.content_sources!.enabled = content.sources?.map((source) => source.id) ?? [];
+  character.content_sources!.enabled = [
+    ...(content.sources?.map((source) => source.id) ?? []),
+    ...(customSourceId !== null ? [customSourceId] : []),
+  ];
 
   character.details!.class = content.classes.find((c) => labelToVariable(c.name) === labelToVariable(resolved.identity.className ?? ''));
   character.details!.background = content.backgrounds.find(
