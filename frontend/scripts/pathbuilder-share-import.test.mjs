@@ -15,7 +15,6 @@ import {
 } from '../src/process/import/pathbuilder/pathbuilder-resolve.ts';
 import { extractBuildId, fetchPathbuilderShare } from '../src/process/import/pathbuilder/fetch-pathbuilder-share.ts';
 import { PathbuilderShareBuildSchema } from '../src/schemas/pathbuilder.ts';
-import { PathbuilderShareBuildSchema } from '../src/schemas/pathbuilder.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = JSON.parse(readFileSync(join(here, 'fixtures', 'pathbuilder-kasane-1596127.json'), 'utf8'));
@@ -29,16 +28,6 @@ const fixture = JSON.parse(readFileSync(join(here, 'fixtures', 'pathbuilder-kasa
 const resolved = resolveBuild(fixture.build, {
   buildId: fixture.build_id,
   formatVersion: fixture.format_version,
-});
-
-test('the captured share payload passes the wire schema, including string Custom File types', () => {
-  const parsed = PathbuilderShareBuildSchema.safeParse(fixture.build);
-  assert.equal(parsed.success, true);
-
-  const stringTyped = structuredClone(fixture.build);
-  stringTyped.listCustomFiles[0].type = '1';
-  const reparsed = PathbuilderShareBuildSchema.safeParse(stringTyped);
-  assert.equal(reparsed.success, true);
 });
 
 test('the captured v121 share payload passes the wire schema and fetch parser', async () => {
