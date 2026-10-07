@@ -95,6 +95,7 @@ test('level-1 ancestry/background boosts and trained-only skills are preserved',
   assert.deepEqual(resolved.trainedSkills, ['Acrobatics', 'Stealth']);
 });
 
+
 test('Pathbuilder keeps languages and active custom effects in the resolved payload', () => {
   assert.deepEqual(resolved.languages, ['Common']);
   assert.equal(resolved.activeCustomBuffs.length, 1);
@@ -102,6 +103,58 @@ test('Pathbuilder keeps languages and active custom effects in the resolved payl
   assert.equal(resolved.activeCustomBuffs[0].stacks, 1);
   assert.equal(resolved.activeCustomBuffs[0].custom?.listCustomEffects?.[0]?.effectType, 8);
   assert.equal(resolved.activeCustomBuffs[0].custom?.listCustomEffects?.[0]?.bonusAmount, 1);
+});
+
+test('json.php-derived spellcaster data resolves spell source instead of reporting it as unmapped', () => {
+  const build = structuredClone(fixture.build);
+  build.characterData.hashMapPlayerSpells = {
+    'Message&0&0': {
+      spellList: 0,
+      spellName: 'Message',
+      heighten: 0,
+    },
+  };
+
+  const derived = {
+    spellCasters: [
+      {
+        name: 'Wizard',
+        magicTradition: 'arcane',
+        spellcastingType: 'prepared',
+      },
+    ],
+  };
+
+  const derivedResolved = resolveBuild(build, {
+    buildId: fixture.build_id,
+    formatVersion: fixture.format_version,
+    derived,
+  });
+
+  assert.equal(derivedResolved.spells[0].source, 'Wizard');
+  assert.equal(derivedResolved.spells[0].tradition, 'arcane');
+  assert.equal(derivedResolved.unresolved.some((entry) => entry.kind === 'spell-source'), false);
+});
+
+test('json.php-derived armor data recovers an armor name missing from playerArmor', () => {
+  const build = structuredClone(fixture.build);
+  build.characterData.playerArmor = {
+    potency: 1,
+    listPropertyRunes: ['Raiment'],
+    armorName: 'be5e11f6-4459-4080-9107-8145dd57014b',
+  };
+
+  const derivedResolved = resolveBuild(build, {
+    buildId: fixture.build_id,
+    formatVersion: fixture.format_version,
+    derived: {
+      armor: [{ name: 'Full Plate', pot: 1 }],
+    },
+  });
+
+  assert.equal(derivedResolved.armor?.name, 'Full Plate');
+  assert.equal(derivedResolved.armor?.raw, 'be5e11f6-4459-4080-9107-8145dd57014b');
+  assert.equal(derivedResolved.unresolved.some((entry) => entry.kind === 'armor'), false);
 });
 
 test('rule variants map onto WG CharacterVariants keys', () => {
