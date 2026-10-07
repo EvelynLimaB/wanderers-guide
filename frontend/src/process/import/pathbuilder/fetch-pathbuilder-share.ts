@@ -39,7 +39,7 @@ export function extractBuildId(input: string | number | undefined | null): strin
 
   try {
     const url = new URL(text);
-    for (const param of ['emailedBuildID', 'emailedBuildId', 'buildID', 'buildId', 'jsonID', 'jsonId', 'id']) {
+    for (const param of ['emailedBuildID', 'emailedBuildId', 'buildID', 'buildId', 'build', 'jsonID', 'jsonId', 'id']) {
       const value = url.searchParams.get(param);
       if (value && /^\d+$/.test(value)) return value;
     }
