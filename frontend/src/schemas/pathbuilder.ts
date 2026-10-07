@@ -58,8 +58,7 @@ export type PathbuilderCustomEffect = z.infer<typeof PathbuilderCustomEffectSche
  */
 export const PathbuilderCustomFileSchema = z
   .object({
-    uniqueIdentifier: z.string().nullish(),
-    uniqueIdentiier: z.string().nullish(),
+    uniqueIdentifier: z.string(),
     type: PathbuilderTypeSchema,
     name: z.string().nullish(),
     description: z.string().nullish(),
@@ -76,15 +75,7 @@ export const PathbuilderCustomFileSchema = z
     action0desc: z.string().nullish(),
     listCustomEffects: z.array(PathbuilderCustomEffectSchema).nullish(),
   })
-  .passthrough()
-  .transform((value) => ({
-    ...value,
-    uniqueIdentifier: value.uniqueIdentifier ?? value.uniqueIdentiier,
-  }))
-  .refine((value) => typeof value.uniqueIdentifier === 'string' && value.uniqueIdentifier.length > 0, {
-    path: ['uniqueIdentifier'],
-    message: 'Custom File must contain uniqueIdentifier or uniqueIdentiier',
-  });
+  .passthrough();
 export type PathbuilderCustomFile = z.infer<typeof PathbuilderCustomFileSchema>;
 
 /**
