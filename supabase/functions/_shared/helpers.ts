@@ -417,7 +417,8 @@ export type TableName =
   | 'spell'
   | 'creature'
   | 'language'
-  | 'encounter';
+  | 'encounter'
+  | 'pathbuilder_import';
 
 interface SelectFilter {
   column: string;
