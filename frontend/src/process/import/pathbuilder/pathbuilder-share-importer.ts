@@ -405,7 +405,7 @@ async function createCustomItem(
       // re-export can work from the original rather than from our mapping.
       pathbuilder: {
         uniqueIdentifier: customFile.uniqueIdentifier,
-        type: numericPathbuilderType(customFile.type),
+        type: numericPathbuilderType(customFile.type) ?? 0,
         source: customFile.src ?? 'Custom',
         raw: customFile,
       },
