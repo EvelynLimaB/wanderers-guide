@@ -534,7 +534,7 @@ async function createCustomItem(
     size: 'MEDIUM',
     craft_requirements: null,
     usage: null,
-    operations: [],
+    operations: customEffectOperations(customFile, 1, warnings),
     content_source_id: sourceId,
     version: '1.0',
     meta_data: {
