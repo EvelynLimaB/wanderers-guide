@@ -245,6 +245,28 @@ export function resolveAbilityBoosts(boosts: Record<string, number[]> | undefine
   return out.sort((a, b) => a.level - b.level);
 }
 
+/** Ancestry free boosts are stored as an index map; all are level-1 choices. */
+export function resolveAncestryFreeBoosts(selections: Record<string, number> | undefined): ResolvedAbilityBoost[] {
+  return Object.values(selections ?? {})
+    .map((index) => abilityAt(index))
+    .filter((ability): ability is PathbuilderAbility => ability !== undefined)
+    .map((ability) => ({ level: 1, ability }));
+}
+
+/**
+ * Standard backgrounds provide one limited/fixed boost and one free boost.
+ * Pathbuilder stores the selected ability indexes directly.
+ */
+export function resolveBackgroundBoosts(
+  limitedSelection: number | undefined,
+  freeSelection: number | undefined
+): ResolvedAbilityBoost[] {
+  return [limitedSelection, freeSelection]
+    .map((index) => abilityAt(index))
+    .filter((ability): ability is PathbuilderAbility => ability !== undefined)
+    .map((ability) => ({ level: 1, ability }));
+}
+
 export function resolveSkillIncreases(increases: Record<string, string[]> | undefined): ResolvedSkillIncrease[] {
   const out: ResolvedSkillIncrease[] = [];
   for (const [level, skills] of Object.entries(increases ?? {})) {
@@ -391,7 +413,14 @@ export function resolveBuild(
       free_archetype: cd.freeArchetype === true,
       gradual_attribute_boosts: cd.gradualAbilityBoost === true,
     },
-    abilityBoosts: resolveAbilityBoosts(cd.hashMapAbilityBoosts ?? undefined),
+    abilityBoosts: [
+      ...resolveAbilityBoosts(cd.hashMapAbilityBoosts ?? undefined),
+      ...resolveAncestryFreeBoosts(cd.hashMapAncestryFreeBoostSelections ?? undefined),
+      ...resolveBackgroundBoosts(
+        cd.backgroundBoostLimitedSelection,
+        cd.getBackgroundBoostFreeSelection
+      ),
+    ].sort((a, b) => a.level - b.level),
     skillIncreases: resolveSkillIncreases(cd.hashMapSkillIncreases ?? undefined),
     trainedSkills: [
       ...new Set([
