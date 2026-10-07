@@ -1,51 +1,51 @@
-import { Character, Content, OperationCharacterResultPackage } from '@schemas/content';
-import { cloneDeep } from 'lodash-es';
-import { executeOperations } from '@operations/operations.main';
-import { ObjectWithUUID, OperationResult } from '@operations/operation-utils';
-import { isTruthy } from '@utils/types';
-import { labelToVariable, lengthenLabels } from '@variables/variable-utils';
-import { makeRequest } from '@requests/request-manager';
-import { selectRandom } from '@utils/random';
-import { generateNames } from '@process/names/name-generator';
-import { randomCharacterInfo } from '@process/names/random-character-info';
-import { getAllBackgroundImages } from '@process/backgrounds/background-images';
-import { getConditionByName } from '@process/conditions/condition-handler';
-import { fetchContentPackage, fetchContentSources, defineDefaultSources } from '@content/content-store';
+import { generateNames } from '@ai/fantasygen-dev/name-controller';
+import { randomCharacterInfo } from '@ai/open-ai-handler';
+import { getConditionByName } from '@conditions/condition-handler';
+import {
+  defineDefaultSources,
+  fetchContentPackage,
+  fetchContentSources,
+  getDefaultSources,
+} from '@content/content-store';
 import { isItemEquippable, isItemImplantable, isItemInvestable } from '@items/inv-utils';
+import { executeOperations } from '@operations/operations.main';
+import { OperationResult } from '@schemas/operations';
+import { ObjectWithUUID, convertKeyToBasePrefix, hasOperationSelection } from '@operations/operation-utils';
+import { makeRequest } from '@requests/request-manager';
+import { Character, OperationCharacterResultPackage } from '@schemas/content';
+import { selectRandom } from '@utils/random';
+import { isTruthy } from '@utils/type-fixing';
+import { labelToVariable } from '@variables/variable-utils';
+import { cloneDeep } from 'lodash-es';
+import { getAllBackgroundImages } from '@utils/background-images';
+
+/**
+ * FTC - Finder 2e Character - A universal file structure for Pathfinder 2e and Starfinder 2e characters.
+ * ======================================================================================================
+ * This is the type definition for the FTC file structure as well as Wanderer's Guide's implementation of
+ * how to import a character from it.
+ */
 
 export interface FTC {
-  version: string;
+  version: '1.0';
   data: {
-    class: string;
-    background: string;
-    ancestry: string;
-    name: string;
+    class: string | 'RANDOM';
+    background: string | 'RANDOM';
+    ancestry: string | 'RANDOM';
+    name?: string | 'RANDOM';
     level: number;
-    experience: number;
+    experience?: number;
     content_sources: string[] | 'ALL';
-    selections: 'RANDOM' | {
-      name: string;
-      level: number;
-    }[];
-    items: {
-      name: string;
-      level?: number;
-    }[];
-    coins: {
+    selections: { name: string | 'RANDOM'; level: number }[] | 'RANDOM';
+    items: { name: string; level?: number }[];
+    coins?: {
       cp?: number;
       sp?: number;
       gp?: number;
       pp?: number;
     };
-    spells: {
-      name: string;
-      rank: number;
-      source: string;
-    }[];
-    conditions: {
-      name: string;
-      value?: string;
-    }[];
+    spells: { source: string; name: string; rank: number }[];
+    conditions: { name: string; value?: string }[];
     hp?: number;
     temp_hp?: number;
     hero_points?: number;
@@ -375,12 +375,7 @@ export async function importFromFTC(d: FTC) {
   });
 }
 
-/**
- * Shared with the Pathbuilder share importer: WG characters are produced by
- * running operations, so every importer needs the same "which choice does this
- * slot want" lookup. Exported rather than duplicated.
- */
-export function findMatchingOption(selections: { name: string; level: number }[], options: ObjectWithUUID[], level: number) {
+function findMatchingOption(selections: { name: string; level: number }[], options: ObjectWithUUID[], level: number) {
   for (const selection of selections.filter((s) => s.level === level)) {
     if (selection.name === 'RANDOM') {
       return selectRandom(options);
@@ -396,8 +391,7 @@ export function findMatchingOption(selections: { name: string; level: number }[]
   return null;
 }
 
-/** Shared with the Pathbuilder share importer. See `findMatchingOption`. */
-export function findFirstSelection(
+function findFirstSelection(
   resultPackage: OperationCharacterResultPackage,
   checked: Set<string>
 ): {
@@ -460,13 +454,13 @@ function innerFindFirstSelection(
 
       return { selection: result, path };
     } else if (result?.result?.results && result.result.results.length > 0) {
-      // Recursive case: dive deeper if nested results are present
+      // Recursive case: dive deeper if there are nested results
       const resultUUID = result.result?.source?._select_uuid ?? '';
       let newPath = basePath;
       if (resultUUID) newPath += (newPath ? '_' : '') + resultUUID;
 
       const deepSearch = innerFindFirstSelection(result.result.results, checked, newPath);
-      if (deepSearch && deepSearch.selection) return deepSearch;
+      if (deepSearch && deepSearch.selection) return deepSearch; // If a selection is found in deeper levels, return it
     }
   }
 
