@@ -58,7 +58,9 @@ serve(async (req: Request) => {
       if (value !== undefined) payload[key] = value;
     }
 
-    const { procedure, result } = await upsertData(client, 'pathbuilder_import', payload);
+    // The caller is authenticated above. Keep the write path service-role-only,
+    // matching the repository's backend convention that clients never write rows directly.
+    const { procedure, result } = await upsertData(createServiceClient(), 'pathbuilder_import', payload);
 
     return upsertResponseWrapper(procedure, result);
   });
