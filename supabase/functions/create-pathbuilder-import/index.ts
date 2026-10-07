@@ -1,6 +1,13 @@
 // @ts-ignore
 import { serve } from 'std/server';
-import { connect, getPublicUser, upsertData, upsertResponseWrapper } from '../_shared/helpers.ts';
+import {
+  connect,
+  createServiceClient,
+  getPublicUser,
+  updateData,
+  upsertData,
+  upsertResponseWrapper,
+} from '../_shared/helpers.ts';
 
 /**
  * Persists the raw Pathbuilder 2e share payload behind an import.
@@ -58,10 +65,46 @@ serve(async (req: Request) => {
       if (value !== undefined) payload[key] = value;
     }
 
-    // The caller is authenticated above. Keep the write path service-role-only,
-    // matching the repository's backend convention that clients never write rows directly.
-    const { procedure, result } = await upsertData(createServiceClient(), 'pathbuilder_import', payload);
+    // All writes use the service-role client after connect() has authenticated the caller.
+    // Updates additionally guard on user_id in the same SQL UPDATE, preventing an IDOR
+    // where an authenticated user supplies another user's snapshot id.
+    const serviceClient = createServiceClient();
 
+    if (id !== undefined && id !== null && id !== -1) {
+      const { status } = await updateData(
+        serviceClient,
+        'pathbuilder_import',
+        id as number,
+        payload,
+        false,
+        { guard: { column: 'user_id', value: user.user_id } }
+      );
+
+      if (status === 'SUCCESS') {
+        return { status: 'success', data: true };
+      }
+
+      if (status === 'CONFLICT') {
+        return {
+          status: 'fail',
+          data: { id: 'Import snapshot not found or not owned by the current user' },
+        };
+      }
+
+      if (status === 'ERROR_DUPLICATE') {
+        return {
+          status: 'fail',
+          data: { id: 'A conflicting import snapshot already exists' },
+        };
+      }
+
+      return {
+        status: 'error',
+        message: 'Failed to update import snapshot',
+      };
+    }
+
+    const { procedure, result } = await upsertData(serviceClient, 'pathbuilder_import', payload);
     return upsertResponseWrapper(procedure, result);
   });
 });
