@@ -249,19 +249,23 @@ async function ensureCustomContent(
   warnings: string[]
 ): Promise<{ sourceId: number | null; byUuid: Map<string, Item> }> {
   const byUuid = new Map<string, Item>();
-  const allCustom = [...resolved.customFiles.values()];
-  const referenced = new Set(
-    [
-      ...resolved.weapons.filter((weapon) => weapon.kind === 'custom').map((weapon) => weapon.uuid),
-      ...resolved.looseEquipment.filter((item) => item.kind === 'custom').map((item) => item.uuid),
-      ...resolved.containers.flatMap((container) => container.items).filter((item) => item.kind === 'custom').map((item) => item.uuid),
-      ...(resolved.armor?.kind === 'custom' ? [resolved.armor.uuid] : []),
-      ...(resolved.shield?.kind === 'custom' ? [resolved.shield.uuid] : []),
-      ...resolved.activeCustomBuffs.map((buff) => buff.uuid),
-    ].filter((uuid): uuid is string => !!uuid)
-  );
-  const needed = allCustom.filter((custom) => referenced.has(custom.uniqueIdentifier));
-  if (needed.length === 0) return { sourceId: null, byUuid };
+
+  // Only materialize Custom Files the character actually references. A payload can
+  // carry files for gear the character no longer has.
+  const referenced = new Map<string, PathbuilderCustomFile>();
+  const consider = (ref: ResolvedItemRef | undefined) => {
+    if (ref?.kind === 'custom' && ref.uuid && ref.custom) referenced.set(ref.uuid.toLowerCase(), ref.custom);
+  };
+  resolved.weapons.forEach(consider);
+  resolved.looseEquipment.forEach(consider);
+  resolved.containers.forEach((container) => container.items.forEach(consider));
+  consider(resolved.armor);
+  consider(resolved.shield);
+  resolved.activeCustomBuffs.forEach((buff) => {
+    if (buff.custom) referenced.set(buff.uuid.toLowerCase(), buff.custom);
+  });
+
+  if (referenced.size === 0) return { sourceId: null, byUuid };
 
   const source = await upsertContentSource({
     id: -1,
@@ -280,6 +284,7 @@ async function ensureCustomContent(
     deprecated: false,
     artwork_url: '',
     required_content_sources: [],
+    meta_data: null,
   } satisfies ContentSource);
 
   const sourceId = source?.id ?? null;
@@ -297,24 +302,21 @@ async function ensureCustomContent(
   }
 
   return { sourceId, byUuid };
+}
 
+async function fetchTraitMap(): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
   try {
-    const createdSource = await upsertContentSource(source);
-    if (!createdSource) {
-      warnings.push('custom content: could not create a WG content source');
-      return { sourceId: null, byUuid };
+    const sources = await fetchContentSources('ALL-OFFICIAL-PUBLIC');
+    const sv = defineDefaultSources('PAGE', sources.map((source) => source.id));
+    const content = await fetchContentPackage(sv, { fetchSources: true });
+    for (const trait of (content.traits ?? []) as Trait[]) {
+      map.set(labelToVariable(trait.name), trait.id);
     }
-
-    for (const customFile of needed) {
-      const item = await createCustomItem(customFile, createdSource.id, warnings);
-      if (item) byUuid.set(customFile.uniqueIdentifier.toLowerCase(), item);
-    }
-    return { sourceId: createdSource.id, byUuid };
   } catch (error) {
-    console.error('Could not import Pathbuilder custom content:', error);
-    warnings.push('custom content: unexpected error while creating homebrew content');
-    return { sourceId: null, byUuid };
+    console.warn('Could not load traits for the Pathbuilder import:', error);
   }
+  return map;
 }
 
 /** Convert one Pathbuilder Custom File to a WG Item while preserving the raw file in meta_data. */
@@ -370,6 +372,7 @@ async function createCustomItem(
     content_source_id: sourceId,
     version: '1.0',
     meta_data: {
+      bulk: {},
       // Kept as display text so nothing is lost when a trait has no WG id.
       display_traits: rawTraits,
       ...(isWeapon
