@@ -112,7 +112,7 @@ export async function fetchPathbuilderShare(
     return { ok: false, error: 'Pathbuilder build payload did not match the expected shape' };
   }
 
-  return { ok: true, build: parsed.data, formatVersion: envelope.data.version };
+  return { ok: true, build: parsed.data, formatVersion: envelope.data.version ?? undefined };
 }
 
 /**
