@@ -37,6 +37,7 @@ import { ObjectWithUUID } from '@operations/operation-utils';
 import { executeOperations } from '@operations/operations.main';
 import { makeRequest } from '@requests/request-manager';
 import { Character, InventoryItem, Item, ItemMetaGroupSchema, OperationCharacterResultPackage, Spell, Trait } from '@schemas/content';
+import { Operation } from '@schemas/operations';
 import { lengthenLabels, labelToVariable } from '@variables/variable-utils';
 import { cloneDeep } from 'lodash-es';
 
@@ -274,9 +275,6 @@ async function ensureCustomContent(
   resolved.containers.forEach((container) => container.items.forEach(consider));
   consider(resolved.armor);
   consider(resolved.shield);
-  resolved.activeCustomBuffs.forEach((buff) => {
-    if (buff.custom) referenced.set(buff.uuid.toLowerCase(), buff.custom);
-  });
 
   const standardRefs = [
     ...resolved.weapons,
@@ -306,7 +304,7 @@ async function ensureCustomContent(
 
   const traits = await fetchTraitMap();
   for (const [uuid, customFile] of referenced) {
-    const item = await createCustomItem(customFile, sourceId, traits, warnings);
+    const item = await createCustomItem(customFile, sourceId, traits, content, warnings);
     if (item) byUuid.set(uuid, item);
   }
 
@@ -368,7 +366,7 @@ async function createReferenceItem(
     size: 'MEDIUM',
     craft_requirements: null,
     usage: null,
-    operations: [],
+    operations: customEffectOperations(customFile, 1, warnings),
     content_source_id: sourceId,
     version: '1.0',
     meta_data: {
@@ -480,6 +478,7 @@ async function createCustomItem(
   customFile: PathbuilderCustomFile,
   sourceId: number,
   traits: Map<string, number>,
+  content: Awaited<ReturnType<typeof fetchContentPackage>>,
   warnings: string[]
 ): Promise<Item | null> {
   const rawTraits = (customFile.weaponTraits ?? '')
@@ -503,6 +502,17 @@ async function createCustomItem(
     (customFile.weaponTraits ?? '').length > 0 ||
     typeof customFile.group === 'string';
 
+  // Custom weapons frequently describe their base weapon without repeating its
+  // mechanical fields. Reuse a uniquely identifiable WG weapon as a mechanical
+  // baseline, while preserving the Custom File's own identity and raw payload.
+  const inferredBaseWeapon = isWeapon ? inferBaseWeapon(customFile, content.items) : undefined;
+  const baseDamage = (inferredBaseWeapon?.meta_data?.damage ?? {}) as Record<string, any>;
+  const inferredDamageType =
+    mapDamageType(customFile.damageType) ??
+    (typeof baseDamage.damageType === 'string' ? baseDamage.damageType : undefined) ??
+    inferDamageTypeFromText(customFile.description);
+  const inheritedTraits = inferredBaseWeapon?.traits?.filter((id) => !traitIds.includes(id)) ?? [];
+
   // Pathbuilder descriptions are HTML-ish (<br>, <br><br>); WG content is markdown.
   // toMarkdown is the same helper the custom-pack importer uses, so both Pathbuilder
   // entry points normalize prose identically.
@@ -514,10 +524,10 @@ async function createCustomItem(
     created_at: '',
     name: customFile.name ?? 'Unnamed Custom Item',
     price: typeof customFile.price === 'number' ? { gp: customFile.price } : null,
-    bulk: null,
-    level: customFile.itemLevel ?? 0,
+    bulk: inferredBaseWeapon?.bulk ?? null,
+    level: customFile.itemLevel ?? inferredBaseWeapon?.level ?? 0,
     rarity: /unique/i.test(customFile.weaponTraits ?? '') ? 'UNIQUE' : 'COMMON',
-    traits: traitIds,
+    traits: [...traitIds, ...inheritedTraits],
     description,
     group: isWeapon ? 'WEAPON' : 'GENERAL',
     hands: customFile.hands ?? null,
@@ -534,12 +544,19 @@ async function createCustomItem(
       ...(isWeapon
         ? {
             damage: {
-              dice: 1,
-              die: typeof customFile.damage === 'number' ? `d${customFile.damage}` : null,
-              damageType: mapDamageType(customFile.damageType),
+              ...(baseDamage ?? {}),
+              dice: baseDamage.dice ?? 1,
+              die:
+                typeof customFile.damage === 'number'
+                  ? `d${customFile.damage}`
+                  : (baseDamage.die as string | null | undefined) ?? null,
+              damageType: inferredDamageType,
             },
-            category: (customFile.group ?? '').toLowerCase().includes('brawling') ? 'unarmed_attack' : '',
-            group: mapMetaGroup(customFile.group),
+            category:
+              (customFile.group ?? '').toLowerCase().includes('brawling')
+                ? 'unarmed_attack'
+                : (baseDamage.category as string | undefined) ?? '',
+            group: mapMetaGroup(customFile.group) ?? (inferredBaseWeapon?.meta_data?.group as string | undefined),
           }
         : {}),
       // The verbatim Custom File, so the PT-BR translation layer and any future
@@ -564,6 +581,138 @@ async function createCustomItem(
   }
   return created;
 }
+/**
+ * Convert the subset of Pathbuilder custom effects whose targets are explicit in
+ * the payload. Unknown numeric effect types stay preserved in raw metadata.
+ *
+ * Observed in the regression build:
+ *   effectType 1 = Speed
+ *   effectType 8 = Spell Attack
+ */
+const PATHBUILDER_EFFECT_VARIABLES: Record<number, string> = {
+  1: 'SPEED',
+  8: 'SPELL_ATTACK',
+};
+
+const PATHBUILDER_SKILL_NAMES = new Set([
+  'ACROBATICS',
+  'ARCANA',
+  'ATHLETICS',
+  'CRAFTING',
+  'DECEPTION',
+  'DIPLOMACY',
+  'INTIMIDATION',
+  'MEDICINE',
+  'NATURE',
+  'OCCULTISM',
+  'PERFORMANCE',
+  'RELIGION',
+  'SOCIETY',
+  'STEALTH',
+  'SURVIVAL',
+  'THIEVERY',
+]);
+
+function pathbuilderProficiencyVariable(name: string): string | undefined {
+  const normalized = labelToVariable(name);
+  if (PATHBUILDER_SKILL_NAMES.has(normalized)) return `SKILL_${normalized}`;
+  return {
+    SPELL_ATTACK: 'SPELL_ATTACK',
+    SPELL_DC: 'SPELL_DC',
+    CLASS_DC: 'CLASS_DC',
+    PERCEPTION: 'PERCEPTION',
+    FORTITUDE: 'SAVE_FORT',
+    REFLEX: 'SAVE_REFLEX',
+    WILL: 'SAVE_WILL',
+  }[normalized];
+}
+
+function customEffectOperations(
+  customFile: PathbuilderCustomFile,
+  stackMultiplier: number,
+  warnings: string[]
+): Operation[] {
+  const operations: Operation[] = [];
+
+  for (const [index, effect] of (customFile.listCustomEffects ?? []).entries()) {
+    const amount =
+      typeof effect.bonusAmount === 'number' && Number.isFinite(effect.bonusAmount)
+        ? effect.bonusAmount * stackMultiplier
+        : undefined;
+
+    if (amount === undefined || amount === 0) {
+      warnings.push(
+        `custom effect "${customFile.name}": effect ${index + 1} has no directly executable bonus (reference ${effect.reference ?? 'unknown'})`
+      );
+      continue;
+    }
+
+    if (effect.proficiencyName) {
+      const variable = pathbuilderProficiencyVariable(effect.proficiencyName);
+      if (variable) {
+        operations.push({
+          id: crypto.randomUUID(),
+          type: 'addBonusToValue',
+          data: {
+            variable,
+            value: amount,
+            type: 'item',
+            text: `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder custom effect)`,
+          },
+        });
+      } else {
+        warnings.push(
+          `custom effect "${customFile.name}": unsupported proficiency target "${effect.proficiencyName}"`
+        );
+      }
+    }
+
+    if (effect.effectType !== undefined && effect.effectType !== null) {
+      const variable = PATHBUILDER_EFFECT_VARIABLES[effect.effectType];
+      if (variable) {
+        operations.push({
+          id: crypto.randomUUID(),
+          type: 'addBonusToValue',
+          data: {
+            variable,
+            value: amount,
+            type: 'item',
+            text: `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder effect ${effect.effectType})`,
+          },
+        });
+      } else if (!effect.proficiencyName) {
+        warnings.push(
+          `custom effect "${customFile.name}": unsupported effectType ${effect.effectType} (reference ${effect.reference ?? 'unknown'})`
+        );
+      }
+    }
+  }
+
+  return operations;
+}
+
+function inferBaseWeapon(customFile: PathbuilderCustomFile, items: Item[]): Item | undefined {
+  const haystack = labelToVariable(
+    [customFile.name, customFile.description, customFile.weaponTraits].filter(Boolean).join(' ')
+  );
+  const candidates = items
+    .filter((item) => item.group === 'WEAPON')
+    .filter((item) => haystack.includes(labelToVariable(item.name)))
+    .sort((a, b) => b.name.length - a.name.length);
+
+  if (candidates.length === 0) return undefined;
+  if (candidates.length === 1) return candidates[0];
+  return candidates[0].name.length > candidates[1].name.length ? candidates[0] : undefined;
+}
+
+function inferDamageTypeFromText(description: string | null | undefined): string | undefined {
+  const textValue = labelToVariable(description ?? '');
+  if (/\b(?:SWORD|AXE|SLASH|SLASHING)\b/.test(textValue)) return 'slashing';
+  if (/\b(?:SPEAR|PIKE|RAPIER|PIERCING)\b/.test(textValue)) return 'piercing';
+  if (/\b(?:CLUB|HAMMER|MACE|BLUDGEON|BLUDGEONING)\b/.test(textValue)) return 'bludgeoning';
+  return undefined;
+}
+
 /** Map Pathbuilder's free-form weapon group to WG's finite ItemMetaGroup vocabulary. */
 function mapMetaGroup(value: string | null | undefined): NonNullable<Item['meta_data']>['group'] {
   const normalized = (value ?? '').trim().toLowerCase();
@@ -687,6 +836,15 @@ async function buildCharacter(
     // been fetched, so the object cannot satisfy Character at this point.
   } as unknown as Character;
 
+  const importedOperations = buildPathbuilderCustomOperations(resolved, content, warnings);
+  if (importedOperations.length > 0) {
+    character.options = {
+      ...(character.options ?? {}),
+      custom_operations: true,
+    };
+    character.custom_operations = importedOperations;
+  }
+
   character.content_sources!.enabled = content.sources?.map((source) => source.id) ?? [];
 
   character.details!.class = content.classes.find((c) => labelToVariable(c.name) === labelToVariable(resolved.identity.className ?? ''));
@@ -735,6 +893,39 @@ async function buildCharacter(
     ...character,
     id: undefined, // remove the sentinel so the API creates a new row
   });
+}
+
+function buildPathbuilderCustomOperations(
+  resolved: ResolvedBuild,
+  content: Awaited<ReturnType<typeof fetchContentPackage>>,
+  warnings: string[]
+): Operation[] {
+  const operations: Operation[] = [];
+  const seenLanguages = new Set<number>();
+
+  for (const languageName of resolved.languages) {
+    const language = content.languages.find(
+      (candidate) => labelToVariable(candidate.name) === labelToVariable(languageName)
+    );
+    if (!language) {
+      warnings.push(`language: WG has no language matching "${languageName}"`);
+      continue;
+    }
+    if (seenLanguages.has(language.id)) continue;
+    seenLanguages.add(language.id);
+    operations.push({
+      id: crypto.randomUUID(),
+      type: 'giveLanguage',
+      data: { languageId: language.id },
+    });
+  }
+
+  for (const buff of resolved.activeCustomBuffs) {
+    if (!buff.custom) continue;
+    operations.push(...customEffectOperations(buff.custom, Math.max(1, buff.stacks), warnings));
+  }
+
+  return operations;
 }
 
 /** Feed the operation builder every choice the payload records, level by level. */
