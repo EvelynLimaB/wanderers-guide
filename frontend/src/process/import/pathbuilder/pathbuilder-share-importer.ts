@@ -390,7 +390,7 @@ async function createCustomItem(
         type: customFile.type,
         source: customFile.src ?? 'Custom',
         raw: customFile,
-      } as Record<string, unknown>,
+      },
     },
   } satisfies Item;
 
