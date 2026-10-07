@@ -1,4 +1,4 @@
-# Wanderer's Guide — minimal self-host stack (skeleton).
+# Wanderer's Guide: minimal self-host stack (skeleton).
 #
 # Brings up the frontend plus the Supabase services it needs to run end to end.
 # Hardening (TLS, real secrets management, backups, OAuth providers, SMTP,
@@ -14,8 +14,13 @@ services:
         VITE_SUPABASE_URL: ${PUBLIC_SUPABASE_URL}
         VITE_SUPABASE_KEY: ${ANON_KEY}
         VITE_ENV: ${VITE_ENV:-production}
+    # Bind address is configurable because rootless Podman cannot publish
+    # privileged ports (<1024) and because publishing 0.0.0.0 leaks the stack
+    # onto the LAN. Default 127.0.0.1 = reachable from the host (and therefore
+    # from `tailscale serve`), invisible to the local network.
+    # Set FRONTEND_BIND=0.0.0.0 if you really want LAN access.
     ports:
-      - "${FRONTEND_PORT:-3000}:80"
+      - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-3000}:80"
     depends_on:
       kong:
         condition: service_started
@@ -23,9 +28,12 @@ services:
 
   kong:
     image: kong:2.8.1
+    # Not published to the LAN by default: the browser reaches the API through
+    # frontend nginx (/auth/v1, /rest/v1, ...) which proxies to kong:8000 on the
+    # compose network. Publish these only for debugging, and only on loopback.
     ports:
-      - "${KONG_HTTP_PORT:-8000}:8000/tcp"
-      - "${KONG_HTTPS_PORT:-8443}:8443/tcp"
+      - "${KONG_BIND:-127.0.0.1}:${KONG_HTTP_PORT:-8000}:8000/tcp"
+      - "${KONG_BIND:-127.0.0.1}:${KONG_HTTPS_PORT:-8443}:8443/tcp"
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
@@ -150,7 +158,7 @@ services:
     image: supabase/studio:20240729-ce42139
     profiles: ["studio"]
     ports:
-      - "${STUDIO_PORT:-54323}:3000"
+      - "${STUDIO_BIND:-127.0.0.1}:${STUDIO_PORT:-54323}:3000"
     depends_on:
       meta:
         condition: service_started
@@ -174,7 +182,7 @@ services:
       timeout: 5s
       retries: 10
     ports:
-      - "${POSTGRES_PORT:-54322}:5432"
+      - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-54322}:5432"
     environment:
       POSTGRES_HOST: /var/run/postgresql
       PGPORT: 5432
