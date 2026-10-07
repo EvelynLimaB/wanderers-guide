@@ -33,8 +33,11 @@ export type PathbuilderAbility = (typeof PATHBUILDER_ABILITIES)[number];
 /** A Custom File UUID, which is how Pathbuilder references custom content. */
 export const PATHBUILDER_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Custom File type discriminators are not stable across Pathbuilder formats. Preserve either wire representation. */
-const PathbuilderTypeSchema = z.union([z.number(), z.string()]);
+/** Pathbuilder serializes numeric Custom File type discriminators as numbers or numeric strings. */
+const PathbuilderTypeSchema = z.union([
+  z.number(),
+  z.string().trim().regex(/^\d+$/).transform(Number),
+]);
 
 // ─── Custom Files ─────────────────────────────────────────────────────────────
 
