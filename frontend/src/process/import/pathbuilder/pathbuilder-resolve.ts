@@ -303,7 +303,6 @@ export function resolveSpecialSelections(selections: Record<string, Record<strin
  */
 export function resolveSpells(
   spells: Record<string, unknown> | undefined,
-  unresolved: UnresolvedRef[],
   derived?: Record<string, unknown> | null
 ): ResolvedSpell[] {
   const out: ResolvedSpell[] = [];
@@ -372,7 +371,7 @@ export function resolveBuild(
   const { loose, containers } = resolveEquipment(cd, customFiles, unresolved);
   const weapons = resolveWeapons(cd.listPlayerWeapons ?? undefined, customFiles, unresolved);
   const buffs = resolveActiveCustomBuffs(cd.hashMapActiveCustomBuffs ?? undefined, customFiles, unresolved);
-  const spells = resolveSpells(cd.hashMapPlayerSpells ?? undefined, unresolved, options.derived);
+  const spells = resolveSpells(cd.hashMapPlayerSpells ?? undefined, options.derived);
 
   // Armor: the share payload may contain only potency/runes or a Custom File UUID.
   // json.php, when available, includes the resolved armor name, so prefer that as
