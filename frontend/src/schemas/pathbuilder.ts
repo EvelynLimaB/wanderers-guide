@@ -301,6 +301,23 @@ export const PathbuilderDerivedBuildSchema = z
     deity: z.string().nullish(),
     gender: z.string().nullish(),
     age: z.string().nullish(),
+    abilities: z.object({
+      str: z.number().optional(),
+      dex: z.number().optional(),
+      con: z.number().optional(),
+      int: z.number().optional(),
+      wis: z.number().optional(),
+      cha: z.number().optional(),
+    }).passthrough().nullish(),
+    proficiencies: z.record(z.string(), z.number()).nullish(),
+    attributes: z.record(z.string(), z.number()).nullish(),
+    acTotal: z.object({
+      acProfBonus: z.number().optional(),
+      acAbilityBonus: z.number().optional(),
+      acItemBonus: z.number().optional(),
+      acTotal: z.number().optional(),
+      shieldBonus: z.number().nullable().optional(),
+    }).passthrough().nullish(),
     money: z
       .object({
         cp: z.number().optional(),
