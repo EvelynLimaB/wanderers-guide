@@ -1191,17 +1191,22 @@ async function resolveSelections(
           .filter((selection) => selection.level === found.level)
           .map((selection) => selection.name)
           .join(', ');
-        warnings.push(
-          `selection: WG has no matching option for level ${found.level} (available Pathbuilder choices: ${requested || 'none'}; selection path: ${found.path})`
+        const available = options
+          .map((option) => option.name ?? option.title ?? option._select_uuid ?? 'unnamed')
+          .filter(Boolean)
+          .join(', ');
+        throw new Error(
+          `Pathbuilder 1:1 selection mapping failed: level ${found.level}; requested: ${requested || 'none'}; available: ${available || 'none'}; selection path: ${found.path}`
         );
       }
       checked.add(found.path);
     } else {
       hasSelections = false;
     }
-    if (++iteration > 999) {
-      console.warn('Infinite loop detected in the Pathbuilder import.');
-      break;
+    if (++iteration > Math.max(64, selections.length + 16)) {
+      throw new Error(
+        `Pathbuilder 1:1 selection resolution did not converge after ${iteration} iterations`
+      );
     }
   }
 }
