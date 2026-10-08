@@ -114,6 +114,7 @@ await build({
   write: true,
   platform: 'node',
   format: 'esm',
+  define: { 'import.meta.env.VITE_ENV': '"test"' },
   tsconfig: join(root, 'tsconfig.json'),
   plugins: [
     {
