@@ -521,8 +521,13 @@ async function createCustomItem(
     if (id !== undefined) traitIds.push(id);
     else unresolvedTraits.push(name);
   }
+  // Unknown/homebrew traits are retained verbatim in meta_data.display_traits.
+  // They are not an import failure and must not inflate the "unmapped" count.
   if (unresolvedTraits.length > 0) {
-    warnings.push(`custom item "${customFile.name}": traits not found in WG content: ${unresolvedTraits.join(', ')}`);
+    console.info(
+      `Pathbuilder custom item "${customFile.name}" has traits not present in WG content; preserved as display text:`,
+      unresolvedTraits
+    );
   }
 
   const isWeapon =
