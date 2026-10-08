@@ -6,6 +6,8 @@ import { test } from 'node:test';
 
 import {
   buildCustomFileIndex,
+  findFreeArchetypeBranch,
+  getAbilityBoostOriginForPath,
   isPathbuilderUuid,
   parseCustomFileJson,
   parseFeatSlotKey,
@@ -81,6 +83,33 @@ test('identity is read from characterData, not from a derived sheet', () => {
 });
 
 /** Verify compact Pathbuilder ability tokens match the labels emitted by WG attribute selectors. */
+test('level-1 class boosts and free-archetype branches route to native WG operations', () => {
+  assert.equal(getAbilityBoostOriginForPath('class_abc'), 'levelled');
+  assert.equal(getAbilityBoostOriginForPath('class-feature-123'), 'levelled');
+  assert.equal(getAbilityBoostOriginForPath('ancestry_abc'), 'ancestry');
+  assert.equal(getAbilityBoostOriginForPath('background_abc'), 'background');
+
+  const dedication = findFreeArchetypeBranch(
+    [
+      { title: 'Add Archetype Feat', _select_uuid: 'feat' },
+      { title: 'Add Dedication', _select_uuid: 'dedication' },
+    ],
+    [{ name: 'Rogue Dedication', level: 4 }],
+    4
+  );
+  assert.equal(dedication?._select_uuid, 'dedication');
+
+  const archetypeFeat = findFreeArchetypeBranch(
+    [
+      { title: 'Add Archetype Feat', _select_uuid: 'feat' },
+      { title: 'Add Dedication', _select_uuid: 'dedication' },
+    ],
+    [{ name: 'Dismantle Spell', level: 6 }],
+    6
+  );
+  assert.equal(archetypeFeat?._select_uuid, 'feat');
+});
+
 test('Pathbuilder ability tokens map to native WG attribute labels', () => {
   const labels = {
     str: 'Strength',
