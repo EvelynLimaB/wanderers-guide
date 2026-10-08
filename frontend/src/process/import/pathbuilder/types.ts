@@ -66,6 +66,7 @@ export type ResolvedSpecialSelection = {
 export type ResolvedAbilityBoost = {
   level: number;
   ability: PathbuilderAbility;
+  origin: 'levelled' | 'ancestry' | 'background';
 };
 
 export type ResolvedSkillIncrease = {
