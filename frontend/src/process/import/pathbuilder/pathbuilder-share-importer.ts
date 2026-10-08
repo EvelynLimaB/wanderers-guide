@@ -1180,6 +1180,11 @@ async function resolveSelections(
       const selectionId = found.selection?.selection?.id ?? '';
       if (selectionId && checkedSelectionIds.has(selectionId)) {
         checked.add(found.path);
+        if (++iteration > Math.max(64, selections.length + 16)) {
+          throw new Error(
+            `Pathbuilder 1:1 selection resolution did not converge after ${iteration} iterations`
+          );
+        }
         continue;
       }
       const options = found.selection?.selection?.options ?? [];
