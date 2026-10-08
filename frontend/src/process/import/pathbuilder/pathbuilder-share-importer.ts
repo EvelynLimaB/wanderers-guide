@@ -981,17 +981,6 @@ async function buildCharacter(
   });
 }
 
-/**
- * Identify WG's dedicated class key-ability selector without letting a key ability
- * satisfy an unrelated attribute boost selector with the same label.
- */
-function isKeyAbilitySelection(
-  selection: { title?: string; description?: string } | undefined
-): boolean {
-  const text = [selection?.title, selection?.description].filter(Boolean).join(' ');
-  return /\bkey\s+(?:ability|attribute)\b/i.test(text);
-}
-
 function buildPathbuilderCustomOperations(
   resolved: ResolvedBuild,
   content: Awaited<ReturnType<typeof fetchContentPackage>>,
