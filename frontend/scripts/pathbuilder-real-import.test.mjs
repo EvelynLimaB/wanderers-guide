@@ -263,6 +263,11 @@ try {
   assert.equal(shareRequests, 1);
   assert.equal(derivedRequests, 1);
   assert.equal(outcome.ok, true, outcome.ok ? '' : outcome.error);
+  assert.deepEqual(
+    outcome.warnings,
+    [],
+    `1597410 must import without unresolved mechanics; got: ${outcome.warnings.join('; ')}`
+  );
   assert.equal(outcome.character?.id, 9001);
   assert.equal(outcome.character?.name, 'Kasane');
 
