@@ -1068,7 +1068,7 @@ export function getAbilityBoostOriginForPath(path: string): 'levelled' | 'ancest
  * then it exposes the actual feat selector. Pathbuilder stores only the actual
  * feat, so the importer must infer the outer branch from the level's selected feat.
  */
-function findFreeArchetypeBranch(
+export function findFreeArchetypeBranch(
   options: ObjectWithUUID[],
   feats: { name: string; level: number }[],
   level: number
