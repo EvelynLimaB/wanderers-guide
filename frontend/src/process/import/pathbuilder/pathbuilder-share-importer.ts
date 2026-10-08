@@ -1184,11 +1184,19 @@ function isAttributeSelection(options: ObjectWithUUID[]): boolean {
   });
 }
 
-function isSkillSelection(options: ObjectWithUUID[]): boolean {
+function isSkillSelection(
+  options: ObjectWithUUID[],
+  selection?: { title?: string; description?: string }
+): boolean {
+  const selectionText = [selection?.title, selection?.description].filter(Boolean).join(' ');
+  if (/\bskill\b.*\b(?:train|increase|select)|\b(?:train|increase|select).*\bskill\b/i.test(selectionText)) {
+    return true;
+  }
   if (options.length === 0) return false;
-  return options.every((option) =>
-    typeof option.name === 'string' && PATHBUILDER_SKILL_NAMES.has(labelToVariable(option.name))
-  );
+  return options.every((option) => {
+    const label = option.name ?? option.title;
+    return typeof label === 'string' && PATHBUILDER_SKILL_NAMES.has(labelToVariable(label));
+  });
 }
 
 function isLanguageSelection(selection: { title?: string; description?: string } | undefined): boolean {
@@ -1350,7 +1358,7 @@ async function resolveSelections(
       }
       const options = found.selection?.selection?.options ?? [];
       const attributeSelection = isAttributeSelection(options);
-      const skillSelection = isSkillSelection(options);
+      const skillSelection = isSkillSelection(options, found.selection?.selection);
       const languageSelection = isLanguageSelection(found.selection?.selection);
       const keyAbilitySelection = isKeyAbilitySelection(found.selection?.selection);
       let requestedSelections: { name: string; level: number }[] = [];
