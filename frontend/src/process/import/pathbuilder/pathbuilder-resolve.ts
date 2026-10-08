@@ -396,7 +396,7 @@ export function stripCategoryPrefix(value: string | undefined): string | undefin
  */
 export function resolveBuild(
   build: PathbuilderShareBuild,
-  options: { buildId?: string; formatVersion?: string; derived?: Record<string, unknown> | null } = {}
+  options: { buildId?: string; formatVersion?: string; derived?: PathbuilderDerivedBuild | null } = {}
 ): ResolvedBuild {
   const cd: PathbuilderCharacterData = build?.characterData ?? {};
   const unresolved: UnresolvedRef[] = [];
@@ -412,12 +412,7 @@ export function resolveBuild(
   // json.php, when available, includes the resolved armor name, so prefer that as
   // the lookup name while preserving the original Pathbuilder reference in raw.
   const armorRaw = cd.playerArmor;
-  const derivedArmors =
-    Array.isArray((options.derived as Record<string, unknown> | null | undefined)?.armor)
-      ? (
-          (options.derived as Record<string, unknown>).armor as Array<{ name?: string | null; worn?: boolean }>
-        )
-      : [];
+  const derivedArmors = options.derived?.armor ?? [];
   const derivedArmor = derivedArmors.find((entry) => entry.worn === true) ?? derivedArmors[0];
   const derivedArmorName = derivedArmor?.name ?? undefined;
 
@@ -464,7 +459,7 @@ export function resolveBuild(
     unresolved.push({ kind: 'shield', ref: JSON.stringify(shieldRaw), reason: 'playerShieldNew has no shieldName' });
   }
 
-  const derived = options.derived as { money?: { cp?: number; sp?: number; gp?: number; pp?: number } } | null | undefined;
+  const derived = options.derived;
 
   // An "ABP ..." custom buff strongly suggests Automatic Bonus Progression, but a
   // homebrew buff name is not proof of a rules variant. Surface it, do not set it.
@@ -482,7 +477,7 @@ export function resolveBuild(
       ancestry: cd.ancestry ?? undefined,
       heritage: cd.heritage ?? undefined,
       className: cd.className ?? undefined,
-      keyAbility: parsePathbuilderAbility(cd.keyability ?? (options.derived as PathbuilderDerivedBuild | null | undefined)?.keyability),
+      keyAbility: parsePathbuilderAbility(cd.keyability ?? options.derived?.keyability),
       background: stripCategoryPrefix(cd.background ?? undefined),
       gender: cd.gender ?? undefined,
       alignment: cd.alignment ?? undefined,
