@@ -1217,6 +1217,68 @@ function findPathbuilderOption(
   return null;
 }
 
+function getFeatSelectionsForOperation(
+  title: string,
+  level: number,
+  resolved: ResolvedBuild
+): { name: string; level: number }[] {
+  const normalizedTitle = title.toLowerCase();
+  const atLevel = resolved.feats.filter((feat) => feat.level === level);
+
+  if (normalizedTitle.includes('archetype')) {
+    return atLevel
+      .filter((feat) => /^free archetype/i.test(feat.slot))
+      .map((feat) => ({ name: feat.name, level }));
+  }
+  if (normalizedTitle.includes('skill')) {
+    return atLevel
+      .filter((feat) => /^skill feat/i.test(feat.slot))
+      .map((feat) => ({ name: feat.name, level }));
+  }
+  if (normalizedTitle.includes('general')) {
+    return atLevel
+      .filter((feat) => /^general feat/i.test(feat.slot))
+      .map((feat) => ({ name: feat.name, level }));
+  }
+  if (normalizedTitle.includes('class')) {
+    return atLevel
+      .filter((feat) => /\bfeat\b/i.test(feat.slot) && !/^(skill|general|free archetype|ancestry paragon)/i.test(feat.slot))
+      .map((feat) => ({ name: feat.name, level }));
+  }
+
+  // A bare "Select a Feat" under an ancestry branch represents the ancestry
+  // feat slot. This includes normal "Automaton Feat N" slots and Ancestry Paragon
+  // slots; the operation tree decides which exact option is legal.
+  return atLevel
+    .filter((feat) => /\bfeat\b/i.test(feat.slot) && !/^(skill|general|champion|free archetype)/i.test(feat.slot))
+    .map((feat) => ({ name: feat.name, level }));
+}
+
+function getSpecialSelectionsForOperation(
+  selection: { title?: string; description?: string } | undefined,
+  level: number,
+  resolved: ResolvedBuild
+): { name: string; level: number }[] {
+  const title = selection?.title ?? '';
+  const normalizedTitle = labelToVariable(title.replace(/^select\s+(?:an?\s+)?/i, ''));
+  const matches = resolved.specialSelections
+    .filter((special) => {
+      const prompt = labelToVariable(special.prompt.replace(/^select\s+(?:an?\s+)?/i, ''));
+      return prompt === normalizedTitle;
+    })
+    .map((special) => ({ name: special.value, level }));
+
+  if (/sanctification/i.test(title)) {
+    const cause = resolved.specialSelections.find((special) =>
+      /cause/i.test(special.prompt)
+    );
+    const match = cause?.value.match(/\b(Holy|Unholy|Neither)\b/i);
+    if (match) matches.push({ name: match[1], level });
+  }
+
+  return matches;
+}
+
 /**
  * Identify WG's dedicated class key-ability selector without letting the key
  * ability satisfy an unrelated attribute-boost selector with the same label.
@@ -1261,6 +1323,7 @@ async function resolveSelections(
   const abilityBoostCursors = new Map<string, number>();
   const skillCursors = new Map<number, number>();
   let classAttributeSelectionIndex = 0;
+  const featCursors = new Map<string, number>();
 
   let hasSelections = true;
   let iteration = 0;
@@ -1290,7 +1353,7 @@ async function resolveSelections(
       const skillSelection = isSkillSelection(options);
       const languageSelection = isLanguageSelection(found.selection?.selection);
       const keyAbilitySelection = isKeyAbilitySelection(found.selection?.selection);
-      let requestedSelections = selections;
+      let requestedSelections: { name: string; level: number }[] = [];
       let result: Pick<ObjectWithUUID, '_select_uuid'> | null = null;
 
       const freeArchetypeBranch = findFreeArchetypeBranch(options, selections, found.level);
@@ -1342,6 +1405,13 @@ async function resolveSelections(
         requestedSelections = candidate ? [candidate] : [];
       } else if (languageSelection) {
         requestedSelections = resolved.languages.map((name) => ({ name, level: found.level }));
+      } else if (/\bfeat\b/i.test(found.selection?.selection?.title ?? '')) {
+        const key = found.path;
+        const cursor = featCursors.get(key) ?? 0;
+        const candidates = getFeatSelectionsForOperation(found.selection?.selection?.title ?? '', found.level, resolved);
+        requestedSelections = candidates.slice(cursor);
+      } else {
+        requestedSelections = getSpecialSelectionsForOperation(found.selection?.selection, found.level, resolved);
       }
 
       if (!result && resolved.identity.heritage) {
@@ -1371,6 +1441,10 @@ async function resolveSelections(
         if (skillSelection) {
           const cursor = skillCursors.get(found.level) ?? 0;
           skillCursors.set(found.level, cursor + 1);
+        }
+        if (/\bfeat\b/i.test(found.selection?.selection?.title ?? '')) {
+          const key = found.path;
+          featCursors.set(key, (featCursors.get(key) ?? 0) + 1);
         }
       } else {
         const requested = requestedSelections
