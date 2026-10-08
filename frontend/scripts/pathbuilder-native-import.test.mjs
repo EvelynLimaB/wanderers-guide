@@ -215,7 +215,7 @@ const content = {
       ],
       meta_data: { archetype_trait: true },
     },
-    ...[2, 3, 5, 7].map((level) => ({
+    ...[2, 3, 4, 5, 7].map((level) => ({
       id: 6000 + level,
       name: 'Attribute Boosts',
       type: 'class-feature',
@@ -224,7 +224,7 @@ const content = {
       operations: [attributeSelect(`level-${level}-boost`)],
     })),
     {
-      id: 6004,
+      id: 6104,
       name: 'Archetype Choice',
       type: 'class-feature',
       level: 4,
@@ -243,14 +243,6 @@ const content = {
           }],
         },
       }],
-    },
-    {
-      id: 6006,
-      name: 'Attribute Boosts',
-      type: 'class-feature',
-      level: 6,
-      traits: [WIZARD_TRAIT],
-      operations: [attributeSelect('level-6-no-boost')],
     },
   ],
   items: [
