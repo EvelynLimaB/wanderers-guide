@@ -1177,10 +1177,10 @@ const PATHBUILDER_ATTRIBUTE_VARIABLES = new Set([
  */
 function isAttributeSelection(options: ObjectWithUUID[]): boolean {
   if (options.length === 0) return false;
+  const labels = new Set(['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma']);
   return options.every((option) => {
     if (typeof option.variable === 'string' && PATHBUILDER_ATTRIBUTE_VARIABLES.has(option.variable)) return true;
-    return typeof option.name === 'string' &&
-      PATHBUILDER_ATTRIBUTE_VARIABLES.has('ATTRIBUTE_' + labelToVariable(option.name));
+    return typeof option.name === 'string' && labels.has(option.name);
   });
 }
 
@@ -1291,8 +1291,10 @@ async function resolveSelections(
         }
       } else if (skillSelection) {
         const cursor = skillCursors.get(found.level) ?? 0;
-        const candidates = [...resolved.trainedSkills.map((skill) => ({ name: skill, level: 1 })), ...resolved.skillIncreases]
-          .filter((selection) => selection.level === found.level);
+        const candidates = [
+          ...resolved.trainedSkills.map((skill) => ({ name: skill, level: 1 })),
+          ...resolved.skillIncreases.map((increase) => ({ name: increase.skill, level: increase.level })),
+        ].filter((selection) => selection.level === found.level);
         const candidate = candidates[cursor];
         requestedSelections = candidate ? [candidate] : [];
       }
