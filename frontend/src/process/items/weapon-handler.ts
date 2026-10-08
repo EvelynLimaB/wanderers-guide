@@ -40,7 +40,19 @@ export function getWeaponStats(id: StoreID, item: Item) {
   if (dice < minDice) dice = minDice;
 
   //
-  const baseDie = item.meta_data?.damage?.die ?? '';
+  const pathbuilderState = item.meta_data?.pathbuilder as
+    | (NonNullable<Item['meta_data']>['pathbuilder'] & {
+        attackAbility?: string;
+        twoHanded?: boolean;
+      })
+    | undefined;
+  const twoHandDie = (item.meta_data?.display_traits ?? [])
+    .map((trait) => /two-hand\\s+d(4|6|8|10|12)/i.exec(trait)?.[1])
+    .find(Boolean);
+  const baseDie =
+    pathbuilderState?.twoHanded === true && twoHandDie
+      ? `d${twoHandDie}`
+      : item.meta_data?.damage?.die ?? '';
   const humbleStrikes = getVariable<VariableBool>(id, 'EXEMPLAR_HUMBLE_STRIKES')?.value ?? false;
   const die = humbleStrikes && item.meta_data?.category === 'simple' ? increaseDamageDie(baseDie) : baseDie;
   const damageType = convertDamageType(item.meta_data?.damage?.damageType ?? '');
@@ -115,7 +127,16 @@ function getAttackBonus(id: StoreID, item: Item) {
   const ranged = isItemRangedWeapon(item);
   const brutal = hasTraitType('BRUTAL', traits);
   const finesse = !ranged && hasTraitType('FINESSE', traits);
-  const attributes = ranged ? [brutal ? 'STR' : 'DEX'] : finesse ? ['STR', 'DEX'] : ['STR'];
+  const configuredAttackAbility = pathbuilderState?.attackAbility?.toLowerCase();
+  const configuredAttribute =
+    configuredAttackAbility === 'str' ? 'STR' : configuredAttackAbility === 'dex' ? 'DEX' : undefined;
+  const attributes = configuredAttribute
+    ? [configuredAttribute]
+    : ranged
+      ? [brutal ? 'STR' : 'DEX']
+      : finesse
+        ? ['STR', 'DEX']
+        : ['STR'];
   const proficiency = getProfTotal(id, item);
   const sharedPotency = getSharedEidolonRunes(id, item).potency;
   const ownPotency = Math.min(item.meta_data?.runes?.potency ?? 0, 4);
