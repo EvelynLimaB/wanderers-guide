@@ -274,10 +274,15 @@ const content = {
   classArchetypes: [],
 };
 
+const derived = {
+  abilities: { str: 10, dex: 16, con: 16, int: 20, wis: 12, cha: 12 },
+  acTotal: { acTotal: 24 },
+};
+
 const warnings = [];
 const customItems = new Map();
 const fallbackSpells = new Map();
-const built = await buildCharacter(resolved, content, customItems, fallbackSpells, null, warnings);
+const built = await buildCharacter(resolved, content, customItems, fallbackSpells, null, warnings, derived);
 
 const engine = await createOperationEngine();
 try {
