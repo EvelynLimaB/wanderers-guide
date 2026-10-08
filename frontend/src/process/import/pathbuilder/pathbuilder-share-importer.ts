@@ -1030,7 +1030,12 @@ export async function buildCharacter(
     ['background', resolved.identity.background],
     ['ancestry', resolved.identity.ancestry],
   ] as const) {
-    if (value && !character.details?.[field]) warnings.push(`identity: WG has no ${field} matching "${value}"`);
+    if (!value) {
+      throw new Error(`Pathbuilder 1:1 identity mapping failed: missing ${field}`);
+    }
+    if (!character.details?.[field]) {
+      throw new Error(`Pathbuilder 1:1 identity mapping failed: WG has no ${field} matching "${value}"`);
+    }
   }
 
   await resolveSelections(character, content, resolved, warnings);
@@ -1064,6 +1069,13 @@ export async function buildCharacter(
 
   if (derived) {
     await validatePathbuilderDerived(character, content, derived);
+  }
+
+  const mechanicalWarnings = warnings.filter((warning) => !warning.startsWith('provenance:'));
+  if (mechanicalWarnings.length > 0) {
+    throw new Error(
+      `Pathbuilder 1:1 import blocked by unresolved mechanics: ${mechanicalWarnings.join('; ')}`
+    );
   }
 
   return await makeRequest<Character>('create-character', {
