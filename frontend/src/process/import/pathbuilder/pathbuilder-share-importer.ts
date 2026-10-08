@@ -1011,9 +1011,11 @@ async function validatePathbuilderDerived(
     for (const [ability, score] of Object.entries(abilities)) {
       if (score === undefined) continue;
       const variable = getFinalVariableValue('CHARACTER', `ATTRIBUTE_${ability.toUpperCase()}`);
-      const actualScore = 10 + variable.total * 2;
-      if (actualScore !== score) {
-        mismatches.push(`ability ${ability}: Pathbuilder ${score}, WG ${actualScore}`);
+      const expectedModifier = Math.floor((score - 10) / 2);
+      if (variable.total !== expectedModifier) {
+        mismatches.push(
+          `ability ${ability}: Pathbuilder score ${score} (modifier ${expectedModifier}), WG modifier ${variable.total}`
+        );
       }
     }
   }
