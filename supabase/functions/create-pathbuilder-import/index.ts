@@ -41,10 +41,25 @@ serve(async (req: Request) => {
       };
     }
 
-    if (!build_id && !id) {
+    const isCreate = id === undefined || id === null || id === -1;
+    if (isCreate && (typeof build_id !== 'string' || !/^\d+$/.test(build_id.trim()))) {
       return {
         status: 'fail',
-        data: { build_id: 'build_id is required when creating a row' },
+        data: { build_id: 'a numeric build_id is required when creating a row' },
+      };
+    }
+
+    if (!isCreate && (!Number.isInteger(id) || id < 1)) {
+      return {
+        status: 'fail',
+        data: { id: 'id must be a positive integer when updating a row' },
+      };
+    }
+
+    if (character_id !== undefined && character_id !== null && (!Number.isInteger(character_id) || character_id < 1)) {
+      return {
+        status: 'fail',
+        data: { character_id: 'character_id must be null or a positive integer' },
       };
     }
 
@@ -70,7 +85,7 @@ serve(async (req: Request) => {
     // where an authenticated user supplies another user's snapshot id.
     const serviceClient = createServiceClient();
 
-    if (id !== undefined && id !== null && id !== -1) {
+    if (!isCreate) {
       const { status } = await updateData(
         serviceClient,
         'pathbuilder_import',
