@@ -386,7 +386,14 @@ async function ensureCustomContent(
       continue;
     }
 
-    const item = await createReferenceItem(ref, sourceId, warnings);
+    const semanticKind = resolved.weapons.includes(ref)
+      ? 'weapon'
+      : resolved.armor === ref
+        ? 'armor'
+        : resolved.shield === ref
+          ? 'shield'
+          : 'equipment';
+    const item = await createReferenceItem(ref, sourceId, warnings, semanticKind, traits);
     if (item) byUuid.set(`ref:${labelToVariable(ref.name)}`, item);
   }
 
@@ -429,8 +436,21 @@ const PATHBUILDER_ITEM_ALIASES: Record<string, string[]> = {
 async function createReferenceItem(
   ref: ResolvedItemRef,
   sourceId: number,
-  warnings: string[]
+  warnings: string[],
+  semanticKind: 'weapon' | 'armor' | 'shield' | 'equipment' = 'equipment',
+  traits: Map<string, number> = new Map()
 ): Promise<Item | null> {
+  const specialUnarmed = /\\bSPECIAL\\s+UNARMED\\s*\\(\\s*\\d+d(?:4|6|8|10|12)\\s*\\)/i.test(ref.raw);
+  const damageMatch = /\\(\\s*(\\d+)d(4|6|8|10|12)\\s*\\)/i.exec(ref.raw);
+  const displayTraits = semanticKind === 'weapon' && specialUnarmed
+    ? ['Agile', 'Finesse', 'Magical', 'Nonlethal', 'Unarmed']
+    : [];
+
+  const traitIds = displayTraits
+    .map((name) => traits.get(labelToVariable(name)))
+    .filter((id): id is number => id !== undefined);
+
+  const isWeapon = semanticKind === 'weapon';
   const item = {
     id: -1,
     created_at: '',
@@ -439,18 +459,18 @@ async function createReferenceItem(
     bulk: null,
     level: 0,
     rarity: 'COMMON',
-    traits: [],
+    traits: traitIds,
     description:
       `Imported from Pathbuilder as a reference. Wanderer's Guide did not have a matching content record at import time. Original Pathbuilder reference: ${ref.raw}`,
     group:
-      ref.unresolvedKind === 'weapon'
+      semanticKind === 'weapon'
         ? 'WEAPON'
-        : ref.unresolvedKind === 'armor'
+        : semanticKind === 'armor'
           ? 'ARMOR'
-          : ref.unresolvedKind === 'shield'
+          : semanticKind === 'shield'
             ? 'SHIELD'
             : 'GENERAL',
-    hands: null,
+    hands: isWeapon && specialUnarmed ? '1' : null,
     size: 'MEDIUM',
     craft_requirements: null,
     usage: null,
@@ -459,12 +479,26 @@ async function createReferenceItem(
     version: '1.0',
     meta_data: {
       bulk: {},
+      ...(isWeapon
+        ? {
+            category: specialUnarmed ? 'unarmed_attack' : 'simple',
+            group: specialUnarmed ? 'brawling' : undefined,
+            damage: {
+              dice: damageMatch ? Number(damageMatch[1]) : 1,
+              die: damageMatch ? `d${damageMatch[2]}` : 'd4',
+              damageType: 'B',
+              extra: '',
+            },
+            display_traits: displayTraits,
+          }
+        : {}),
       pathbuilder: {
         uniqueIdentifier: crypto.randomUUID(),
         type: 0,
         source: 'Pathbuilder Reference',
         raw: {
           kind: ref.kind,
+          semanticKind,
           name: ref.name,
           raw: ref.raw,
           quantity: ref.quantity,
