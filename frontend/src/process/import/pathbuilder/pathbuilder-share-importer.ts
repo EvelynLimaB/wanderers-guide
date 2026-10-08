@@ -750,6 +750,23 @@ function customEffectOperations(
   warnings: string[]
 ): Operation[] {
   const operations: Operation[] = [];
+  const emitted = new Set<string>();
+
+  const addBonusOperation = (variable: string, amount: number, text: string) => {
+    const key = `${variable}:${amount}`;
+    if (emitted.has(key)) return;
+    emitted.add(key);
+    operations.push({
+      id: crypto.randomUUID(),
+      type: 'addBonusToValue',
+      data: {
+        variable,
+        value: amount,
+        type: 'item',
+        text,
+      },
+    });
+  };
 
   for (const [index, effect] of (customFile.listCustomEffects ?? []).entries()) {
     const amount =
@@ -757,7 +774,11 @@ function customEffectOperations(
         ? effect.bonusAmount * stackMultiplier
         : undefined;
 
+    // A reference-only effect carries provenance for a Pathbuilder-side rule link but
+    // no mechanical value. Preserve it in the raw Custom File without manufacturing
+    // an "unmapped" warning for a non-numeric payload.
     if (amount === undefined || amount === 0) {
+      if (effect.reference && Object.keys(effect).every((key) => key === 'reference')) continue;
       warnings.push(
         `custom effect "${customFile.name}": effect ${index + 1} has no directly executable bonus (reference ${effect.reference ?? 'unknown'})`
       );
@@ -767,16 +788,11 @@ function customEffectOperations(
     if (effect.proficiencyName) {
       const variable = pathbuilderProficiencyVariable(effect.proficiencyName);
       if (variable) {
-        operations.push({
-          id: crypto.randomUUID(),
-          type: 'addBonusToValue',
-          data: {
-            variable,
-            value: amount,
-            type: 'item',
-            text: `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder custom effect)`,
-          },
-        });
+        addBonusOperation(
+          variable,
+          amount,
+          `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder custom effect)`
+        );
       } else {
         warnings.push(
           `custom effect "${customFile.name}": unsupported proficiency target "${effect.proficiencyName}"`
@@ -787,22 +803,55 @@ function customEffectOperations(
     if (effect.effectType !== undefined && effect.effectType !== null) {
       const variable = PATHBUILDER_EFFECT_VARIABLES[effect.effectType];
       if (variable) {
-        operations.push({
-          id: crypto.randomUUID(),
-          type: 'addBonusToValue',
-          data: {
-            variable,
-            value: amount,
-            type: 'item',
-            text: `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder effect ${effect.effectType})`,
-          },
-        });
+        addBonusOperation(
+          variable,
+          amount,
+          `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder effect ${effect.effectType})`
+        );
       } else if (!effect.proficiencyName) {
         warnings.push(
           `custom effect "${customFile.name}": unsupported effectType ${effect.effectType} (reference ${effect.reference ?? 'unknown'})`
         );
       }
     }
+  }
+
+  // Some Pathbuilder Custom Files contain effects in prose as well as in
+  // listCustomEffects. Replay explicit numeric item bonuses from the prose so the
+  // character sheet keeps the same currently-active totals.
+  const description = customFile.description ?? '';
+  for (const match of description.matchAll(/\\+(\\d+)\\s*item[- ]bonus\\s+to\\s+([^.]*(?:\\.)?)/gi)) {
+    const amount = Number(match[1]) * stackMultiplier;
+    const targets = match[2];
+    for (const skill of [
+      'Acrobatics','Arcana','Athletics','Crafting','Deception','Diplomacy',
+      'Intimidation','Medicine','Nature','Occultism','Performance','Religion',
+      'Society','Stealth','Survival','Thievery',
+    ]) {
+      if (targets.toLowerCase().includes(skill.toLowerCase())) {
+        addBonusOperation(
+          `SKILL_${labelToVariable(skill)}`,
+          amount,
+          `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder custom description)`
+        );
+      }
+    }
+    if (targets.toLowerCase().includes('speed')) {
+      addBonusOperation(
+        'SPEED',
+        amount,
+        `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder custom description)`
+      );
+    }
+  }
+
+  const speedMatch = /\\+(\\d+)\\s*(?:ft|feet)\\s*item[- ]bonus\\s+to\\s+speed/i.exec(description);
+  if (speedMatch) {
+    addBonusOperation(
+      'SPEED',
+      Number(speedMatch[1]) * stackMultiplier,
+      `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder custom description)`
+    );
   }
 
   return operations;
