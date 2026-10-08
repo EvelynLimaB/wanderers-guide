@@ -157,7 +157,14 @@ function resolveRef(
       ref: raw,
       reason: 'Custom File UUID is not present in listCustomFiles (share payloads omit Custom Pack contents)',
     });
-    return { kind: 'unresolved', name: nameOverride || raw, raw, uuid: raw, quantity };
+    return {
+      kind: 'unresolved',
+      name: nameOverride || raw,
+      raw,
+      uuid: raw,
+      quantity,
+      unresolvedKind: kind,
+    };
   }
   return { kind: 'standard', name: nameOverride || raw, raw, quantity };
 }
