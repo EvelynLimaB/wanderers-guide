@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 globalThis.window = { location: { origin: 'http://localhost' }, addEventListener() {}, removeEventListener() {} };
+globalThis.document = { addEventListener() {}, removeEventListener() {} };
 
 import { build } from 'esbuild';
 import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
