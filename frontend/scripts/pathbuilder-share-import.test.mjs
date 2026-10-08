@@ -189,7 +189,9 @@ test('build id extraction accepts ids/URLs and rejects arbitrary text', () => {
   assert.equal(extractBuildId('https://pathbuilder2e.com/app.html?emailedBuildID=1596127'), '1596127');
   assert.equal(extractBuildId('https://pathbuilder2e.com/app.html?id=1596127'), '1596127');
   assert.equal(extractBuildId('not-a-build-abc'), null);
+  assert.equal(extractBuildId('build 1596127 please'), null);
   assert.equal(extractBuildId(-1), null);
+  assert.equal(extractBuildId(1596127.5), null);
 });
 
 test('custom file index accepts Pathbuilder uniqueIdentifier misspellings', () => {
