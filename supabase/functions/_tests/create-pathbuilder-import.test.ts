@@ -120,16 +120,44 @@ Deno.test({
     const id = created.body?.data?.id;
     assert(id, 'expected an id from the insert');
 
-    const updated = await callFunction('create-pathbuilder-import', { id, character_id: 424242 }, { token: jwt });
+    // Use null here because the migration intentionally enforces a foreign key to
+    // public.character(id); a fabricated ID would make this test invalid.
+    const updated = await callFunction('create-pathbuilder-import', { id, character_id: null }, { token: jwt });
     assertEquals(updated.body?.status, 'success');
     assertEquals(updated.body?.data, true, 'the update path returns true, not a row');
 
     const { data: stored } = await admin.from('pathbuilder_import').select('*').eq('id', id).single();
-    assertEquals(stored?.character_id, 424242);
+    assertEquals(stored?.character_id, null);
     // The point of the second call is that it must not clobber the snapshot.
     assertEquals(stored?.build_id, '1596127');
     assertEquals(stored?.character_data?.characterName, 'Test Import');
     assertEquals(stored?.custom_files?.length, 1);
+
+    await admin.from('pathbuilder_import').delete().eq('id', id);
+  },
+});
+
+Deno.test({
+  name: 'create-pathbuilder-import: rejects a character_id that violates the foreign key',
+  ignore: skip,
+  async fn() {
+    const { jwt } = await seed();
+
+    const created = await callFunction('create-pathbuilder-import', { id: -1, ...payload }, { token: jwt });
+    const id = created.body?.data?.id;
+    assert(id, 'expected an id from the insert');
+
+    const attempted = await callFunction(
+      'create-pathbuilder-import',
+      { id, character_id: 424242 },
+      { token: jwt }
+    );
+
+    assertEquals(attempted.body?.status, 'fail');
+
+    const { data: stored } = await admin.from('pathbuilder_import').select('*').eq('id', id).single();
+    assertEquals(stored?.character_id, null);
+    assertEquals(stored?.character_data?.characterName, 'Test Import');
 
     await admin.from('pathbuilder_import').delete().eq('id', id);
   },
