@@ -83,7 +83,7 @@ export function resetContentStore() {}
 export function setContentCacheActor() {}
 `;
 
-const notifications = 'export function showNotification() {} export function hideNotification() {}';
+const notifications = 'export function showNotification() {} export function hideNotification() {} export function updateNotification() {}';
 const creation = `export async function createPathbuilderContentSource() { return null; }
 export async function upsertItem() {}
 export async function upsertSpell() {}
