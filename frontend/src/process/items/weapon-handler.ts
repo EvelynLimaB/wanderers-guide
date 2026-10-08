@@ -48,9 +48,10 @@ export function getWeaponStats(id: StoreID, item: Item) {
   const minDice = getVariable<VariableNum>(id, 'MINIMUM_WEAPON_DAMAGE_DICE')?.value ?? 1;
   if (dice < minDice) dice = minDice;
 
-  //
+  // Pathbuilder may explicitly select a two-hand mode for a weapon.
+  const pathbuilderState = getPathbuilderWeaponState(item);
   const twoHandDie = (item.meta_data?.display_traits ?? [])
-    .map((trait) => /two-hand\\s+d(4|6|8|10|12)/i.exec(trait)?.[1])
+    .map((trait) => /two-hand\s+d(4|6|8|10|12)/i.exec(trait)?.[1])
     .find(Boolean);
   const baseDie =
     pathbuilderState?.twoHanded === true && twoHandDie
