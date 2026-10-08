@@ -981,6 +981,17 @@ async function buildCharacter(
   });
 }
 
+/**
+ * Identify WG's dedicated class key-ability selector without letting a key ability
+ * satisfy an unrelated attribute boost selector with the same label.
+ */
+function isKeyAbilitySelection(
+  selection: { title?: string; description?: string } | undefined
+): boolean {
+  const text = [selection?.title, selection?.description].filter(Boolean).join(' ');
+  return /\bkey\s+(?:ability|attribute)\b/i.test(text);
+}
+
 function buildPathbuilderCustomOperations(
   resolved: ResolvedBuild,
   content: Awaited<ReturnType<typeof fetchContentPackage>>,
@@ -1029,9 +1040,6 @@ async function resolveSelections(
 
   const selections: { name: string; level: number }[] = [
     ...resolved.feats.map((feat) => ({ name: feat.name, level: feat.level ?? 1 })),
-    ...(resolved.identity.keyAbility
-      ? [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: 1 }]
-      : []),
     ...resolved.abilityBoosts.map((boost) => ({ name: pathbuilderAbilityLabel(boost.ability), level: boost.level })),
     ...resolved.skillIncreases.map((increase) => ({ name: increase.skill, level: increase.level })),
     // Class/background/ancestry operations often ask for additional trained skills at level 1.
@@ -1060,8 +1068,13 @@ async function resolveSelections(
     });
     const found = findFirstSelection(results, checked);
     if (found) {
+      const keyAbilitySelection = isKeyAbilitySelection(found.selection?.selection);
+      const requestedSelections =
+        keyAbilitySelection && resolved.identity.keyAbility
+          ? [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: found.level }]
+          : selections;
       const result: ObjectWithUUID | null = findMatchingOption(
-        selections,
+        requestedSelections,
         found.selection?.selection?.options ?? [],
         found.level
       );
