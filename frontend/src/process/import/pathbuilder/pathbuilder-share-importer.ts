@@ -1125,6 +1125,9 @@ async function resolveSelections(
 
   const chosen: Record<string, string> = {};
   const checked = new Set<string>();
+  // Dynamic grants can rebuild the same selection with a different ancestry/source path.
+  // The actual select-operation id is stable, so track it separately from the rendered path.
+  const checkedSelectionIds = new Set<string>();
   const abilityBoostCursors = new Map<string, number>();
 
   let hasSelections = true;
@@ -1140,6 +1143,11 @@ async function resolveSelections(
     });
     const found = findFirstSelection(results, checked);
     if (found) {
+      const selectionId = found.selection?.selection?.id ?? '';
+      if (selectionId && checkedSelectionIds.has(selectionId)) {
+        checked.add(found.path);
+        continue;
+      }
       const options = found.selection?.selection?.options ?? [];
       const attributeSelection = isAttributeSelection(options);
       const keyAbilitySelection = isKeyAbilitySelection(found.selection?.selection);
@@ -1200,6 +1208,7 @@ async function resolveSelections(
         );
       }
       checked.add(found.path);
+      if (selectionId) checkedSelectionIds.add(selectionId);
     } else {
       hasSelections = false;
     }
