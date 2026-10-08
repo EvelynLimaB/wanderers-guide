@@ -194,6 +194,27 @@ test('build id extraction accepts ids/URLs and rejects arbitrary text', () => {
   assert.equal(extractBuildId(1596127.5), null);
 });
 
+test('custom item schema preserves generic Custom Pack fields', () => {
+  const entry = {
+    type: 5,
+    uniqueIdentifier: '00000000-0000-0000-0000-000000000001',
+    json: JSON.stringify({
+      uniqueIdentifier: '00000000-0000-0000-0000-000000000001',
+      name: 'Gloves of Combustion',
+      bulk: 'L',
+      traits: 'Fire, Staff, 3rd Party, Invested, Unique',
+      category: 8,
+      itemLevel: 9,
+    }),
+  };
+
+  const parsed = parseCustomFileJson(entry);
+  assert.equal(parsed?.name, 'Gloves of Combustion');
+  assert.equal(parsed?.bulk, 'L');
+  assert.equal(parsed?.traits, 'Fire, Staff, 3rd Party, Invested, Unique');
+  assert.equal(parsed?.category, 8);
+});
+
 test('custom file index accepts Pathbuilder uniqueIdentifier misspellings', () => {
   const index = buildCustomFileIndex(fixture.build.listCustomFiles);
   assert.equal(index.size, 3);
