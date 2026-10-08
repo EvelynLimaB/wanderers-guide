@@ -307,20 +307,61 @@ async function ensureCustomContent(
     return { sourceId, byUuid, fallbackSpellsByName };
   }
 
-  const traits = await fetchTraitMap();
+  // The source is intentionally reused across retries of the same user/build.
+  // Reload its existing content so an interrupted/repeated import does not treat
+  // deterministic UUID collisions as a rejection and then lose the custom item.
+  let sourceItems: Item[] = [];
+  let sourceSpells: Spell[] = [];
+  try {
+    const sourceContent = await fetchContentPackage([sourceId], { fetchSources: true });
+    sourceItems = sourceContent.items ?? [];
+    sourceSpells = sourceContent.spells ?? [];
+  } catch (error) {
+    console.warn('Could not reload existing Pathbuilder source content:', error);
+  }
+
+  const traits = new Map<string, number>(
+    (content.traits ?? []).map((trait) => [labelToVariable(trait.name), trait.id])
+  );
+
   for (const [uuid, customFile] of referenced) {
+    const existing = sourceItems.find(
+      (item) => item.meta_data?.pathbuilder?.uniqueIdentifier?.toLowerCase() === uuid
+    );
+    if (existing) {
+      byUuid.set(uuid, existing);
+      continue;
+    }
+
     const item = await createCustomItem(customFile, sourceId, traits, content, warnings);
     if (item) byUuid.set(uuid, item);
   }
 
   for (const ref of missingItems) {
-    const item = await createReferenceItem(ref, sourceId, warnings);
-    if (item) {
-      byUuid.set(`ref:${labelToVariable(ref.name)}`, item);
+    const existing = sourceItems.find((item) => {
+      if (item.meta_data?.pathbuilder?.source !== 'Pathbuilder Reference') return false;
+      const raw = item.meta_data.pathbuilder.raw;
+      return typeof raw === 'object' && raw !== null && 'raw' in raw && (raw as Record<string, unknown>).raw === ref.raw;
+    });
+    if (existing) {
+      byUuid.set(`ref:${labelToVariable(ref.name)}`, existing);
+      continue;
     }
+
+    const item = await createReferenceItem(ref, sourceId, warnings);
+    if (item) byUuid.set(`ref:${labelToVariable(ref.name)}`, item);
   }
 
   for (const spell of missingSpells) {
+    const existing = sourceSpells.find((candidate) => {
+      const raw = candidate.meta_data?.pathbuilder?.raw;
+      return typeof raw === 'object' && raw !== null && 'rawKey' in raw && (raw as Record<string, unknown>).rawKey === spell.rawKey;
+    });
+    if (existing) {
+      fallbackSpellsByName.set(labelToVariable(spell.name), existing);
+      continue;
+    }
+
     const item = await createReferenceSpell(spell, sourceId);
     if (item) {
       warnings.push(
@@ -443,21 +484,6 @@ async function createReferenceSpell(
   } catch {
     return null;
   }
-}
-
-async function fetchTraitMap(): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
-  try {
-    const sources = await fetchContentSources('ALL-USER-ACCESSIBLE');
-    const sv = defineDefaultSources('PAGE', sources.map((source) => source.id));
-    const content = await fetchContentPackage(sv, { fetchSources: true });
-    for (const trait of (content.traits ?? []) as Trait[]) {
-      map.set(labelToVariable(trait.name), trait.id);
-    }
-  } catch (error) {
-    console.warn('Could not load traits for the Pathbuilder import:', error);
-  }
-  return map;
 }
 
 /** Convert one Pathbuilder Custom File to a WG Item while preserving the raw file in meta_data. */
@@ -873,7 +899,7 @@ async function buildCharacter(
     if (value && !character.details?.[field]) warnings.push(`identity: WG has no ${field} matching "${value}"`);
   }
 
-  await resolveSelections(character, content, resolved);
+  await resolveSelections(character, content, resolved, warnings);
 
   character.inventory = {
     coins: { ...resolved.coins },
@@ -895,6 +921,8 @@ async function buildCharacter(
         rank: Math.max(spell.heighten, resolvedSpell.rank ?? 0),
         source: spell.source ? labelToVariable(spell.source) : '',
       });
+    } else {
+      warnings.push(`spell: could not resolve "${spell.name}" and it was not added to the character`);
     }
   }
 
@@ -943,7 +971,8 @@ function buildPathbuilderCustomOperations(
 async function resolveSelections(
   character: Character,
   content: Awaited<ReturnType<typeof fetchContentPackage>>,
-  resolved: ResolvedBuild
+  resolved: ResolvedBuild,
+  warnings: string[]
 ): Promise<void> {
   // Levels for special selections come from the feat slot that owns them.
   const slotLevel = new Map<string, number>();
@@ -989,6 +1018,14 @@ async function resolveSelections(
       if (result) {
         chosen[found.path] = result._select_uuid;
         character.operation_data!.selections = cloneDeep(chosen);
+      } else {
+        const requested = selections
+          .filter((selection) => selection.level === found.level)
+          .map((selection) => selection.name)
+          .join(', ');
+        warnings.push(
+          `selection: WG has no matching option for level ${found.level} (available Pathbuilder choices: ${requested || 'none'}; selection path: ${found.path})`
+        );
       }
       checked.add(found.path);
     } else {
