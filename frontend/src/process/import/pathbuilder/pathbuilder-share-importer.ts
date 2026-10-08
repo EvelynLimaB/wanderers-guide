@@ -440,8 +440,8 @@ async function createReferenceItem(
   semanticKind: 'weapon' | 'armor' | 'shield' | 'equipment' = 'equipment',
   traits: Map<string, number> = new Map()
 ): Promise<Item | null> {
-  const specialUnarmed = /\\bSPECIAL\\s+UNARMED\\s*\\(\\s*\\d+d(?:4|6|8|10|12)\\s*\\)/i.test(ref.raw);
-  const damageMatch = /\\(\\s*(\\d+)d(4|6|8|10|12)\\s*\\)/i.exec(ref.raw);
+  const specialUnarmed = new RegExp('\\\\bSPECIAL\\\\s+UNARMED\\\\s*\\(\\\\s*\\\\d+d(?:4|6|8|10|12)\\\\s*\\\\)', 'i').test(ref.raw);
+  const damageMatch = new RegExp('\\\\(\\\\s*(\\\\d+)d(4|6|8|10|12)\\\\s*\\\\)', 'i').exec(ref.raw);
   const displayTraits = semanticKind === 'weapon' && specialUnarmed
     ? ['Agile', 'Finesse', 'Magical', 'Nonlethal', 'Unarmed']
     : [];
