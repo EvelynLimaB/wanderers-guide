@@ -1053,10 +1053,12 @@ function isKeyAbilitySelection(
  * progression below class-feature-*. The options are still checked first so
  * a non-attribute selector can never consume one of the imported boosts.
  */
-function getAbilityBoostOriginForPath(path: string): 'levelled' | 'ancestry' | 'background' | null {
+export function getAbilityBoostOriginForPath(path: string): 'levelled' | 'ancestry' | 'background' | null {
   if (path.startsWith('background_')) return 'background';
   if (path.startsWith('ancestry_')) return 'ancestry';
-  if (path.startsWith('class-feature-')) return 'levelled';
+  // Pathfinder 2e's four level-1 ability boosts are part of the class operation
+  // tree in WG. Later level boosts are emitted as class-feature-* sources.
+  if (path.startsWith('class_') || path.startsWith('class-feature-')) return 'levelled';
   return null;
 }
 
