@@ -509,7 +509,7 @@ async function createCustomItem(
   content: Awaited<ReturnType<typeof fetchContentPackage>>,
   warnings: string[]
 ): Promise<Item | null> {
-  const rawTraits = (customFile.weaponTraits ?? '')
+  const rawTraits = (customFile.weaponTraits ?? customFile.traits ?? '')
     .split(',')
     .map((trait) => trait.trim())
     .filter(Boolean);
@@ -533,7 +533,7 @@ async function createCustomItem(
   const isWeapon =
     typeof customFile.damage === 'number' ||
     (customFile.weaponTraits ?? '').length > 0 ||
-    typeof customFile.group === 'string';
+    (typeof customFile.group === 'string' && customFile.group.trim().length > 0);
 
   // Custom weapons frequently describe their base weapon without repeating its
   // mechanical fields. Reuse a uniquely identifiable WG weapon as a mechanical
@@ -557,9 +557,9 @@ async function createCustomItem(
     created_at: '',
     name: customFile.name ?? 'Unnamed Custom Item',
     price: typeof customFile.price === 'number' ? { gp: customFile.price } : null,
-    bulk: inferredBaseWeapon?.bulk ?? null,
+    bulk: customFile.bulk ?? inferredBaseWeapon?.bulk ?? null,
     level: customFile.itemLevel ?? inferredBaseWeapon?.level ?? 0,
-    rarity: /unique/i.test(customFile.weaponTraits ?? '') ? 'UNIQUE' : 'COMMON',
+    rarity: /\bunique\b/i.test(rawTraits.join(', ')) ? 'UNIQUE' : 'COMMON',
     traits: [...traitIds, ...inheritedTraits],
     description,
     group: isWeapon ? 'WEAPON' : 'GENERAL',
