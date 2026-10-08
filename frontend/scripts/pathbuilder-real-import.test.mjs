@@ -349,3 +349,17 @@ try {
     assert.equal(clawStats.damage.die, 'd4');
 
     assert.equal(stingerStats.attack_bonus.total, 16);
+
+    assert.equal(stingerStats.attack_bonus.total, 16);
+    assert.equal(stingerStats.damage.dice, 2);
+    assert.equal(stingerStats.damage.die, 'd6');
+
+    assert.equal(crimsonStats.attack_bonus.total, 16);
+    assert.equal(crimsonStats.damage.dice, 2);
+    assert.equal(crimsonStats.damage.die, 'd12');
+  } finally {
+    await engine.cleanup();
+  }
+} finally {
+  await rm(bundleDir, { recursive: true, force: true });
+}
