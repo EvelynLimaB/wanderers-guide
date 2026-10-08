@@ -10,6 +10,8 @@ import {
   parseCustomFileJson,
   parseFeatSlotKey,
   parseFeatValue,
+  parsePathbuilderAbility,
+  pathbuilderAbilityLabel,
   resolveBuild,
   stripCategoryPrefix,
 } from '../src/process/import/pathbuilder/pathbuilder-resolve.ts';
@@ -76,6 +78,105 @@ test('identity is read from characterData, not from a derived sheet', () => {
   assert.equal(resolved.identity.gender, 'Female?');
   assert.equal(resolved.buildId, '1596127');
   assert.equal(resolved.formatVersion, '121');
+});
+
+/** Verify compact Pathbuilder ability tokens match the labels emitted by WG attribute selectors. */
+test('Pathbuilder ability tokens map to native WG attribute labels', () => {
+  const labels = {
+    str: 'Strength',
+    dex: 'Dexterity',
+    con: 'Constitution',
+    int: 'Intelligence',
+    wis: 'Wisdom',
+    cha: 'Charisma',
+  };
+
+  for (const [ability, label] of Object.entries(labels)) {
+    assert.equal(pathbuilderAbilityLabel(ability), label);
+    assert.equal(parsePathbuilderAbility(ability), ability);
+  }
+});
+
+/** Verify the full imported boost set for Arsene can be represented by native WG selectors. */
+test('Arsene ability boosts retain every Pathbuilder choice', () => {
+  const arsene = resolveBuild(
+    {
+      characterData: {
+        characterName: 'Arsene (Reset)',
+        characterLevel: 7,
+        ancestry: 'Fleshwarp',
+        heritage: 'Ifrit',
+        className: 'Wizard',
+        background: 'Criminal',
+        keyability: 'int',
+        hashMapAncestryFreeBoostSelections: { '0': 3 },
+        backgroundBoostLimitedSelection: 3,
+        getBackgroundBoostFreeSelection: 1,
+        hashMapAbilityBoosts: {
+          '1': [1, 2, 3, 5],
+          '2': [1],
+          '3': [4],
+          '4': [2],
+          '5': [3],
+          '7': [3],
+        },
+      },
+    },
+    { buildId: '1596127' }
+  );
+
+  assert.equal(arsene.identity.keyAbility, 'int');
+  assert.deepEqual(arsene.abilityBoosts, [
+    { level: 1, ability: 'int' },
+    { level: 1, ability: 'str' },
+    { level: 1, ability: 'dex' },
+    { level: 1, ability: 'cha' },
+    { level: 1, ability: 'con' },
+    { level: 1, ability: 'dex' },
+    { level: 1, ability: 'int' },
+    { level: 1, ability: 'int' },
+    { level: 2, ability: 'dex' },
+    { level: 3, ability: 'wis' },
+    { level: 4, ability: 'con' },
+    { level: 5, ability: 'int' },
+    { level: 7, ability: 'int' },
+  ]);
+});
+
+/** Verify a derived-only key ability still reaches the native import representation. */
+test('derived key ability is retained when share characterData does not contain it', () => {
+  const resolvedFromDerived = resolveBuild(
+    {
+      characterData: {
+        characterName: 'Wizard fixture',
+        characterLevel: 7,
+        className: 'Wizard',
+      },
+    },
+    {
+      buildId: '1',
+      derived: { keyability: 'INT' },
+    }
+  );
+
+  assert.equal(resolvedFromDerived.identity.keyAbility, 'int');
+});
+
+/** The share payload wins when both payload forms contain a key ability. */
+test('share key ability takes precedence over derived key ability', () => {
+  const resolvedFromBoth = resolveBuild(
+    {
+      characterData: {
+        className: 'Wizard',
+        keyability: 'dex',
+      },
+    },
+    {
+      derived: { keyability: 'int' },
+    }
+  );
+
+  assert.equal(resolvedFromBoth.identity.keyAbility, 'dex');
 });
 
 test('the BACKGROUND_ prefix is stripped but nothing else is mangled', () => {
