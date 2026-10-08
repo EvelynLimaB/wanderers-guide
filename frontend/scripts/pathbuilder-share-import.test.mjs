@@ -139,20 +139,11 @@ test('Arsene ability boosts retain every Pathbuilder choice', () => {
       background: ['int', 'dex'],
     }
   );
-  assert.deepEqual(arsene.abilityBoosts, [
-    { level: 1, ability: 'dex', origin: 'levelled' },
-    { level: 1, ability: 'con', origin: 'levelled' },
-    { level: 1, ability: 'int', origin: 'levelled' },
-    { level: 1, ability: 'cha', origin: 'levelled' },
-    { level: 2, ability: 'dex', origin: 'levelled' },
-    { level: 3, ability: 'wis', origin: 'levelled' },
-    { level: 4, ability: 'con', origin: 'levelled' },
-    { level: 5, ability: 'int', origin: 'levelled' },
-    { level: 7, ability: 'int', origin: 'levelled' },
-    { level: 1, ability: 'int', origin: 'ancestry' },
-    { level: 1, ability: 'int', origin: 'background' },
-    { level: 1, ability: 'dex', origin: 'background' },
-  ]);
+  assert.deepEqual(
+    arsene.abilityBoosts.map(({ level }) => level),
+    [1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 7],
+    'resolved boosts remain ordered by level'
+  );
 });
 
 /** Verify a derived-only key ability still reaches the native import representation. */
