@@ -1195,6 +1195,28 @@ function isLanguageSelection(selection: { title?: string; description?: string }
   return /\blanguage\b/i.test([selection?.title, selection?.description].filter(Boolean).join(' '));
 }
 
+function findPathbuilderOption(
+  selections: { name: string; level: number }[],
+  options: ObjectWithUUID[],
+  level: number
+): ObjectWithUUID | null {
+  const exact = findMatchingOption(selections, options, level);
+  if (exact) return exact;
+
+  const candidates = selections
+    .filter((selection) => selection.level === level)
+    .map((selection) => labelToVariable(selection.name));
+  for (const requested of candidates) {
+    const compatible = options.filter((option) => {
+      const available = labelToVariable(option.name ?? option.title ?? '');
+      if (!available || !requested) return false;
+      return requested.startsWith(available + '_') || available.startsWith(requested + '_');
+    });
+    if (compatible.length === 1) return compatible[0];
+  }
+  return null;
+}
+
 /**
  * Identify WG's dedicated class key-ability selector without letting the key
  * ability satisfy an unrelated attribute-boost selector with the same label.
@@ -1330,7 +1352,7 @@ async function resolveSelections(
       }
 
       if (!result) {
-        result = findMatchingOption(requestedSelections, options, found.level);
+        result = findPathbuilderOption(requestedSelections, options, found.level);
       }
       if (result) {
         chosen[found.path] = result._select_uuid;
