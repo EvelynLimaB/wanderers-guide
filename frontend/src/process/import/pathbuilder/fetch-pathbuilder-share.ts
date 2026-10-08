@@ -50,8 +50,7 @@ export function extractBuildId(input: string | number | undefined | null): strin
     if (last && /^\d+$/.test(last)) return last;
     return null;
   } catch {
-    const match = text.match(/\d+/);
-    return match ? match[0] : null;
+    return null;
   }
 }
 
