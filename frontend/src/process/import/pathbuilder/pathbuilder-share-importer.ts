@@ -1025,6 +1025,52 @@ function buildPathbuilderCustomOperations(
   return operations;
 }
 
+const PATHBUILDER_ATTRIBUTE_VARIABLES = new Set([
+  'ATTRIBUTE_STR',
+  'ATTRIBUTE_DEX',
+  'ATTRIBUTE_CON',
+  'ATTRIBUTE_INT',
+  'ATTRIBUTE_WIS',
+  'ATTRIBUTE_CHA',
+]);
+
+/**
+ * Detect an attribute selector from the actual WG options rather than from its
+ * source path. This keeps feat, skill, heritage, and lore selectors out of the
+ * ability-boost matcher.
+ */
+function isAttributeSelection(options: ObjectWithUUID[]): boolean {
+  return options.length > 0 && options.every((option) => {
+    return typeof option.variable === 'string' && PATHBUILDER_ATTRIBUTE_VARIABLES.has(option.variable);
+  });
+}
+
+/**
+ * Identify WG's dedicated class key-ability selector without letting the key
+ * ability satisfy an unrelated attribute-boost selector with the same label.
+ */
+function isKeyAbilitySelection(
+  selection: { title?: string; description?: string } | undefined
+): boolean {
+  const text = [selection?.title, selection?.description].filter(Boolean).join(' ');
+  return /\bkey\b.*\b(?:ability|attribute)\b|\b(?:ability|attribute)\b.*\bkey\b/i.test(text);
+}
+
+/**
+ * Route an attribute selector to the corresponding Pathbuilder boost group.
+ *
+ * The WG operation tree exposes ancestry operations below ancestry_*,
+ * background operations below background_*, and level-based character
+ * progression below class-feature-*. The options are still checked first so
+ * a non-attribute selector can never consume one of the imported boosts.
+ */
+function getAbilityBoostOriginForPath(path: string): 'levelled' | 'ancestry' | 'background' | null {
+  if (path.startsWith('background_')) return 'background';
+  if (path.startsWith('ancestry_')) return 'ancestry';
+  if (path.startsWith('class-feature-')) return 'levelled';
+  return null;
+}
+
 /** Feed the operation builder every choice the payload records, level by level. */
 async function resolveSelections(
   character: Character,
@@ -1068,21 +1114,34 @@ async function resolveSelections(
     });
     const found = findFirstSelection(results, checked);
     if (found) {
+      const options = found.selection?.selection?.options ?? [];
+      const attributeSelection = isAttributeSelection(options);
       const keyAbilitySelection = isKeyAbilitySelection(found.selection?.selection);
-      const requestedSelections =
-        keyAbilitySelection && resolved.identity.keyAbility
-          ? [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: found.level }]
-          : selections;
+      let requestedSelections = selections;
+
+      if (attributeSelection) {
+        if (keyAbilitySelection && resolved.identity.keyAbility) {
+          requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: found.level }];
+        } else {
+          const origin = getAbilityBoostOriginForPath(found.path);
+          requestedSelections = origin
+            ? resolved.abilityBoosts
+                .filter((boost) => boost.origin === origin)
+                .map((boost) => ({ name: pathbuilderAbilityLabel(boost.ability), level: boost.level }))
+            : [];
+        }
+      }
+
       const result: ObjectWithUUID | null = findMatchingOption(
         requestedSelections,
-        found.selection?.selection?.options ?? [],
+        options,
         found.level
       );
       if (result) {
         chosen[found.path] = result._select_uuid;
         character.operation_data!.selections = cloneDeep(chosen);
       } else {
-        const requested = selections
+        const requested = requestedSelections
           .filter((selection) => selection.level === found.level)
           .map((selection) => selection.name)
           .join(', ');
