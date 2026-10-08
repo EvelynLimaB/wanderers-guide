@@ -294,8 +294,15 @@ try {
       engine.getFinalVariableValue('CHARACTER', `ATTRIBUTE_${name}`).total,
     ])
   );
-  assert.deepEqual(attrs, { STR: 0, DEX: 3, CON: 3, INT: 5, WIS: 1, CHA: 1 });
-  assert.equal(parts.profBonus, 7, 'Light Armor must be trained at level 7');
+  const expectedPathbuilderScores = { STR: 10, DEX: 16, CON: 16, INT: 20, WIS: 12, CHA: 12 };
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(attrs).map(([name, modifier]) => [name, 10 + modifier * 2])),
+    expectedPathbuilderScores,
+    'imported WG modifiers must reproduce the Pathbuilder ability scores 1:1'
+  );
+  assert.equal(parts.profBonus, 9, 'Light Armor trained proficiency must include level 7');
+  assert.equal(engine.getFinalProfValue('CHARACTER', 'LIGHT_ARMOR'), '+9');
+  assert.equal(engine.getFinalProfValue('CHARACTER', 'UNARMORED_DEFENSE'), '+9');
   assert.equal(parts.armorBonus, 2, 'Padded Armor +1 must contribute +2 AC');
   assert.equal(engine.getFinalAcValue('CHARACTER', built.inventory.items.find((entry) => entry.is_equipped)?.item), 24);
   assert.equal(warnings.length, 0, `import must not leave warnings: ${warnings.join('; ')}`);
