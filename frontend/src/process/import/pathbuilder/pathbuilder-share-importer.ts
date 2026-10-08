@@ -1254,11 +1254,11 @@ function getFeatSelectionsForOperation(
       .map((feat) => ({ name: feat.name, level }));
   }
 
-  // A bare "Select a Feat" under an ancestry branch represents the ancestry
-  // feat slot. This includes normal "Automaton Feat N" slots and Ancestry Paragon
-  // slots; the operation tree decides which exact option is legal.
+  // Generic "Select a Feat" nodes occur in several branches. Do not guess the
+  // provenance from the rendered path; let the legal WG option list decide which
+  // recorded Pathbuilder feat is applicable.
   return atLevel
-    .filter((feat) => /\bfeat\b/i.test(feat.slot) && !/^(skill|general|champion|free archetype)/i.test(feat.slot))
+    .filter((feat) => /\bfeat\b/i.test(feat.slot))
     .map((feat) => ({ name: feat.name, level }));
 }
 
