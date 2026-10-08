@@ -44,7 +44,7 @@ test('the captured v121 share payload passes the wire schema and fetch parser', 
   // payloads. Preserve unexpected scalar/object values instead of rejecting
   // the entire share before we can resolve the actual Custom File JSON.
   const driftedType = structuredClone(fixture.build);
-  driftedType.listCustomFiles[5].type = { kind: 'custom-content' };
+  driftedType.listCustomFiles[2].type = { kind: 'custom-content' };
   const driftedParsed = PathbuilderShareBuildSchema.safeParse(driftedType);
   assert.equal(driftedParsed.success, true);
 
@@ -158,3 +158,43 @@ test('json.php-derived armor data recovers an armor name missing from playerArmo
 });
 
 test('rule variants map onto WG CharacterVariants keys', () => {
+  assert.equal(resolved.variants.ancestry_paragon, true);
+  assert.equal(resolved.variants.free_archetype, true);
+  assert.equal(resolved.variants.gradual_attribute_boosts, true);
+});
+
+test('custom references, quantities, containers and runes are preserved', () => {
+  assert.equal(resolved.weapons.length, 5);
+  assert.equal(resolved.weapons[0].quantity, 4);
+  assert.equal(resolved.weapons[3].kind, 'custom');
+  assert.equal(resolved.weapons[3].name, 'Stinger');
+  assert.equal(resolved.weapons[4].kind, 'custom');
+  assert.equal(resolved.weapons[4].name, 'Crimson Blade');
+  assert.deepEqual(resolved.weapons[4].runes, ['Wounding']);
+  assert.equal(resolved.containers.length, 1);
+  assert.equal(resolved.containers[0].name, 'Backpack');
+  assert.equal(resolved.containers[0].items.find((item) => item.name === 'Chalk')?.quantity, 10);
+  assert.equal(resolved.containers[0].items.find((item) => item.name === 'Rations')?.quantity, 2);
+});
+
+test('missing derived armor remains explicitly unresolved instead of being silently dropped', () => {
+  assert.equal(resolved.armor, undefined);
+  assert.equal(resolved.armorRunes.includes('Raiment'), true);
+  assert.equal(resolved.armorPotency, 1);
+  assert.equal(resolved.unresolved.some((entry) => entry.kind === 'armor'), true);
+});
+
+test('build id extraction accepts ids/URLs and rejects arbitrary text', () => {
+  assert.equal(extractBuildId('1596127'), '1596127');
+  assert.equal(extractBuildId('https://pathbuilder2e.com/app.html?emailedBuildID=1596127'), '1596127');
+  assert.equal(extractBuildId('https://pathbuilder2e.com/app.html?id=1596127'), '1596127');
+  assert.equal(extractBuildId('not-a-build-abc'), null);
+  assert.equal(extractBuildId(-1), null);
+});
+
+test('custom file index accepts Pathbuilder uniqueIdentifier misspellings', () => {
+  const index = buildCustomFileIndex(fixture.build.listCustomFiles);
+  assert.equal(index.size, 3);
+  assert.equal(index.get('aed7ec78-7487-4428-80f6-8f4334f7dce7')?.name, 'Stinger');
+  assert.equal(index.get('de586c2c-938e-413e-b3e9-38ed676b83b7')?.name, 'Crimson Blade');
+});
