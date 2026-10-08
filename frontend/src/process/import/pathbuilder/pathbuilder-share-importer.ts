@@ -28,7 +28,7 @@
  */
 
 import { createPathbuilderContentSource, upsertItem, upsertSpell } from '@content/content-creation';
-import { defineDefaultSources, fetchContentPackage, fetchContentSources } from '@content/content-store';
+import { defineDefaultSources, fetchContent, fetchContentPackage, fetchContentSources } from '@content/content-store';
 import { toMarkdown } from '@content/content-utils';
 import { findFirstSelection, findMatchingOption } from '@import/ftc/import-from-ftc';
 import { isItemEquippable, isItemImplantable, isItemInvestable } from '@items/inv-utils';
@@ -319,9 +319,23 @@ async function ensureCustomContent(
   let sourceItems: Item[] = [];
   let sourceSpells: Spell[] = [];
   try {
-    const sourceContent = await fetchContentPackage([sourceId], { fetchSources: true });
-    sourceItems = sourceContent.items ?? [];
-    sourceSpells = sourceContent.spells ?? [];
+    // A newly-created private source is not part of the operation worker's posted
+    // content package. fetchContentPackage([sourceId]) could therefore return an
+    // empty worker-local package instead of hitting Supabase, causing duplicate
+    // UUID inserts on repeated imports. Bypass the worker and global cache here
+    // because this read is specifically about freshly-created source content.
+    sourceItems = await fetchContent<Item>(
+      'item',
+      { content_sources: [sourceId] },
+      true,
+      true
+    );
+    sourceSpells = await fetchContent<Spell>(
+      'spell',
+      { content_sources: [sourceId] },
+      true,
+      true
+    );
   } catch (error) {
     console.warn('Could not reload existing Pathbuilder source content:', error);
   }
