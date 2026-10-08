@@ -128,19 +128,32 @@ test('Arsene ability boosts retain every Pathbuilder choice', () => {
   );
 
   assert.equal(arsene.identity.keyAbility, 'int');
+  assert.deepEqual(
+    Object.fromEntries(
+      ['levelled', 'ancestry', 'background'].map((origin) => [
+        origin,
+        arsene.abilityBoosts.filter((boost) => boost.origin === origin).map((boost) => boost.ability),
+      ])
+    ),
+    {
+      levelled: ['dex', 'con', 'int', 'cha', 'dex', 'wis', 'con', 'int', 'int'],
+      ancestry: ['int'],
+      background: ['int', 'dex'],
+    }
+  );
   assert.deepEqual(arsene.abilityBoosts, [
-    { level: 1, ability: 'dex' },
-    { level: 1, ability: 'con' },
-    { level: 1, ability: 'int' },
-    { level: 1, ability: 'cha' },
-    { level: 1, ability: 'int' },
-    { level: 1, ability: 'int' },
-    { level: 1, ability: 'dex' },
-    { level: 2, ability: 'dex' },
-    { level: 3, ability: 'wis' },
-    { level: 4, ability: 'con' },
-    { level: 5, ability: 'int' },
-    { level: 7, ability: 'int' },
+    { level: 1, ability: 'dex', origin: 'levelled' },
+    { level: 1, ability: 'con', origin: 'levelled' },
+    { level: 1, ability: 'int', origin: 'levelled' },
+    { level: 1, ability: 'cha', origin: 'levelled' },
+    { level: 2, ability: 'dex', origin: 'levelled' },
+    { level: 3, ability: 'wis', origin: 'levelled' },
+    { level: 4, ability: 'con', origin: 'levelled' },
+    { level: 5, ability: 'int', origin: 'levelled' },
+    { level: 7, ability: 'int', origin: 'levelled' },
+    { level: 1, ability: 'int', origin: 'ancestry' },
+    { level: 1, ability: 'int', origin: 'background' },
+    { level: 1, ability: 'dex', origin: 'background' },
   ]);
 });
 
