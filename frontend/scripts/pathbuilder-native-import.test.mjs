@@ -188,6 +188,7 @@ const pathbuilderCharacterData = {
   ancestry: 'Fleshwarp',
   heritage: 'Ifrit',
   className: 'Wizard',
+  classOptionalTrainedSkill: 'Arcana',
   background: 'BACKGROUND_Criminal',
   keyability: 'int',
   hashMapAncestryFreeBoostSelections: { '0': 3 },
