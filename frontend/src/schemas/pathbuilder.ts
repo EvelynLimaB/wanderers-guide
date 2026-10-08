@@ -182,6 +182,7 @@ export const PathbuilderCharacterDataSchema = z
   .object({
     characterName: z.string().nullish(),
     characterLevel: z.number().nullish(),
+    keyability: z.string().nullish(),
     ancestry: z.string().nullish(),
     className: z.string().nullish(),
     background: z.string().nullish(),
@@ -295,6 +296,7 @@ export const PathbuilderDerivedBuildSchema = z
     heritage: z.string().nullish(),
     background: z.string().nullish(),
     level: z.number().optional(),
+    keyability: z.string().nullish(),
     alignment: z.string().nullish(),
     deity: z.string().nullish(),
     gender: z.string().nullish(),
