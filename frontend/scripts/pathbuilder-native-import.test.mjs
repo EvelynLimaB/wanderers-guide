@@ -90,11 +90,11 @@ await build({
       name: 'pathbuilder-integration-fixtures',
       setup(p) {
         for (const [filter, contents] of [
-          [/^@content\\/content-store$/, contentStore],
-          [/^@content\\/content-creation$/, creation],
-          [/^@requests\\/request-manager$/, requests],
-          [/^@mantine\\/notifications$/, notifications],
-          [/^@content\\/content-utils$/, 'export function toMarkdown(value) { return String(value ?? ""); }'],
+          [/^@content\/content-store$/, contentStore],
+          [/^@content\/content-creation$/, creation],
+          [/^@requests\/request-manager$/, requests],
+          [/^@mantine\/notifications$/, notifications],
+          [/^@content\/content-utils$/, 'export function toMarkdown(value) { return String(value ?? ""); }'],
         ]) {
           p.onResolve({ filter }, (args) => ({ path: args.path, namespace: 'pb-fixture' }));
         }
