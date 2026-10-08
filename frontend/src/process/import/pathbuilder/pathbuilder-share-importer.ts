@@ -31,13 +31,14 @@ import { createPathbuilderContentSource, upsertItem, upsertSpell } from '@conten
 import { defineDefaultSources, fetchContent, fetchContentPackage, fetchContentSources } from '@content/content-store';
 import { toMarkdown } from '@content/content-utils';
 import { findFirstSelection, findMatchingOption } from '@import/ftc/import-from-ftc';
-import { isItemEquippable, isItemImplantable, isItemInvestable } from '@items/inv-utils';
+import { getBestArmor, isItemEquippable, isItemImplantable, isItemInvestable } from '@items/inv-utils';
 import { hideNotification, showNotification } from '@mantine/notifications';
 import { ObjectWithUUID } from '@operations/operation-utils';
 import { executeOperations } from '@operations/operations.main';
 import { makeRequest } from '@requests/request-manager';
 import { Character, InventoryItem, Item, ItemMetaCategorySchema, ItemMetaGroupSchema, OperationCharacterResultPackage, Spell, Trait } from '@schemas/content';
 import { Operation } from '@schemas/operations';
+import { getFinalAcValue, getFinalVariableValue } from '@variables/variable-helpers';
 import { labelToVariable } from '@variables/variable-utils';
 import { cloneDeep } from 'lodash-es';
 
@@ -164,7 +165,8 @@ export async function importFromPathbuilderShare(
       customItems,
       custom.fallbackSpellsByName,
       customSourceId,
-      warnings
+      warnings,
+      derived
     );
 
     if (importId !== null && character?.id) {
@@ -833,7 +835,8 @@ export async function buildCharacter(
   customItems: Map<string, Item>,
   fallbackSpellsByName: Map<string, Spell>,
   customSourceId: number | null,
-  warnings: string[]
+  warnings: string[],
+  derived?: import('@schemas/pathbuilder').PathbuilderDerivedBuild | null
 ): Promise<Character | null> {
   const character = {
     id: -1,
@@ -976,10 +979,56 @@ export async function buildCharacter(
 
   character.details!.conditions = [];
 
+  if (derived) {
+    await validatePathbuilderDerived(character, content, derived);
+  }
+
   return await makeRequest<Character>('create-character', {
     ...character,
     id: undefined, // remove the sentinel so the API creates a new row
   });
+}
+
+/**
+ * Strictly compare the fields that Pathbuilder derives from the imported build
+ * and that WG must reproduce through its native operation engine. A mismatch is
+ * an import failure, never a warning: creating a character that silently differs
+ * defeats 1:1 import.
+ */
+async function validatePathbuilderDerived(
+  character: Character,
+  content: Awaited<ReturnType<typeof fetchContentPackage>>,
+  derived: import('@schemas/pathbuilder').PathbuilderDerivedBuild
+): Promise<void> {
+  await executeOperations<OperationCharacterResultPackage>({
+    type: 'CHARACTER',
+    data: { character: cloneDeep(character), content, context: 'CHARACTER-SHEET' },
+  });
+
+  const mismatches: string[] = [];
+  const abilities = derived.abilities;
+  if (abilities) {
+    for (const [ability, score] of Object.entries(abilities)) {
+      if (score === undefined) continue;
+      const variable = getFinalVariableValue('CHARACTER', `ATTRIBUTE_${ability.toUpperCase()}`);
+      const actualScore = 10 + variable.total * 2;
+      if (actualScore !== score) {
+        mismatches.push(`ability ${ability}: Pathbuilder ${score}, WG ${actualScore}`);
+      }
+    }
+  }
+
+  const armor = getBestArmor('CHARACTER', character.inventory)?.item;
+  if (derived.acTotal?.acTotal !== undefined) {
+    const actualAc = getFinalAcValue('CHARACTER', armor);
+    if (actualAc !== derived.acTotal.acTotal) {
+      mismatches.push(`AC: Pathbuilder ${derived.acTotal.acTotal}, WG ${actualAc}`);
+    }
+  }
+
+  if (mismatches.length > 0) {
+    throw new Error(`Pathbuilder 1:1 validation failed: ${mismatches.join('; ')}`);
+  }
 }
 
 function buildPathbuilderCustomOperations(
