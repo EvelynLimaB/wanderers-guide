@@ -1334,7 +1334,7 @@ async function resolveSelections(
           .filter(Boolean)
           .join(', ');
         throw new Error(
-          `Pathbuilder 1:1 selection mapping failed: level ${found.level}; requested: ${requested || 'none'}; available: ${available || 'none'}; selection path: ${found.path}`
+          `Pathbuilder 1:1 selection mapping failed: level ${found.level}; requested: ${requested || 'none'}; available: ${available || 'none'}; selection path: ${found.path}; selector: ${found.selection?.selection?.title ?? found.selection?.selection?.description ?? 'untitled'}`
         );
       }
       checked.add(found.path);
