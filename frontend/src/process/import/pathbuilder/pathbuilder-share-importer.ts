@@ -38,11 +38,11 @@ import { executeOperations } from '@operations/operations.main';
 import { makeRequest } from '@requests/request-manager';
 import { Character, InventoryItem, Item, ItemMetaCategorySchema, ItemMetaGroupSchema, OperationCharacterResultPackage, Spell, Trait } from '@schemas/content';
 import { Operation } from '@schemas/operations';
-import { lengthenLabels, labelToVariable } from '@variables/variable-utils';
+import { labelToVariable } from '@variables/variable-utils';
 import { cloneDeep } from 'lodash-es';
 
 import { extractBuildId, fetchPathbuilderDerived, fetchPathbuilderShare } from './fetch-pathbuilder-share';
-import { resolveBuild } from './pathbuilder-resolve';
+import { pathbuilderAbilityLabel, resolveBuild } from './pathbuilder-resolve';
 import { PathbuilderCustomFile, ResolvedBuild, ResolvedItemRef } from './types';
 
 export type PathbuilderImportOptions = {
@@ -1029,7 +1029,10 @@ async function resolveSelections(
 
   const selections: { name: string; level: number }[] = [
     ...resolved.feats.map((feat) => ({ name: feat.name, level: feat.level ?? 1 })),
-    ...resolved.abilityBoosts.map((boost) => ({ name: lengthenLabels(boost.ability), level: boost.level })),
+    ...(resolved.identity.keyAbility
+      ? [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: 1 }]
+      : []),
+    ...resolved.abilityBoosts.map((boost) => ({ name: pathbuilderAbilityLabel(boost.ability), level: boost.level })),
     ...resolved.skillIncreases.map((increase) => ({ name: increase.skill, level: increase.level })),
     // Class/background/ancestry operations often ask for additional trained skills at level 1.
     // The share payload records these independently from hashMapSkillIncreases.
