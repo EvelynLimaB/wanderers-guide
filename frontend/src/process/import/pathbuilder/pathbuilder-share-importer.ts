@@ -1176,9 +1176,19 @@ const PATHBUILDER_ATTRIBUTE_VARIABLES = new Set([
  * ability-boost matcher.
  */
 function isAttributeSelection(options: ObjectWithUUID[]): boolean {
-  return options.length > 0 && options.every((option) => {
-    return typeof option.variable === 'string' && PATHBUILDER_ATTRIBUTE_VARIABLES.has(option.variable);
+  if (options.length === 0) return false;
+  return options.every((option) => {
+    if (typeof option.variable === 'string' && PATHBUILDER_ATTRIBUTE_VARIABLES.has(option.variable)) return true;
+    return typeof option.name === 'string' &&
+      PATHBUILDER_ATTRIBUTE_VARIABLES.has('ATTRIBUTE_' + labelToVariable(option.name));
   });
+}
+
+function isSkillSelection(options: ObjectWithUUID[]): boolean {
+  if (options.length === 0) return false;
+  return options.every((option) =>
+    typeof option.name === 'string' && PATHBUILDER_SKILL_NAMES.has(labelToVariable(option.name))
+  );
 }
 
 /**
@@ -1223,6 +1233,7 @@ async function resolveSelections(
   // The actual select-operation id is stable, so track it separately from the rendered path.
   const checkedSelectionIds = new Set<string>();
   const abilityBoostCursors = new Map<string, number>();
+  const skillCursors = new Map<number, number>();
 
   let hasSelections = true;
   let iteration = 0;
@@ -1249,6 +1260,7 @@ async function resolveSelections(
       }
       const options = found.selection?.selection?.options ?? [];
       const attributeSelection = isAttributeSelection(options);
+      const skillSelection = isSkillSelection(options);
       const keyAbilitySelection = isKeyAbilitySelection(found.selection?.selection);
       let requestedSelections = selections;
       let result: Pick<ObjectWithUUID, '_select_uuid'> | null = null;
@@ -1277,6 +1289,12 @@ async function resolveSelections(
             requestedSelections = [];
           }
         }
+      } else if (skillSelection) {
+        const cursor = skillCursors.get(found.level) ?? 0;
+        const candidates = [...resolved.trainedSkills.map((skill) => ({ name: skill, level: 1 })), ...resolved.skillIncreases]
+          .filter((selection) => selection.level === found.level);
+        const candidate = candidates[cursor];
+        requestedSelections = candidate ? [candidate] : [];
       }
 
       if (!result && resolved.identity.heritage) {
@@ -1299,6 +1317,10 @@ async function resolveSelections(
             const cursorKey = origin + ':' + found.level;
             abilityBoostCursors.set(cursorKey, (abilityBoostCursors.get(cursorKey) ?? 0) + 1);
           }
+        }
+        if (skillSelection) {
+          const cursor = skillCursors.get(found.level) ?? 0;
+          skillCursors.set(found.level, cursor + 1);
         }
       } else {
         const requested = requestedSelections
