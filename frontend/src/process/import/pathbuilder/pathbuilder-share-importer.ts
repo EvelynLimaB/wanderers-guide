@@ -1257,6 +1257,26 @@ async function resolveSelections(
 /**
  * Resolve an inventory reference to a concrete WG item.
  */
+function withPathbuilderWeaponState(item: Item, weapon: ResolvedBuild['weapons'][number]): Item {
+  const copy = cloneDeep(item);
+  const existing = copy.meta_data ?? ({ bulk: {} } as NonNullable<Item['meta_data']>);
+  const existingPathbuilder = existing.pathbuilder;
+  const pathbuilderState = {
+    ...(existingPathbuilder ?? {
+      uniqueIdentifier: crypto.randomUUID(),
+      type: 0,
+      raw: null,
+    }),
+    attackAbility: weapon.attackAbility,
+    twoHanded: weapon.twoHanded,
+  };
+  copy.meta_data = {
+    ...existing,
+    pathbuilder: pathbuilderState,
+  };
+  return copy;
+}
+
 function findInventoryItem(
   ref: ResolvedItemRef,
   content: Awaited<ReturnType<typeof fetchContentPackage>>,
@@ -1389,7 +1409,7 @@ function buildInventory(
       continue;
     }
     const item = withPathbuilderRunes(
-      base,
+      withPathbuilderWeaponState(base, weapon),
       weapon.potency,
       weapon.striking,
       weapon.runes,
