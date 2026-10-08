@@ -34,6 +34,8 @@ export type ResolvedItemRef = {
   uuid?: string;
   quantity: number;
   custom?: PathbuilderCustomFile;
+  /** Original semantic kind when the Pathbuilder reference could not be resolved. */
+  unresolvedKind?: UnresolvedRef['kind'];
 };
 
 export type ResolvedWeapon = ResolvedItemRef & {
