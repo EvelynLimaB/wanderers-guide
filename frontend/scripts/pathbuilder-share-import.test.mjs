@@ -6,8 +6,6 @@ import { test } from 'node:test';
 
 import {
   buildCustomFileIndex,
-  findFreeArchetypeBranch,
-  getAbilityBoostOriginForPath,
   isPathbuilderUuid,
   parseCustomFileJson,
   parseFeatSlotKey,
@@ -18,6 +16,7 @@ import {
   stripCategoryPrefix,
 } from '../src/process/import/pathbuilder/pathbuilder-resolve.ts';
 import { extractBuildId, fetchPathbuilderShare } from '../src/process/import/pathbuilder/fetch-pathbuilder-share.ts';
+import { findFreeArchetypeBranch, getAbilityBoostOriginForPath } from '../src/process/import/pathbuilder/pathbuilder-selection-routing.ts';
 import { PathbuilderShareBuildSchema } from '../src/schemas/pathbuilder.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
