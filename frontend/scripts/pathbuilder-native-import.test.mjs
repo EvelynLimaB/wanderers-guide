@@ -320,7 +320,7 @@ const content = {
     { id: ANCESTRY_TRAIT, name: 'Fleshwarp', meta_data: { ancestry_trait: true } },
   ],
   sources: [],
-  languages: [],
+  languages: [{ id: 9001, name: 'Common', speakers: '', script: '', description: '', content_source_id: 1, deprecated: false, rarity: 'COMMON', availability: null, meta_data: null }],
   spells: [],
   archetypes: [],
   classArchetypes: [],
