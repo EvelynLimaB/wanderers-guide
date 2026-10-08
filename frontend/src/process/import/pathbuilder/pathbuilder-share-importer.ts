@@ -1144,7 +1144,7 @@ async function resolveSelections(
       const attributeSelection = isAttributeSelection(options);
       const keyAbilitySelection = isKeyAbilitySelection(found.selection?.selection);
       let requestedSelections = selections;
-      let result: ObjectWithUUID | null = null;
+      let result: ObjectWithUUID | PathbuilderSelectionOption | null = null;
 
       const freeArchetypeBranch = findFreeArchetypeBranch(options, selections, found.level);
       if (freeArchetypeBranch) {
