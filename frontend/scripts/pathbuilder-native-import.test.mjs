@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { test } from 'node:test';
-
 import { resolveBuild } from '../src/process/import/pathbuilder/pathbuilder-resolve.ts';
 import { createOperationEngine } from './operation-test-harness.mjs';
 
@@ -134,25 +132,6 @@ const attributeSelect = (id, title = 'Select an Attribute') => ({
   },
 });
 
-const featSelect = {
-  id: 'rogue-dedication-select',
-  type: 'select',
-  data: {
-    title: 'Select an Archetype Feat',
-    modeType: 'FILTERED',
-    optionType: 'ABILITY_BLOCK',
-    optionsPredefined: [],
-    optionsFilters: {
-      id: 'rogue-dedication-filter',
-      type: 'ABILITY_BLOCK',
-      level: { max: 4 },
-      traits: ['1001'],
-      abilityBlockType: 'feat',
-      isFromArchetype: false,
-    },
-  },
-};
-
 const pathbuilderCharacterData = {
   characterLevel: 7,
   characterName: 'Arsene (Reset)',
@@ -175,6 +154,8 @@ const pathbuilderCharacterData = {
   hashMapFeatSelections: {
     'Free Archetype 4': 'ARCHETYPE_Rogue Dedication',
   },
+  freeArchetype: true,
+  playerArmor: { armorName: 'Padded Armor', potency: 1 },
 };
 
 const resolved = resolveBuild(
