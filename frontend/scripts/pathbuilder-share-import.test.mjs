@@ -309,11 +309,11 @@ test('custom references, quantities, containers and runes are preserved', () => 
   assert.equal(resolved.containers[0].items.find((item) => item.name === 'Rations')?.quantity, 2);
 });
 
-test('missing derived armor remains explicitly unresolved instead of being silently dropped', () => {
+test('armor rune state without an equipped armor name is preserved without a false unresolved warning', () => {
   assert.equal(resolved.armor, undefined);
   assert.equal(resolved.armorRunes.includes('Raiment'), true);
   assert.equal(resolved.armorPotency, 1);
-  assert.equal(resolved.unresolved.some((entry) => entry.kind === 'armor'), true);
+  assert.equal(resolved.unresolved.some((entry) => entry.kind === 'armor'), false);
 });
 
 test('build id extraction accepts ids/URLs and rejects arbitrary text', () => {
