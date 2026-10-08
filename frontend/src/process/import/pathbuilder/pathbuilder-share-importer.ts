@@ -361,7 +361,7 @@ async function ensureCustomContent(
   for (const ref of missingItems) {
     const existing = sourceItems.find((item) => {
       if (item.meta_data?.pathbuilder?.source !== 'Pathbuilder Reference') return false;
-      const raw = item.meta_data.pathbuilder.raw;
+      const raw = (item.meta_data?.pathbuilder as { raw?: unknown } | undefined)?.raw;
       return typeof raw === 'object' && raw !== null && 'raw' in raw && (raw as Record<string, unknown>).raw === ref.raw;
     });
     if (existing) {
