@@ -386,7 +386,7 @@ async function ensureCustomContent(
       continue;
     }
 
-    const semanticKind = resolved.weapons.includes(ref)
+    const semanticKind = resolved.weapons.some((weapon) => weapon === ref)
       ? 'weapon'
       : resolved.armor === ref
         ? 'armor'
