@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createRequire } from 'node:module';
 import { dirname, fileURLToPath, pathToFileURL } from 'node:url';
 
 import { build } from 'esbuild';
@@ -189,7 +188,6 @@ export function getIconFromContentType() { return undefined; }
 
 const bundleDir = await mkdtemp(join(tmpdir(), 'wg-pathbuilder-real-import-'));
 const outfile = join(bundleDir, 'importer.mjs');
-const { rmSync } = createRequire(join(root, 'package.json'))('node:fs');
 
 try {
   await build({
@@ -210,13 +208,14 @@ try {
     plugins: [{
       name: 'pathbuilder-real-import-fixtures',
       setup(pluginBuild) {
-        for (const [key, contents] of [
+        const entries = new Map([
           ['@content/content-store', contentStore],
           ['@content/content-creation', creation],
           ['@requests/request-manager', requests],
           ['@mantine/notifications', notifications],
           ['@content/content-utils', contentUtils],
-        ]) {
+        ]);
+        for (const [key] of entries) {
           const filter =
             key === '@content/content-store' ? /^@content\\/content-store$/ :
             key === '@content/content-creation' ? /^@content\\/content-creation$/ :
@@ -224,17 +223,12 @@ try {
             key === '@mantine/notifications' ? /^@mantine\\/notifications$/ :
             /^@content\\/content-utils$/;
           pluginBuild.onResolve({ filter }, (args) => ({ path: args.path, namespace: 'pb-real-fixture' }));
-          pluginBuild.onLoad({ filter: /.*/, namespace: 'pb-real-fixture' }, (args) => {
-            const entries = new Map([
-              ['@content/content-store', contentStore],
-              ['@content/content-creation', creation],
-              ['@requests/request-manager', requests],
-              ['@mantine/notifications', notifications],
-              ['@content/content-utils', contentUtils],
-            ]);
-            return { contents: entries.get(args.path), loader: 'ts' };
-          });
         }
+        pluginBuild.onLoad({ filter: /.*/, namespace: 'pb-real-fixture' }, (args) => {
+          const value = entries.get(args.path);
+          if (value === undefined) throw new Error('Missing fixture module: ' + args.path);
+          return { contents: value, loader: 'ts' };
+        });
       },
     }],
   });
@@ -365,5 +359,4 @@ try {
   }
 } finally {
   await rm(bundleDir, { recursive: true, force: true });
-  rmSync?.();
 }
