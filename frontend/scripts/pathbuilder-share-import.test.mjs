@@ -127,14 +127,13 @@ test('Arsene ability boosts retain every Pathbuilder choice', () => {
 
   assert.equal(arsene.identity.keyAbility, 'int');
   assert.deepEqual(arsene.abilityBoosts, [
-    { level: 1, ability: 'int' },
-    { level: 1, ability: 'str' },
     { level: 1, ability: 'dex' },
-    { level: 1, ability: 'cha' },
     { level: 1, ability: 'con' },
+    { level: 1, ability: 'int' },
+    { level: 1, ability: 'cha' },
+    { level: 1, ability: 'int' },
+    { level: 1, ability: 'int' },
     { level: 1, ability: 'dex' },
-    { level: 1, ability: 'int' },
-    { level: 1, ability: 'int' },
     { level: 2, ability: 'dex' },
     { level: 3, ability: 'wis' },
     { level: 4, ability: 'con' },
