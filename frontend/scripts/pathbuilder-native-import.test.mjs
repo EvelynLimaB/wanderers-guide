@@ -114,7 +114,7 @@ await build({
   write: true,
   platform: 'node',
   format: 'esm',
-  define: { 'import.meta.env.VITE_ENV': '"test"' },
+  define: { 'import.meta.env': '{"VITE_ENV":"test","VITE_SUPABASE_URL":"http://localhost:8000"}' },
   tsconfig: join(root, 'tsconfig.json'),
   plugins: [
     {
