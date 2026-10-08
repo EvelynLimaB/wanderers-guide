@@ -121,7 +121,7 @@ export async function importFromPathbuilderShare(
     const resolved = resolveBuild(shared.build, {
       buildId,
       formatVersion: shared.formatVersion,
-      derived: derived as Record<string, unknown> | null,
+      derived,
     });
 
     // Provenance first: if character creation blows up, the payload is still saved.
