@@ -826,7 +826,7 @@ function mapDamageType(value: string | null | undefined): string | undefined {
  * no way to write feats/boosts directly. You feed the builder the choices and
  * let `executeOperations` converge.
  */
-async function buildCharacter(
+export async function buildCharacter(
   resolved: ResolvedBuild,
   content: Awaited<ReturnType<typeof fetchContentPackage>>,
   customItems: Map<string, Item>,
