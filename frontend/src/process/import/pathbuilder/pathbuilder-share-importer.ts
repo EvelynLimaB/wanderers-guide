@@ -1059,9 +1059,14 @@ function findInventoryItem(
     if (custom) return custom;
   }
   if (ref.kind === 'standard') {
-    const found = findImportedItem(content.items, ref.name);
+    // A Pathbuilder weapon can carry a display-only nameOverride (e.g. "Claw")
+    // while weaponName remains the actual content reference ("Special Unarmed (1d4)").
+    const found = findImportedItem(content.items, ref.name) ?? findImportedItem(content.items, ref.raw);
     if (found) return found;
-    return customItems.get(`ref:${labelToVariable(ref.name)}`);
+    return (
+      customItems.get(`ref:${labelToVariable(ref.name)}`) ??
+      customItems.get(`ref:${labelToVariable(ref.raw)}`)
+    );
   }
   return undefined;
 }
