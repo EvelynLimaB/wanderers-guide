@@ -190,6 +190,7 @@ const pathbuilderCharacterData = {
   className: 'Wizard',
   classOptionalTrainedSkill: 'Arcana',
   listLanguages: ['Common'],
+  hashMapTrainedOnlySkillChoices: { standardSelection: ['Athletics'] },
   background: 'BACKGROUND_Criminal',
   keyability: 'int',
   hashMapAncestryFreeBoostSelections: { '0': 3 },
