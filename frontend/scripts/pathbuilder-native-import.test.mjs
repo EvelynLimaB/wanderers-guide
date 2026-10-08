@@ -84,7 +84,22 @@ export function setContentCacheActor() {}
 `;
 
 const notifications = 'export function showNotification() {} export function hideNotification() {}';
-const creation = 'export async function createPathbuilderContentSource() { return null; } export async function upsertItem() {} export async function upsertSpell() {}';
+const creation = `export async function createPathbuilderContentSource() { return null; }
+export async function upsertItem() {}
+export async function upsertSpell() {}
+export async function deleteContent() { return null; }
+export async function upsertAbilityBlock() { return null; }
+export async function upsertAncestry() { return null; }
+export async function upsertArchetype() { return null; }
+export async function upsertBackground() { return null; }
+export async function upsertClass() { return null; }
+export async function upsertClassArchetype() { return null; }
+export async function upsertContent() { return null; }
+export async function upsertContentSource() { return null; }
+export async function upsertCreature() { return null; }
+export async function upsertLanguage() { return null; }
+export async function upsertTrait() { return null; }
+export async function upsertVersatileHeritage() { return null; }`;
 const requests = 'export async function makeRequest(_endpoint, body) { return { ...body, id: body.id === undefined ? 9001 : body.id }; }';
 
 const outfile = join(bundleDir, 'importer.mjs');
