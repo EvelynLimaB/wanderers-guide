@@ -1100,6 +1100,7 @@ async function resolveSelections(
 
   const chosen: Record<string, string> = {};
   const checked = new Set<string>();
+  const abilityBoostCursors = new Map<string, number>();
 
   let hasSelections = true;
   let iteration = 0;
@@ -1124,22 +1125,34 @@ async function resolveSelections(
           requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: found.level }];
         } else {
           const origin = getAbilityBoostOriginForPath(found.path);
-          requestedSelections = origin
-            ? resolved.abilityBoosts
-                .filter((boost) => boost.origin === origin)
-                .map((boost) => ({ name: pathbuilderAbilityLabel(boost.ability), level: boost.level }))
-            : [];
+          if (origin) {
+            const cursorKey = origin + ':' + found.level;
+            const cursor = abilityBoostCursors.get(cursorKey) ?? 0;
+            const candidates = resolved.abilityBoosts.filter(
+              (boost) => boost.origin === origin && boost.level === found.level
+            );
+            const candidate = candidates[cursor];
+            requestedSelections = candidate
+              ? [{ name: pathbuilderAbilityLabel(candidate.ability), level: candidate.level }]
+              : [];
+          } else {
+            requestedSelections = [];
+          }
         }
       }
 
-      const result: ObjectWithUUID | null = findMatchingOption(
-        requestedSelections,
-        options,
-        found.level
-      );
+      const result: ObjectWithUUID | null = findMatchingOption(requestedSelections, options, found.level);
       if (result) {
         chosen[found.path] = result._select_uuid;
         character.operation_data!.selections = cloneDeep(chosen);
+
+        if (attributeSelection && !keyAbilitySelection) {
+          const origin = getAbilityBoostOriginForPath(found.path);
+          if (origin) {
+            const cursorKey = origin + ':' + found.level;
+            abilityBoostCursors.set(cursorKey, (abilityBoostCursors.get(cursorKey) ?? 0) + 1);
+          }
+        }
       } else {
         const requested = requestedSelections
           .filter((selection) => selection.level === found.level)
