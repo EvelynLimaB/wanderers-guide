@@ -374,3 +374,22 @@ try {
   await engine.cleanup();
   await rm(bundleDir, { recursive: true, force: true });
 }
+
+// TDD guard: an unresolved required selection must fail the import instead of becoming a warning
+// or causing the selection resolver to spin until the global calculation timeout.
+const unresolvedSelectionFixture = structuredClone(resolved);
+unresolvedSelectionFixture.specialSelections = [
+  { slot: 'Archetype Choice', prompt: 'Select an Archetype Feat', value: 'Definitely Not A Real Option' },
+];
+await assert.rejects(
+  buildCharacter(
+    unresolvedSelectionFixture,
+    content,
+    customItems,
+    fallbackSpells,
+    null,
+    [],
+    null
+  ),
+  /Pathbuilder 1:1 selection mapping failed:/
+);
