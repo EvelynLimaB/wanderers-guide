@@ -17,7 +17,6 @@ import {
 } from '../src/process/import/pathbuilder/pathbuilder-resolve.ts';
 import { extractBuildId, fetchPathbuilderShare } from '../src/process/import/pathbuilder/fetch-pathbuilder-share.ts';
 import { PathbuilderShareBuildSchema } from '../src/schemas/pathbuilder.ts';
-import { labelToVariable } from '../src/process/variables/variable-utils.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = JSON.parse(readFileSync(join(here, 'fixtures', 'pathbuilder-kasane-1596127.json'), 'utf8'));
@@ -94,7 +93,6 @@ test('Pathbuilder ability tokens map to native WG attribute labels', () => {
 
   for (const [ability, label] of Object.entries(labels)) {
     assert.equal(pathbuilderAbilityLabel(ability), label);
-    assert.equal(labelToVariable(pathbuilderAbilityLabel(ability)), labelToVariable(label));
     assert.equal(parsePathbuilderAbility(ability), ability);
   }
 });
