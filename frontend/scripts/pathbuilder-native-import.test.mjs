@@ -311,6 +311,19 @@ try {
   assert.equal(parts.armorBonus, 2, 'Padded Armor +1 must contribute +2 AC');
   assert.equal(engine.getFinalAcValue('CHARACTER', built.inventory.items.find((entry) => entry.is_equipped)?.item), 24);
   assert.equal(warnings.length, 0, `import must not leave warnings: ${warnings.join('; ')}`);
+
+  await assert.rejects(
+    buildCharacter(
+      resolved,
+      content,
+      customItems,
+      fallbackSpells,
+      null,
+      [],
+      { abilities: { str: 10, dex: 16, con: 16, int: 20, wis: 12, cha: 12 }, acTotal: { acTotal: 23 } }
+    ),
+    /Pathbuilder 1:1 validation failed:/
+  );
 } finally {
   await engine.cleanup();
   await rm(bundleDir, { recursive: true, force: true });
