@@ -17,6 +17,7 @@ import { PATHBUILDER_ABILITIES, PATHBUILDER_UUID_RE, PathbuilderCustomFileSchema
 import type {
   PathbuilderAbility,
   PathbuilderCharacterData,
+  PathbuilderDerivedBuild,
   PathbuilderCustomFile,
   PathbuilderCustomFileEntry,
   PathbuilderEquipmentEntry,
@@ -116,6 +117,33 @@ export function parseFeatValue(value: string): { category?: string; qualifier?: 
 
 function abilityAt(index: number | undefined): PathbuilderAbility | undefined {
   return typeof index === 'number' ? PATHBUILDER_ABILITIES[index] : undefined;
+}
+
+/**
+ * Convert Pathbuilder's compact ability token to the full label used by WG selectors.
+ *
+ * Pathbuilder serializes abilities as lowercase tokens such as `dex`, while WG's
+ * attribute selection options expose labels such as `Dexterity`. Keeping this mapping
+ * at the Pathbuilder boundary avoids changing the generic label helpers for every caller.
+ */
+const PATHBUILDER_ABILITY_LABELS: Record<PathbuilderAbility, string> = {
+  str: 'Strength',
+  dex: 'Dexterity',
+  con: 'Constitution',
+  int: 'Intelligence',
+  wis: 'Wisdom',
+  cha: 'Charisma',
+};
+
+/** Return the WG selection label for a validated Pathbuilder ability token. */
+export function pathbuilderAbilityLabel(ability: PathbuilderAbility): string {
+  return PATHBUILDER_ABILITY_LABELS[ability];
+}
+
+/** Normalize a Pathbuilder ability token from either share or derived payloads. */
+export function parsePathbuilderAbility(value: string | null | undefined): PathbuilderAbility | undefined {
+  const normalized = value?.trim().toLowerCase();
+  return PATHBUILDER_ABILITIES.find((ability) => ability === normalized);
 }
 
 /**
@@ -454,6 +482,7 @@ export function resolveBuild(
       ancestry: cd.ancestry ?? undefined,
       heritage: cd.heritage ?? undefined,
       className: cd.className ?? undefined,
+      keyAbility: parsePathbuilderAbility(cd.keyability ?? (options.derived as PathbuilderDerivedBuild | null | undefined)?.keyability),
       background: stripCategoryPrefix(cd.background ?? undefined),
       gender: cd.gender ?? undefined,
       alignment: cd.alignment ?? undefined,
