@@ -111,6 +111,26 @@ Deno.test({
 });
 
 Deno.test({
+  name: 'create-pathbuilder-import: -1 sentinel still requires build_id',
+  ignore: skip,
+  async fn() {
+    const { jwt } = await seed();
+
+    const result = await callFunction(
+      'create-pathbuilder-import',
+      { id: -1, character_data: { characterName: 'No Id' } },
+      { token: jwt }
+    );
+
+    assertEquals(result.body?.status, 'fail');
+    assertEquals(
+      result.body?.data?.build_id,
+      'a numeric build_id is required when creating a row'
+    );
+  },
+});
+
+Deno.test({
   name: 'create-pathbuilder-import: update path attaches character_id and keeps the payload',
   ignore: skip,
   async fn() {
@@ -132,6 +152,38 @@ Deno.test({
     assertEquals(stored?.build_id, '1596127');
     assertEquals(stored?.character_data?.characterName, 'Test Import');
     assertEquals(stored?.custom_files?.length, 1);
+
+    await admin.from('pathbuilder_import').delete().eq('id', id);
+  },
+});
+
+Deno.test({
+  name: 'create-pathbuilder-import: rejects malformed update ids and character ids',
+  ignore: skip,
+  async fn() {
+    const { jwt } = await seed();
+    const created = await callFunction('create-pathbuilder-import', { id: -1, ...payload }, { token: jwt });
+    const id = created.body?.data?.id;
+    assert(id, 'expected an id from the insert');
+
+    const badId = await callFunction(
+      'create-pathbuilder-import',
+      { id: '1', character_id: null },
+      { token: jwt }
+    );
+    assertEquals(badId.body?.status, 'fail');
+    assertEquals(badId.body?.data?.id, 'id must be a positive integer when updating a row');
+
+    const badCharacter = await callFunction(
+      'create-pathbuilder-import',
+      { id, character_id: 0 },
+      { token: jwt }
+    );
+    assertEquals(badCharacter.body?.status, 'fail');
+    assertEquals(
+      badCharacter.body?.data?.character_id,
+      'character_id must be null or a positive integer'
+    );
 
     await admin.from('pathbuilder_import').delete().eq('id', id);
   },
