@@ -425,7 +425,8 @@ async function createReferenceItem(
     traits: [],
     description:
       `Imported from Pathbuilder as a reference. Wanderer's Guide did not have a matching content record at import time. Original Pathbuilder reference: ${ref.raw}`,
-    group: 'GENERAL',
+    group:
+      ref.kind === 'weapon' ? 'WEAPON' : ref.kind === 'armor' ? 'ARMOR' : ref.kind === 'shield' ? 'SHIELD' : 'GENERAL',
     hands: null,
     size: 'MEDIUM',
     craft_requirements: null,
