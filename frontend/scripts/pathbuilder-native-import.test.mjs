@@ -154,7 +154,7 @@ const pathbuilderCharacterData = {
   hashMapFeatSelections: {
     'Free Archetype 4': 'ARCHETYPE_Rogue Dedication',
   },
-  freeArchetype: true,
+  freeArchetype: false,
   playerArmor: { armorName: 'Padded Armor', potency: 1 },
 };
 
@@ -215,7 +215,7 @@ const content = {
       ],
       meta_data: { archetype_trait: true },
     },
-    ...[2, 3, 4, 5, 7].map((level) => ({
+    ...[2, 3, 5, 7].map((level) => ({
       id: 6000 + level,
       name: 'Attribute Boosts',
       type: 'class-feature',
@@ -223,6 +223,35 @@ const content = {
       traits: [WIZARD_TRAIT],
       operations: [attributeSelect(`level-${level}-boost`)],
     })),
+    {
+      id: 6004,
+      name: 'Archetype Choice',
+      type: 'class-feature',
+      level: 4,
+      traits: [WIZARD_TRAIT],
+      operations: [{
+        id: 'rogue-dedication-slot',
+        type: 'select',
+        data: {
+          title: 'Select an Archetype Feat',
+          modeType: 'PREDEFINED',
+          optionType: 'ABILITY_BLOCK',
+          optionsPredefined: [{
+            id: 'rogue-option',
+            type: 'ABILITY_BLOCK',
+            operation: { id: 'rogue-give', type: 'giveAbilityBlock', data: { abilityBlockId: 5001, type: 'feat' } },
+          }],
+        },
+      }],
+    },
+    {
+      id: 6006,
+      name: 'Attribute Boosts',
+      type: 'class-feature',
+      level: 6,
+      traits: [WIZARD_TRAIT],
+      operations: [attributeSelect('level-6-no-boost')],
+    },
   ],
   items: [
     {
