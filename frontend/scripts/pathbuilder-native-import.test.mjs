@@ -66,6 +66,21 @@ export function getDefaultSources(view) { return packageContent.defaultSources?.
 export function getDefaultSourcesKey(view) { return (getDefaultSources(view) ?? []).join(','); }
 export function defineDefaultSources() {}
 export async function fetchContentPackage() { return structuredClone(packageContent); }
+export async function fetchContentSources() { return []; }
+export async function fetchAbilityBlockByName() { return null; }
+export async function fetchAllPrereqs() { return []; }
+export async function fetchCreatureByName() { return null; }
+export async function fetchItemByName() { return null; }
+export async function fetchLanguageByName() { return null; }
+export async function fetchSpellByName() { return null; }
+export async function fetchTraits() { return []; }
+export async function fetchVersHeritageByHeritage() { return null; }
+export async function findRequiredContentSources() {
+  return { sourceIds: [], sources: [], newSourceIds: [], newSources: [] };
+}
+export function getContentFast() { return []; }
+export function resetContentStore() {}
+export function setContentCacheActor() {}
 `;
 
 const notifications = 'export function showNotification() {} export function hideNotification() {}';
@@ -94,7 +109,15 @@ await build({
           [/^@content\/content-creation$/, creation],
           [/^@requests\/request-manager$/, requests],
           [/^@mantine\/notifications$/, notifications],
-          [/^@content\/content-utils$/, 'export function toMarkdown(value) { return String(value ?? ""); }'],
+          [/^@content\/content-utils$/, `
+export function toMarkdown(value) { return String(value ?? ""); }
+export function toHTML(value) { return String(value ?? ""); }
+export function toText(value) { return String(value ?? ""); }
+export function isAbilityBlockType(value) { return ['action', 'feat', 'physical-feature', 'sense', 'class-feature', 'heritage', 'mode'].includes(value ?? ''); }
+export function isActionCost(value) { return ['ONE-ACTION', 'TWO-ACTIONS', 'THREE-ACTIONS', 'REACTION', 'FREE-ACTION', 'REACTION-OR-ONE-ACTION', 'ONE-TO-TWO-ACTIONS', 'ONE-TO-THREE-ACTIONS', 'TWO-TO-THREE-ACTIONS', 'TWO-TO-TWO-ROUNDS', 'TWO-TO-THREE-ROUNDS', 'THREE-TO-TWO-ROUNDS', 'THREE-TO-THREE-ROUNDS', null].includes(value); }
+export function convertToContentType(type) { if (type === 'hazard') return 'creature'; if (type === 'cast-spell' || type === 'add-spell') return 'spell'; if (type === 'inv-item') return 'item'; return isAbilityBlockType(type) ? 'ability-block' : type; }
+export function getIconFromContentType() { return undefined; }
+`],
         ]) {
           p.onResolve({ filter }, (args) => ({ path: args.path, namespace: 'pb-fixture' }));
         }
@@ -104,7 +127,15 @@ await build({
             { key: '@content/content-creation', value: creation },
             { key: '@requests/request-manager', value: requests },
             { key: '@mantine/notifications', value: notifications },
-            { key: '@content/content-utils', value: 'export function toMarkdown(value) { return String(value ?? ""); }' },
+            { key: '@content/content-utils', value: `
+export function toMarkdown(value) { return String(value ?? ""); }
+export function toHTML(value) { return String(value ?? ""); }
+export function toText(value) { return String(value ?? ""); }
+export function isAbilityBlockType(value) { return ['action', 'feat', 'physical-feature', 'sense', 'class-feature', 'heritage', 'mode'].includes(value ?? ''); }
+export function isActionCost(value) { return ['ONE-ACTION', 'TWO-ACTIONS', 'THREE-ACTIONS', 'REACTION', 'FREE-ACTION', 'REACTION-OR-ONE-ACTION', 'ONE-TO-TWO-ACTIONS', 'ONE-TO-THREE-ACTIONS', 'TWO-TO-THREE-ACTIONS', 'TWO-TO-TWO-ROUNDS', 'TWO-TO-THREE-ROUNDS', 'THREE-TO-TWO-ROUNDS', 'THREE-TO-THREE-ROUNDS', null].includes(value); }
+export function convertToContentType(type) { if (type === 'hazard') return 'creature'; if (type === 'cast-spell' || type === 'add-spell') return 'spell'; if (type === 'inv-item') return 'item'; return isAbilityBlockType(type) ? 'ability-block' : type; }
+export function getIconFromContentType() { return undefined; }
+` },
           ].find((entry) => args.path === entry.key);
           return { contents: entry.value, loader: 'ts' };
         });
