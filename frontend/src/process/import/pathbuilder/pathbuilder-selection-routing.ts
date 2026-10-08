@@ -46,7 +46,7 @@ export function findFreeArchetypeBranch(
   if (titles.size === 0) return null;
 
   const hasDedication = feats.some(
-    (feat) => feat.level === level && /\\bdedication\\b/i.test(feat.name)
+    (feat) => feat.level === level && /\bdedication\b/i.test(feat.name)
   );
   const target = hasDedication ? 'Add Dedication' : 'Add Archetype Feat';
   return options.find((option) => (option.title ?? option.name) === target) ?? null;
