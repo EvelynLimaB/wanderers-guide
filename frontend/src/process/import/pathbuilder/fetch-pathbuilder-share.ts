@@ -30,7 +30,9 @@ export type PathbuilderShareResult =
  * query parameter, and URLs whose last path segment is numeric.
  */
 export function extractBuildId(input: string | number | undefined | null): string | null {
-  if (typeof input === 'number') return Number.isFinite(input) ? String(Math.trunc(input)) : null;
+  if (typeof input === 'number') {
+    return Number.isFinite(input) && Number.isInteger(input) && input >= 0 ? String(input) : null;
+  }
   if (typeof input !== 'string') return null;
 
   const text = input.trim();
