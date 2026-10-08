@@ -238,31 +238,50 @@ try {
 
   let shareRequests = 0;
   let derivedRequests = 0;
-  const outcome = await importer.importFromPathbuilderShare('1597410', {
-    silent: true,
-    fetchImpl: async (url, init = {}) => {
-      if (url.includes('/app/fetch_emailed.php')) {
-        shareRequests++;
-        assert.equal(init.method, 'POST');
-        assert.deepEqual(JSON.parse(init.body), { id: '1597410' });
-        return new Response(JSON.stringify({
-          success: true,
-          version: '121',
-          build: JSON.stringify(fixture.build),
-        }), { status: 200, headers: { 'content-type': 'application/json' } });
-      }
 
-      if (url.includes('/json.php')) {
-        derivedRequests++;
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'Build not found.',
-        }), { status: 404, headers: { 'content-type': 'application/json' } });
-      }
+  const importBuild = async (build) =>
+    importer.importFromPathbuilderShare('1597410', {
+      silent: true,
+      fetchImpl: async (url, init = {}) => {
+        if (url.includes('/app/fetch_emailed.php')) {
+          shareRequests++;
+          assert.equal(init.method, 'POST');
+          assert.deepEqual(JSON.parse(init.body), { id: '1597410' });
+          return new Response(JSON.stringify({
+            success: true,
+            version: '121',
+            build: JSON.stringify(build),
+          }), { status: 200, headers: { 'content-type': 'application/json' } });
+        }
 
-      throw new Error('Unexpected URL: ' + url);
-    },
-  });
+        if (url.includes('/json.php')) {
+          derivedRequests++;
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'Build not found.',
+          }), { status: 404, headers: { 'content-type': 'application/json' } });
+        }
+
+        throw new Error('Unexpected URL: ' + url);
+      },
+    });
+
+  assert.equal(fixture.build.characterData.keyability, undefined);
+  const rawOutcome = await importBuild(fixture.build);
+  assert.equal(rawOutcome.ok, false);
+  assert.match(rawOutcome.error, /key ability/i);
+  assert.equal(shareRequests, 1);
+  assert.equal(derivedRequests, 1);
+
+  // The captured Pathbuilder share genuinely omits keyability. For the mechanical
+  // parity test, inject the independently recovered value from the human-readable
+  // oracle rather than pretending the source payload contained it.
+  const certifiedBuild = structuredClone(fixture.build);
+  certifiedBuild.characterData.keyability = 'str';
+
+  shareRequests = 0;
+  derivedRequests = 0;
+  const outcome = await importBuild(certifiedBuild);
 
   assert.equal(shareRequests, 1);
   assert.equal(derivedRequests, 1);
