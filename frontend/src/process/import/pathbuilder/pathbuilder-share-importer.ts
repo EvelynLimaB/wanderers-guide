@@ -281,20 +281,26 @@ async function ensureCustomContent(
   consider(resolved.armor);
   consider(resolved.shield);
 
-  const standardRefs = [
+  const itemRefs = [
     ...resolved.weapons,
     ...resolved.looseEquipment,
     ...resolved.containers.flatMap((container) => container.items),
     ...(resolved.armor ? [resolved.armor] : []),
     ...(resolved.shield ? [resolved.shield] : []),
-  ].filter((ref) => ref.kind === 'standard');
+  ];
 
-  const missingItems = standardRefs.filter((ref) => !findImportedItem(content.items, ref.name));
+  const standardRefs = itemRefs.filter((ref) => ref.kind === 'standard');
+  const unresolvedRefs = new Map<string, ResolvedItemRef>();
+  for (const ref of itemRefs) {
+    if (ref.kind === 'unresolved') unresolvedRefs.set(ref.raw.toLowerCase(), ref);
+  }
+
+  const missingItems = standardRefs.filter((ref) => !findImportedItem(content.items, ref.name) && !findImportedItem(content.items, ref.raw));
   const missingSpells = resolved.spells.filter(
     (spell) => !content.spells.some((item) => labelToVariable(item.name) === labelToVariable(spell.name))
   );
 
-  if (referenced.size === 0 && missingItems.length === 0 && missingSpells.length === 0) {
+  if (referenced.size === 0 && unresolvedRefs.size === 0 && missingItems.length === 0 && missingSpells.length === 0) {
     return { sourceId: null, byUuid, fallbackSpellsByName };
   }
 
@@ -335,6 +341,21 @@ async function ensureCustomContent(
 
     const item = await createCustomItem(customFile, sourceId, traits, content, warnings);
     if (item) byUuid.set(uuid, item);
+  }
+
+  for (const ref of unresolvedRefs.values()) {
+    const existing = sourceItems.find((item) => {
+      if (item.meta_data?.pathbuilder?.source !== 'Pathbuilder Reference') return false;
+      const raw = item.meta_data.pathbuilder.raw;
+      return typeof raw === 'object' && raw !== null && 'raw' in raw && (raw as Record<string, unknown>).raw === ref.raw;
+    });
+    if (existing) {
+      byUuid.set(`unresolved:${ref.raw.toLowerCase()}`, existing);
+      continue;
+    }
+
+    const item = await createReferenceItem(ref, sourceId, warnings);
+    if (item) byUuid.set(`unresolved:${ref.raw.toLowerCase()}`, item);
   }
 
   for (const ref of missingItems) {
@@ -1067,6 +1088,9 @@ function findInventoryItem(
       customItems.get(`ref:${labelToVariable(ref.name)}`) ??
       customItems.get(`ref:${labelToVariable(ref.raw)}`)
     );
+  }
+  if (ref.kind === 'unresolved') {
+    return customItems.get(`unresolved:${ref.raw.toLowerCase()}`);
   }
   return undefined;
 }
