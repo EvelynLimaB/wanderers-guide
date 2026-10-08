@@ -998,3 +998,4 @@ function buildPathbuilderCustomOperations(
   }
 
   return operations;
+}
