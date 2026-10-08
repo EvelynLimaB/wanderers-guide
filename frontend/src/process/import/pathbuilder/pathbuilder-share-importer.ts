@@ -346,7 +346,7 @@ async function ensureCustomContent(
   for (const ref of unresolvedRefs.values()) {
     const existing = sourceItems.find((item) => {
       if (item.meta_data?.pathbuilder?.source !== 'Pathbuilder Reference') return false;
-      const raw = item.meta_data.pathbuilder.raw;
+      const raw = (item.meta_data?.pathbuilder as { raw?: unknown } | undefined)?.raw;
       return typeof raw === 'object' && raw !== null && 'raw' in raw && (raw as Record<string, unknown>).raw === ref.raw;
     });
     if (existing) {
@@ -426,7 +426,13 @@ async function createReferenceItem(
     description:
       `Imported from Pathbuilder as a reference. Wanderer's Guide did not have a matching content record at import time. Original Pathbuilder reference: ${ref.raw}`,
     group:
-      ref.kind === 'weapon' ? 'WEAPON' : ref.kind === 'armor' ? 'ARMOR' : ref.kind === 'shield' ? 'SHIELD' : 'GENERAL',
+      ref.unresolvedKind === 'weapon'
+        ? 'WEAPON'
+        : ref.unresolvedKind === 'armor'
+          ? 'ARMOR'
+          : ref.unresolvedKind === 'shield'
+            ? 'SHIELD'
+            : 'GENERAL',
     hands: null,
     size: 'MEDIUM',
     craft_requirements: null,
