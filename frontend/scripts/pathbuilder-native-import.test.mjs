@@ -5,6 +5,8 @@ import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolveBuild } from '../src/process/import/pathbuilder/pathbuilder-resolve.ts';
+globalThis.window = { location: { origin: 'http://localhost' } };
+
 import { createOperationEngine } from './operation-test-harness.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
