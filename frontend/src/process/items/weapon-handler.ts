@@ -15,6 +15,15 @@ import { compileTraits, getGradeImprovements, isItemRangedWeapon } from './inv-u
 import stripMd from 'remove-markdown';
 import { getSharedEidolonRunes } from './eidolon-runes';
 
+type PathbuilderWeaponState = NonNullable<Item['meta_data']>['pathbuilder'] & {
+  attackAbility?: string;
+  twoHanded?: boolean;
+};
+
+function getPathbuilderWeaponState(item: Item): PathbuilderWeaponState | undefined {
+  return item.meta_data?.pathbuilder as PathbuilderWeaponState | undefined;
+}
+
 export function parseOtherDamage(
   damage: { dice: number; die: string; damageType: string; bonus: number }[],
   prefix?: string
@@ -40,12 +49,6 @@ export function getWeaponStats(id: StoreID, item: Item) {
   if (dice < minDice) dice = minDice;
 
   //
-  const pathbuilderState = item.meta_data?.pathbuilder as
-    | (NonNullable<Item['meta_data']>['pathbuilder'] & {
-        attackAbility?: string;
-        twoHanded?: boolean;
-      })
-    | undefined;
   const twoHandDie = (item.meta_data?.display_traits ?? [])
     .map((trait) => /two-hand\\s+d(4|6|8|10|12)/i.exec(trait)?.[1])
     .find(Boolean);
@@ -123,6 +126,7 @@ function increaseDamageDie(die: string): string {
 
 /** Resolve a weapon attack using only its actual attack attribute and one shared typed-modifier pool. */
 function getAttackBonus(id: StoreID, item: Item) {
+  const pathbuilderState = getPathbuilderWeaponState(item);
   const traits = compileTraits(item);
   const ranged = isItemRangedWeapon(item);
   const brutal = hasTraitType('BRUTAL', traits);
