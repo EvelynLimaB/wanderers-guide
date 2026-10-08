@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { dirname, fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { build } from 'esbuild';
 import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
@@ -205,7 +205,7 @@ try {
     write: true,
     platform: 'node',
     format: 'esm',
-    define: { 'import.meta.env.VITE_ENV': '"test"' },
+    define: { 'import.meta.env': '{"VITE_ENV":"test","VITE_SUPABASE_URL":"http://localhost:8000"}' },
     tsconfig: join(root, 'tsconfig.json'),
     plugins: [{
       name: 'pathbuilder-real-import-fixtures',
