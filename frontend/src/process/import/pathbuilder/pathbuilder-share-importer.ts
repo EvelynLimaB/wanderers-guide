@@ -1191,6 +1191,10 @@ function isSkillSelection(options: ObjectWithUUID[]): boolean {
   );
 }
 
+function isLanguageSelection(selection: { title?: string; description?: string } | undefined): boolean {
+  return /\blanguage\b/i.test([selection?.title, selection?.description].filter(Boolean).join(' '));
+}
+
 /**
  * Identify WG's dedicated class key-ability selector without letting the key
  * ability satisfy an unrelated attribute-boost selector with the same label.
@@ -1234,6 +1238,7 @@ async function resolveSelections(
   const checkedSelectionIds = new Set<string>();
   const abilityBoostCursors = new Map<string, number>();
   const skillCursors = new Map<number, number>();
+  let classAttributeSelectionIndex = 0;
 
   let hasSelections = true;
   let iteration = 0;
@@ -1261,6 +1266,7 @@ async function resolveSelections(
       const options = found.selection?.selection?.options ?? [];
       const attributeSelection = isAttributeSelection(options);
       const skillSelection = isSkillSelection(options);
+      const languageSelection = isLanguageSelection(found.selection?.selection);
       const keyAbilitySelection = isKeyAbilitySelection(found.selection?.selection);
       let requestedSelections = selections;
       let result: Pick<ObjectWithUUID, '_select_uuid'> | null = null;
@@ -1271,7 +1277,22 @@ async function resolveSelections(
       }
 
       if (attributeSelection) {
-        if (keyAbilitySelection && resolved.identity.keyAbility) {
+        const isClassAttributeSelection = found.path.startsWith('class_');
+        const implicitKeyAbilitySelection =
+          isClassAttributeSelection && classAttributeSelectionIndex === 0;
+        if (implicitKeyAbilitySelection) {
+          if (resolved.identity.keyAbility) {
+            requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: found.level }];
+          } else if (options.length === 1) {
+            result = options[0];
+          } else {
+            throw new Error(
+              `Pathbuilder 1:1 key ability is not present in the share payload and WG exposes multiple key-ability candidates: ${options
+                .map((option) => option.name ?? option.title ?? option._select_uuid)
+                .join(', ')}; selection path: ${found.path}`
+            );
+          }
+        } else if (keyAbilitySelection && resolved.identity.keyAbility) {
           requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: found.level }];
         } else {
           const origin = getAbilityBoostOriginForPath(found.path);
@@ -1297,6 +1318,8 @@ async function resolveSelections(
         ].filter((selection) => selection.level === found.level);
         const candidate = candidates[cursor];
         requestedSelections = candidate ? [candidate] : [];
+      } else if (languageSelection) {
+        requestedSelections = resolved.languages.map((name) => ({ name, level: found.level }));
       }
 
       if (!result && resolved.identity.heritage) {
@@ -1313,7 +1336,10 @@ async function resolveSelections(
         chosen[found.path] = result._select_uuid;
         character.operation_data!.selections = cloneDeep(chosen);
 
-        if (attributeSelection && !keyAbilitySelection) {
+        if (attributeSelection) {
+          if (found.path.startsWith('class_')) classAttributeSelectionIndex++;
+        }
+        if (attributeSelection && !keyAbilitySelection && !(found.path.startsWith('class_') && classAttributeSelectionIndex === 1)) {
           const origin = getAbilityBoostOriginForPath(found.path);
           if (origin) {
             const cursorKey = origin + ':' + found.level;
