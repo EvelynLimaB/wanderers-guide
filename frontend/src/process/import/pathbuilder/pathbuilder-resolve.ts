@@ -378,20 +378,27 @@ export function resolveBuild(
   // json.php, when available, includes the resolved armor name, so prefer that as
   // the lookup name while preserving the original Pathbuilder reference in raw.
   const armorRaw = cd.playerArmor;
-  const derivedArmor =
+  const derivedArmors =
     Array.isArray((options.derived as Record<string, unknown> | null | undefined)?.armor)
       ? (
-          (options.derived as Record<string, unknown>).armor as Array<{ name?: string | null }>
-        )[0]
-      : undefined;
+          (options.derived as Record<string, unknown>).armor as Array<{ name?: string | null; worn?: boolean }>
+        )
+      : [];
+  const derivedArmor = derivedArmors.find((entry) => entry.worn === true) ?? derivedArmors[0];
   const derivedArmorName = derivedArmor?.name ?? undefined;
 
   let armor: ResolvedItemRef | undefined;
   const rawArmorName = armorRaw?.armorName;
-  const armorLookupName =
+  const armorCustomFile =
     rawArmorName && isPathbuilderUuid(rawArmorName)
-      ? derivedArmorName ?? rawArmorName
-      : rawArmorName ?? derivedArmorName;
+      ? customFiles.get(rawArmorName.toLowerCase())
+      : undefined;
+  const armorLookupName =
+    armorCustomFile
+      ? rawArmorName
+      : rawArmorName && isPathbuilderUuid(rawArmorName)
+        ? derivedArmorName ?? rawArmorName
+        : rawArmorName ?? derivedArmorName;
 
   if (armorLookupName) {
     const originalUnresolvedLength = unresolved.length;
