@@ -13,6 +13,7 @@ export type {
   PathbuilderAbility,
   PathbuilderArmor,
   PathbuilderCharacterData,
+  PathbuilderDerivedBuild,
   PathbuilderContainer,
   PathbuilderCustomEffect,
   PathbuilderCustomFile,
@@ -111,6 +112,7 @@ export type ResolvedBuild = {
     ancestry?: string;
     heritage?: string;
     className?: string;
+    keyAbility?: PathbuilderAbility;
     background?: string;
     gender?: string;
     alignment?: string;
