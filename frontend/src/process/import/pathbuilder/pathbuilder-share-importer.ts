@@ -1062,6 +1062,31 @@ export function getAbilityBoostOriginForPath(path: string): 'levelled' | 'ancest
   return null;
 }
 
+/**
+ * Free Archetype slots are represented by a two-stage custom selector:
+ * first WG asks whether the user is adding a dedication or an archetype feat,
+ * then it exposes the actual feat selector. Pathbuilder stores only the actual
+ * feat, so the importer must infer the outer branch from the level's selected feat.
+ */
+function findFreeArchetypeBranch(
+  options: ObjectWithUUID[],
+  feats: { name: string; level: number }[],
+  level: number
+): ObjectWithUUID | null {
+  const titles = new Set(
+    options
+      .map((option) => option.title ?? option.name ?? '')
+      .filter((title) => title === 'Add Dedication' || title === 'Add Archetype Feat')
+  );
+  if (titles.size === 0) return null;
+
+  const hasDedication = feats.some(
+    (feat) => feat.level === level && /\\bdedication\\b/i.test(feat.name)
+  );
+  const target = hasDedication ? 'Add Dedication' : 'Add Archetype Feat';
+  return options.find((option) => (option.title ?? option.name) === target) ?? null;
+}
+
 /** Feed the operation builder every choice the payload records, level by level. */
 async function resolveSelections(
   character: Character,
@@ -1109,6 +1134,12 @@ async function resolveSelections(
       const attributeSelection = isAttributeSelection(options);
       const keyAbilitySelection = isKeyAbilitySelection(found.selection?.selection);
       let requestedSelections = selections;
+      let result: ObjectWithUUID | null = null;
+
+      const freeArchetypeBranch = findFreeArchetypeBranch(options, selections, found.level);
+      if (freeArchetypeBranch) {
+        result = freeArchetypeBranch;
+      }
 
       if (attributeSelection) {
         if (keyAbilitySelection && resolved.identity.keyAbility) {
@@ -1131,7 +1162,9 @@ async function resolveSelections(
         }
       }
 
-      const result: ObjectWithUUID | null = findMatchingOption(requestedSelections, options, found.level);
+      if (!result) {
+        result = findMatchingOption(requestedSelections, options, found.level);
+      }
       if (result) {
         chosen[found.path] = result._select_uuid;
         character.operation_data!.selections = cloneDeep(chosen);
