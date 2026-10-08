@@ -56,6 +56,9 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit -p tsconfig.json
 
+      - name: Pathbuilder import regression tests
+        run: npm run test:pathbuilder-import
+
       - name: Rules and content audit regression tests
         run: |
           npm run test:rules
