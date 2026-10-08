@@ -1009,7 +1009,7 @@ async function validatePathbuilderDerived(
   const abilities = derived.abilities;
   if (abilities) {
     for (const [ability, score] of Object.entries(abilities)) {
-      if (score === undefined) continue;
+      if (typeof score !== 'number') continue;
       const variable = getFinalVariableValue('CHARACTER', `ATTRIBUTE_${ability.toUpperCase()}`);
       const expectedModifier = Math.floor((score - 10) / 2);
       if (variable.total !== expectedModifier) {
