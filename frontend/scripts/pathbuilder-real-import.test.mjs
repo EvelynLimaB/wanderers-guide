@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+globalThis.window = { location: { origin: 'http://localhost' } };
+
 import { build } from 'esbuild';
 import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
 
