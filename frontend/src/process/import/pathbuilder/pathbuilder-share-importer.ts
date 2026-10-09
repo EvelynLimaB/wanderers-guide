@@ -1503,6 +1503,10 @@ async function resolveSelections(
   // Dynamic grants can rebuild the same selection with a different ancestry/source path.
   // Keep the confirmed value by operation id so it can be replayed at the new path.
   const selectedByOperationAndLevel = new Map<string, string>();
+  // A selector can be surfaced under multiple generated result paths after its
+  // parent grant is rebuilt. Replay its value on each path, but only count the
+  // first resolution of the semantic selector as new progress.
+  const resolvedSelectionKeys = new Set<string>();
   const abilityBoostCursors = new Map<string, number>();
   const skillCursors = new Map<number, number>();
   let classAttributeSelectionIndex = 0;
@@ -1528,10 +1532,12 @@ async function resolveSelections(
       const current = found;
       const selectionId = current.selection?.selection?.id ?? '';
       const selectionKey = selectionId ? `${selectionId}:${current.level}` : '';
+      const trackingKey = selectionKey || current.path;
+      const selectionKeyWasResolved = resolvedSelectionKeys.has(trackingKey);
       const options = current.selection?.selection?.options ?? [];
       // Rules reuse operation IDs across level-specific class features. Scope replay
       // by level so a level-1 choice cannot overwrite an unrelated level-4 choice.
-      const previouslySelectedUuid = selectionKey ? selectedByOperationAndLevel.get(selectionKey) : undefined;
+      const previouslySelectedUuid = selectedByOperationAndLevel.get(trackingKey);
       const previouslySelectedOption = previouslySelectedUuid
         ? options.find((option) => option._select_uuid === previouslySelectedUuid) ?? null
         : null;
@@ -1626,8 +1632,7 @@ async function resolveSelections(
         ) ?? null;
       }
 
-      const manualSelectionUuid =
-        (selectionKey ? selectionOverrides[selectionKey] : undefined) ?? selectionOverrides[current.path];
+      const manualSelectionUuid = selectionOverrides[trackingKey] ?? selectionOverrides[current.path];
       if (!result && manualSelectionUuid) {
         result = manualOptions.find((option) => option._select_uuid === manualSelectionUuid) ?? null;
       }
@@ -1636,7 +1641,7 @@ async function resolveSelections(
       }
       if (!result) {
         pendingSelection = {
-          key: selectionKey || current.path,
+          key: trackingKey,
           path: current.path,
           title: selectionTitle,
           description: current.selection?.selection?.description,
@@ -1653,7 +1658,8 @@ async function resolveSelections(
       }
       if (result) {
         chosen[current.path] = result._select_uuid;
-        if (selectionKey) selectedByOperationAndLevel.set(selectionKey, result._select_uuid);
+        selectedByOperationAndLevel.set(trackingKey, result._select_uuid);
+        resolvedSelectionKeys.add(trackingKey);
         character.operation_data!.selections = cloneDeep(chosen);
 
         if (attributeSelection) {
@@ -1676,7 +1682,7 @@ async function resolveSelections(
         }
       }
       checked.add(current.path);
-      resolvedAny = true;
+      if (!selectionKeyWasResolved) resolvedAny = true;
       found = findFirstSelection(results, checked);
     }
 
