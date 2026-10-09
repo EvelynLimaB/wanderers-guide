@@ -58,8 +58,8 @@ jobs:
         id: typecheck
         run: npx tsc --noEmit -p tsconfig.json
 
-      - name: Pathbuilder browser bridge protocol tests
-        run: npm run test:pathbuilder-browser-bridge
+      - name: Pathbuilder export identity tests
+        run: npm run test:pathbuilder-export-identity
 
       - name: Automatic Pathbuilder worker tests
         working-directory: ./pathbuilder-automation
