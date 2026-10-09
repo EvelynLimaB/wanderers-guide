@@ -99,7 +99,7 @@ export default function PathbuilderInputModal(props: {
             </Button>
           ) : (
             <Button
-              disabled={!buildId || !iframeRef.current}
+              disabled={!buildId}
               onClick={() => {
                 if (!buildId || !iframeRef.current) return;
                 props.onBrowserConfirm(input.trim(), iframeRef.current);
