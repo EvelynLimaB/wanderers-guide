@@ -66,7 +66,7 @@ export async function importFromPathbuilderViaBrowser(
       : await requestPathbuilderDerivedViaBrowser(buildId);
     const result = await importFromPathbuilderShare(pathbuilderInput, { derivedOverride });
     if (!result.ok) {
-      console.error(`Pathbuilder browser-assisted import failed: ${result.error}`);
+      console.error(`Automatic Pathbuilder import failed: ${result.error}`);
       return null;
     }
     if (result.warnings.length > 0) {
@@ -77,7 +77,7 @@ export async function importFromPathbuilderViaBrowser(
     const message = error instanceof Error ? error.message : 'Unknown browser-assisted export failure.';
     console.error('Pathbuilder browser-assisted import failed:', error);
     showNotification({
-      title: 'Pathbuilder browser export failed',
+      title: 'Automatic Pathbuilder export failed',
       message,
       color: 'red',
       autoClose: false,
