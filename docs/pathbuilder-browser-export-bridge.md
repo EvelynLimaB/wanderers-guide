@@ -9,7 +9,7 @@ The share endpoint (`fetch_emailed.php`) preserves editor selections and custom 
 ## Install
 
 1. Install the **Violentmonkey** userscript manager in Firefox/Zen.
-2. Open [the helper script](../frontend/public/pathbuilder-wg-bridge.user.js) in this repository.
+2. Open [the helper script](https://raw.githubusercontent.com/EvelynLimaB/wanderers-guide/feature/pathbuilder-1to1-import/frontend/public/pathbuilder-wg-bridge.user.js) in this repository.
 3. Create a new userscript in Violentmonkey, replace its contents with the helper file, and save it.
 4. Refresh Wanderer's Guide and choose **Import from Pathbuilder → Import via browser**.
 5. Allow the Pathbuilder popup if prompted. In the Pathbuilder tab, confirm the consent dialog. The helper forwards data only to the tab that opened it.
