@@ -61,6 +61,10 @@ jobs:
       - name: Pathbuilder browser bridge protocol tests
         run: npm run test:pathbuilder-browser-bridge
 
+      - name: Automatic Pathbuilder worker tests
+        working-directory: ./pathbuilder-automation
+        run: npm test
+
       - name: Pathbuilder import regression tests
         run: npm run test:pathbuilder-import
 
