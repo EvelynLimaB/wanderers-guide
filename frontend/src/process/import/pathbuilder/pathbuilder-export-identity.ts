@@ -42,13 +42,40 @@ export function assertPathbuilderDerivedMatchesShare(
     }
   }
 
-  for (const key of ['ancestry', 'heritage'] as const) {
-    const fromShare = characterData[key];
-    const fromDerived = derived[key];
-    if (fromShare && fromDerived && normalizeIdentity(fromShare) !== normalizeIdentity(fromDerived)) {
+  const optionalChecks: Array<{
+    label: string;
+    share: string | null | undefined;
+    derived: string | null | undefined;
+    normalize?: (value: string) => string;
+  }> = [
+    { label: 'ancestry', share: characterData.ancestry, derived: derived.ancestry },
+    { label: 'heritage', share: characterData.heritage, derived: derived.heritage },
+    {
+      label: 'background',
+      share: characterData.background,
+      derived: derived.background,
+      normalize: normalizeBackgroundIdentity,
+    },
+    { label: 'key ability', share: characterData.keyability, derived: derived.keyability },
+  ];
+
+  for (const check of optionalChecks) {
+    const fromShare = check.share?.trim();
+    const fromDerived = check.derived?.trim();
+    // Share payloads omit some optional fields; compare only when both sources
+    // explicitly provide a value. The fields that do overlap must agree.
+    if (!fromShare || !fromDerived) continue;
+
+    const normalize = check.normalize ?? normalizeIdentity;
+    if (normalize(fromShare) !== normalize(fromDerived)) {
       throw new Error(
-        `Pathbuilder share/export mismatch for ${key}: share="${fromShare}", export="${fromDerived}". Import blocked.`
+        `Pathbuilder share/export mismatch for ${check.label}: share="${fromShare}", export="${fromDerived}". Import blocked.`
       );
     }
   }
+}
+
+function normalizeBackgroundIdentity(value: string): string {
+  return normalizeIdentity(value.trim().replace(/^background[_\\s]+/i, ''));
+}
 }

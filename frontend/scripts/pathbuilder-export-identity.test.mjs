@@ -45,6 +45,50 @@ test('share and automatically-derived export identity must match exactly', () =>
   );
 });
 
+test('optional mechanical identity fields must agree when both payloads provide them', () => {
+  const shareWithMechanics = {
+    ...share,
+    background: 'BACKGROUND_Bounty Hunter',
+    keyability: 'STR',
+  };
+  const exportWithMechanics = {
+    ...derived,
+    background: 'Bounty Hunter',
+    keyability: 'str',
+  };
+
+  // Pathbuilder encodes the share background with a category prefix and differs
+  // in keyability casing between payloads. Equivalent values must still match.
+  assert.doesNotThrow(() =>
+    assertPathbuilderDerivedMatchesShare(shareWithMechanics, exportWithMechanics)
+  );
+
+  assert.throws(
+    () =>
+      assertPathbuilderDerivedMatchesShare(
+        { ...shareWithMechanics, keyability: 'dex' },
+        exportWithMechanics
+      ),
+    /mismatch for key ability/
+  );
+  assert.throws(
+    () =>
+      assertPathbuilderDerivedMatchesShare(shareWithMechanics, {
+        ...exportWithMechanics,
+        background: 'Criminal',
+      }),
+    /mismatch for background/
+  );
+  assert.throws(
+    () =>
+      assertPathbuilderDerivedMatchesShare(shareWithMechanics, {
+        ...exportWithMechanics,
+        heritage: 'Ifrit',
+      }),
+    /mismatch for heritage/
+  );
+});
+
 test('missing identity on either side fails closed', () => {
   assert.throws(
     () => assertPathbuilderDerivedMatchesShare(share, { ...derived, name: undefined }),
