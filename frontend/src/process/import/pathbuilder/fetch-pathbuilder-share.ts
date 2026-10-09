@@ -64,6 +64,7 @@ export async function fetchPathbuilderShare(
   options: { fetchImpl?: typeof fetch; signal?: AbortSignal } = {}
 ): Promise<PathbuilderShareResult> {
   const doFetch = options.fetchImpl ?? fetch;
+  const signal = options.signal ?? AbortSignal.timeout(15_000);
 
   let response: Response;
   try {
@@ -71,7 +72,7 @@ export async function fetchPathbuilderShare(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: buildId }),
-      signal: options.signal,
+      signal,
     });
   } catch (error) {
     console.warn(`Pathbuilder share request failed for build ${buildId}:`, error);
@@ -133,8 +134,11 @@ export async function fetchPathbuilderDerived(
 ): Promise<PathbuilderDerivedBuild | null> {
   const doFetch = options.fetchImpl ?? fetch;
   try {
+    // Explicit export IDs are used as the required calculated build for import.
+    // Bound the request so a challenge or unresponsive endpoint cannot hang the UI.
+    const signal = options.signal ?? AbortSignal.timeout(15_000);
     const response = await doFetch(`${PATHBUILDER_DERIVED_ENDPOINT}?id=${encodeURIComponent(buildId)}`, {
-      signal: options.signal,
+      signal,
     });
     if (!response.ok) {
       console.info(
