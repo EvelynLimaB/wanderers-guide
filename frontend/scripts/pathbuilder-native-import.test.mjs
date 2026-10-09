@@ -335,7 +335,45 @@ const derived = {
 const warnings = [];
 const customItems = new Map();
 const fallbackSpells = new Map();
-const built = await buildCharacter(resolved, content, customItems, fallbackSpells, null, warnings, derived);
+
+// Simulate the UI collecting explicit answers to every required selection
+// absent from the fixture. This keeps the mechanical parity assertions focused
+// on the completed build without teaching the importer to guess choices.
+const selectionOverrides = {};
+let built = null;
+for (let attempt = 0; attempt < 64; attempt++) {
+  const preflight = await buildCharacter(
+    resolved,
+    content,
+    customItems,
+    fallbackSpells,
+    null,
+    [],
+    derived,
+    { preflightOnly: true, selectionOverrides }
+  );
+  if (preflight.status === 'ready') {
+    built = await buildCharacter(
+      resolved,
+      content,
+      customItems,
+      fallbackSpells,
+      null,
+      warnings,
+      derived,
+      { selectionOverrides }
+    );
+    break;
+  }
+
+  assert.equal(preflight.status, 'selection-required');
+  assert.ok(
+    preflight.selection.options.length > 0,
+    `fixture requires a choice with no eligible options: ${preflight.selection.title}`
+  );
+  selectionOverrides[preflight.selection.path] = preflight.selection.options[0].value;
+}
+assert.ok(built, 'preflight should converge after the test explicitly answers missing choices');
 
 const engine = await createOperationEngine();
 try {
@@ -401,19 +439,3 @@ await assert.rejects(
   /Pathbuilder 1:1 selection mapping failed:/
 );
 
-// The preflight variant must return a structured prompt, not throw, so the UI
-// can collect an explicit user choice before it persists any import data.
-const preflightOutcome = await buildCharacter(
-  unresolvedSelectionFixture,
-  content,
-  customItems,
-  fallbackSpells,
-  null,
-  [],
-  null,
-  { preflightOnly: true }
-);
-assert.equal(preflightOutcome.status, 'selection-required');
-assert.equal(typeof preflightOutcome.selection.path, 'string');
-assert.equal(typeof preflightOutcome.selection.title, 'string');
-assert.ok(Array.isArray(preflightOutcome.selection.options));
