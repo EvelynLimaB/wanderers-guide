@@ -20,10 +20,7 @@ import { Character } from '@schemas/content';
 
 import { importFromPathbuilderShare } from './pathbuilder-share-importer';
 import { showNotification } from '@mantine/notifications';
-import {
-  requestPathbuilderDerivedViaBrowser,
-  requestPathbuilderDerivedViaIframe,
-} from './pathbuilder-browser-bridge';
+import { requestPathbuilderDerivedAutomatically } from './pathbuilder-automatic-service';
 import { extractBuildId } from './fetch-pathbuilder-share';
 
 export async function importFromPathbuilder(pathbuilderInput: string | number): Promise<Character | null> {
@@ -42,12 +39,11 @@ export async function importFromPathbuilder(pathbuilderInput: string | number): 
 }
 
 /**
- * Import using the live Pathbuilder application to obtain its calculated Export
- * JSON. This deliberately avoids assuming the share ID is also a JSON export ID.
+ * Import through the automated WG backend browser. This avoids iframe and
+ * userscript dependencies and never treats a share ID as a JSON export ID.
  */
-export async function importFromPathbuilderViaBrowser(
-  pathbuilderInput: string | number,
-  iframe?: HTMLIFrameElement
+export async function importFromPathbuilderAutomatically(
+  pathbuilderInput: string | number
 ): Promise<Character | null> {
   const buildId = extractBuildId(pathbuilderInput);
   if (!buildId) {
@@ -61,23 +57,21 @@ export async function importFromPathbuilderViaBrowser(
   }
 
   try {
-    const derivedOverride = iframe
-      ? await requestPathbuilderDerivedViaIframe(buildId, iframe)
-      : await requestPathbuilderDerivedViaBrowser(buildId);
+    const derivedOverride = await requestPathbuilderDerivedAutomatically(buildId);
     const result = await importFromPathbuilderShare(pathbuilderInput, { derivedOverride });
     if (!result.ok) {
       console.error(`Automatic Pathbuilder import failed: ${result.error}`);
       return null;
     }
     if (result.warnings.length > 0) {
-      console.warn(`Pathbuilder import left ${result.warnings.length} detail(s) unmapped:`, result.warnings);
+      console.warn('Pathbuilder import left unmapped details:', result.warnings);
     }
     return result.character;
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown browser-assisted export failure.';
-    console.error('Pathbuilder browser-assisted import failed:', error);
+    const message = error instanceof Error ? error.message : 'Unknown automatic export failure.';
+    console.error('Automatic Pathbuilder import failed:', error);
     showNotification({
-      title: 'Automatic Pathbuilder export failed',
+      title: 'Automatic Pathbuilder import failed',
       message,
       color: 'red',
       autoClose: false,
@@ -85,6 +79,5 @@ export async function importFromPathbuilderViaBrowser(
     return null;
   }
 }
-
 export { importFromPathbuilderShare };
 export type { PathbuilderImportOutcome } from './pathbuilder-share-importer';
