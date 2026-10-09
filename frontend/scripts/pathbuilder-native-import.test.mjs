@@ -411,7 +411,8 @@ try {
       fallbackSpells,
       null,
       [],
-      { abilities: { str: 10, dex: 16, con: 16, int: 20, wis: 12, cha: 12 }, acTotal: { acTotal: 23 } }
+      { abilities: { str: 10, dex: 16, con: 16, int: 20, wis: 12, cha: 12 }, acTotal: { acTotal: 23 } },
+      { selectionOverrides }
     ),
     /Pathbuilder 1:1 validation failed:/
   );
