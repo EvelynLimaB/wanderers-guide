@@ -4,8 +4,9 @@
  * The share endpoint is the source of truth because it carries the raw editor
  * state and the Custom Files attached to the character.
  *
- * The legacy json.php endpoint is optional enrichment only. Shared builds can
- * return 403 there, so that failure never aborts an import.
+ * json.php is only queried when a caller supplies a separate, known export ID.
+ * A share ID is not assumed to be a JSON ID: export IDs may be reused, and a
+ * mismatched response would corrupt a strict 1:1 import.
  */
 
 import {
@@ -123,7 +124,8 @@ export async function fetchPathbuilderShare(
 }
 
 /**
- * Best-effort fetch of the derived json.php shape.
+ * Best-effort fetch of a known JSON export. The caller must supply the ID from
+ * the export flow; never pass a share ID merely because it exists.
  */
 export async function fetchPathbuilderDerived(
   buildId: string,

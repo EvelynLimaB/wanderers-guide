@@ -316,7 +316,8 @@ export const PathbuilderDerivedBuildSchema = z
       acAbilityBonus: z.number().optional(),
       acItemBonus: z.number().optional(),
       acTotal: z.number().optional(),
-      shieldBonus: z.number().nullable().optional(),
+      // Pathbuilder v121 exports this as a string (e.g. "1") in some builds.
+      shieldBonus: z.union([z.number(), z.string()]).nullable().optional(),
     }).passthrough().nullish(),
     money: z
       .object({

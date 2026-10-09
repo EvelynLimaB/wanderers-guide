@@ -43,6 +43,7 @@ import { labelToVariable } from '@variables/variable-utils';
 import { cloneDeep } from 'lodash-es';
 
 import { extractBuildId, fetchPathbuilderDerived, fetchPathbuilderShare } from './fetch-pathbuilder-share';
+import { assertPathbuilderDerivedMatchesShare } from './pathbuilder-browser-bridge';
 import { pathbuilderAbilityLabel, resolveBuild } from './pathbuilder-resolve';
 import { PathbuilderCustomFile, ResolvedBuild, ResolvedItemRef } from './types';
 import { findFreeArchetypeBranch, getAbilityBoostOriginForPath } from './pathbuilder-selection-routing';
@@ -52,6 +53,10 @@ export type PathbuilderImportOptions = {
   fetchImpl?: typeof fetch;
   /** Import the character but do not create homebrew Items for Custom Files. */
   skipCustomContent?: boolean;
+  /** Calculated JSON supplied by Pathbuilder's official browser export flow. */
+  derivedOverride?: import('@schemas/pathbuilder').PathbuilderDerivedBuild | null;
+  /** Explicit JSON export ID. Never default this to the share ID. */
+  derivedBuildId?: string;
   /** Turn off the Mantine notifications (used by tests and bulk imports). */
   silent?: boolean;
 };
@@ -109,15 +114,24 @@ export async function importFromPathbuilderShare(
   try {
     // The derived payload is optional enrichment; it 403s for many shared builds
     // and must never be able to fail the import.
-    const [shared, derived] = await Promise.all([
+    const [shared, fetchedDerived] = await Promise.all([
       fetchPathbuilderShare(buildId, { fetchImpl: options.fetchImpl, signal: options.signal }),
-      fetchPathbuilderDerived(buildId, { fetchImpl: options.fetchImpl, signal: options.signal }),
+      options.derivedOverride !== undefined
+        ? Promise.resolve(options.derivedOverride)
+        : options.derivedBuildId
+          ? fetchPathbuilderDerived(options.derivedBuildId, { fetchImpl: options.fetchImpl, signal: options.signal })
+          : Promise.resolve(null),
     ]);
+    const derived = options.derivedOverride !== undefined ? options.derivedOverride : fetchedDerived;
 
     if (!shared.ok) {
       closeNotification();
       notify({ title: 'Import failed', message: shared.error, color: 'red', icon: null, autoClose: false });
       return { ok: false, error: shared.error, warnings: [] };
+    }
+
+    if (derived) {
+      assertPathbuilderDerivedMatchesShare(shared.build.characterData, derived);
     }
 
     const resolved = resolveBuild(shared.build, {

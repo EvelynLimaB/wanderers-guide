@@ -1,4 +1,4 @@
-import { Button, Group, Modal, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Anchor, Button, Group, Modal, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useState } from 'react';
 
 import { extractBuildId } from './fetch-pathbuilder-share';
@@ -6,6 +6,7 @@ import { extractBuildId } from './fetch-pathbuilder-share';
 export default function PathbuilderInputModal(props: {
   open: boolean;
   onConfirm: (pathbuilderInput: string) => void;
+  onBrowserConfirm: (pathbuilderInput: string) => void;
   onClose: () => void;
 }) {
   const [input, setInput] = useState('');
@@ -28,20 +29,40 @@ export default function PathbuilderInputModal(props: {
           description={buildId && input.trim() !== buildId ? `Build ${buildId}` : undefined}
         />
         <Text fs='italic' fz='sm'>
-          Custom items are imported as homebrew content.
+          Browser-assisted import obtains Pathbuilder-calculated stats and validates the character identity.
+          It requires the browser helper to be installed.
         </Text>
-        <Group justify='flex-end'>
+        <Text fz='sm'>
+          <Anchor
+            href='https://github.com/EvelynLimaB/wanderers-guide/blob/feature/pathbuilder-1to1-import/docs/pathbuilder-browser-export-bridge.md'
+            target='_blank'
+            rel='noreferrer'
+          >
+            Install the browser helper
+          </Anchor>
+        </Text>
+        <Group justify='flex-end' wrap='wrap'>
           <Button variant='default' onClick={props.onClose}>
             Cancel
           </Button>
           <Button
+            variant='default'
             disabled={!buildId}
             onClick={() => {
               if (!buildId) return;
               props.onConfirm(input.trim());
             }}
           >
-            Import
+            Share only
+          </Button>
+          <Button
+            disabled={!buildId}
+            onClick={() => {
+              if (!buildId) return;
+              props.onBrowserConfirm(input.trim());
+            }}
+          >
+            Import via browser
           </Button>
         </Group>
       </Stack>

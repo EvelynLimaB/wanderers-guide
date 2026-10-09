@@ -271,7 +271,7 @@ try {
   assert.equal(rawOutcome.ok, false);
   assert.match(rawOutcome.error, /key ability/i);
   assert.equal(shareRequests, 1);
-  assert.equal(derivedRequests, 1);
+  assert.equal(derivedRequests, 0);
 
   // The captured Pathbuilder share genuinely omits keyability. For the mechanical
   // parity test, inject the independently recovered value from the human-readable
@@ -284,7 +284,7 @@ try {
   const outcome = await importBuild(certifiedBuild);
 
   assert.equal(shareRequests, 1);
-  assert.equal(derivedRequests, 1);
+  assert.equal(derivedRequests, 0);
   assert.equal(outcome.ok, true, outcome.ok ? '' : outcome.error);
   assert.deepEqual(
     outcome.warnings,
