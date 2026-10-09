@@ -1500,7 +1500,7 @@ async function resolveSelections(
   const checked = new Set<string>();
   // Dynamic grants can rebuild the same selection with a different ancestry/source path.
   // Keep the confirmed value by operation id so it can be replayed at the new path.
-  const selectedByOperationId = new Map<string, string>();
+  const selectedByOperationAndLevel = new Map<string, string>();
   const abilityBoostCursors = new Map<string, number>();
   const skillCursors = new Map<number, number>();
   let classAttributeSelectionIndex = 0;
@@ -1520,8 +1520,11 @@ async function resolveSelections(
     const found = findFirstSelection(results, checked);
     if (found) {
       const selectionId = found.selection?.selection?.id ?? '';
+      const selectionKey = selectionId ? `${selectionId}:${found.level}` : '';
       const options = found.selection?.selection?.options ?? [];
-      const previouslySelectedUuid = selectionId ? selectedByOperationId.get(selectionId) : undefined;
+      // Rules reuse operation IDs across level-specific class features. Scope replay
+      // by level so a level-1 choice cannot overwrite an unrelated level-4 choice.
+      const previouslySelectedUuid = selectionKey ? selectedByOperationAndLevel.get(selectionKey) : undefined;
       const previouslySelectedOption = previouslySelectedUuid
         ? options.find((option) => option._select_uuid === previouslySelectedUuid) ?? null
         : null;
@@ -1639,7 +1642,7 @@ async function resolveSelections(
       }
       if (result) {
         chosen[found.path] = result._select_uuid;
-        if (selectionId) selectedByOperationId.set(selectionId, result._select_uuid);
+        if (selectionKey) selectedByOperationAndLevel.set(selectionKey, result._select_uuid);
         character.operation_data!.selections = cloneDeep(chosen);
 
         if (attributeSelection) {
