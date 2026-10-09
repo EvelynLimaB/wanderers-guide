@@ -1499,8 +1499,8 @@ async function resolveSelections(
   const chosen: Record<string, string> = {};
   const checked = new Set<string>();
   // Dynamic grants can rebuild the same selection with a different ancestry/source path.
-  // The actual select-operation id is stable, so track it separately from the rendered path.
-  const checkedSelectionIds = new Set<string>();
+  // Keep the confirmed value by operation id so it can be replayed at the new path.
+  const selectedByOperationId = new Map<string, string>();
   const abilityBoostCursors = new Map<string, number>();
   const skillCursors = new Map<number, number>();
   let classAttributeSelectionIndex = 0;
@@ -1520,16 +1520,11 @@ async function resolveSelections(
     const found = findFirstSelection(results, checked);
     if (found) {
       const selectionId = found.selection?.selection?.id ?? '';
-      if (selectionId && checkedSelectionIds.has(selectionId)) {
-        checked.add(found.path);
-        if (++iteration > Math.max(64, selections.length + 16)) {
-          throw new Error(
-            `Pathbuilder 1:1 selection resolution did not converge after ${iteration} iterations`
-          );
-        }
-        continue;
-      }
       const options = found.selection?.selection?.options ?? [];
+      const previouslySelectedUuid = selectionId ? selectedByOperationId.get(selectionId) : undefined;
+      const previouslySelectedOption = previouslySelectedUuid
+        ? options.find((option) => option._select_uuid === previouslySelectedUuid) ?? null
+        : null;
       const attributeSelection = isAttributeSelection(options);
       const skillSelection = isSkillSelection(options, found.selection?.selection);
       const languageSelection = isLanguageSelection(found.selection?.selection);
@@ -1540,7 +1535,7 @@ async function resolveSelections(
         classAttributeSelectionIndex === 0 &&
         !resolved.identity.keyAbility;
       let requestedSelections: { name: string; level: number }[] = [];
-      let result: Pick<ObjectWithUUID, '_select_uuid'> | null = null;
+      let result: Pick<ObjectWithUUID, '_select_uuid'> | null = previouslySelectedOption;
 
       const freeArchetypeBranch = findFreeArchetypeBranch(options, selections, found.level);
       if (freeArchetypeBranch) {
@@ -1644,6 +1639,7 @@ async function resolveSelections(
       }
       if (result) {
         chosen[found.path] = result._select_uuid;
+        if (selectionId) selectedByOperationId.set(selectionId, result._select_uuid);
         character.operation_data!.selections = cloneDeep(chosen);
 
         if (attributeSelection) {
@@ -1666,11 +1662,10 @@ async function resolveSelections(
         }
       }
       checked.add(found.path);
-      if (selectionId) checkedSelectionIds.add(selectionId);
     } else {
       hasSelections = false;
     }
-    if (++iteration > Math.max(64, selections.length + 16)) {
+    if (++iteration > Math.max(256, selections.length * 8 + 64)) {
       throw new Error(
         `Pathbuilder 1:1 selection resolution did not converge after ${iteration} iterations`
       );
