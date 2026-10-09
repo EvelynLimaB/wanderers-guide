@@ -18,7 +18,7 @@ The worker is part of the repository's Docker Compose stack. Rebuild the stack a
 docker compose up -d --build
 ```
 
-The worker reads `PUBLIC_SUPABASE_URL` and `ANON_KEY` from the existing Compose environment. It has no published host port; Nginx exposes only the authenticated same-origin route. If the deployment is using a static frontend without the Compose worker, automatic export is not available until the worker and reverse-proxy route are deployed.
+The worker reads `PUBLIC_SUPABASE_URL` and `ANON_KEY` from the existing Compose environment. For a self-hosted Supabase stack where the public URL is `http://localhost:8000`, set `PATHBUILDER_SUPABASE_URL=http://kong:8000` in `.env` so the worker can validate the user's session across the Compose network. For externally hosted Supabase, the default public URL is normally correct. The worker has no published host port; Nginx exposes only the authenticated same-origin route. If the deployment is using a static frontend without the Compose worker, automatic export is not available until the worker and reverse-proxy route are deployed.
 
 ## Reliability and security
 
