@@ -6,11 +6,13 @@ import { extractBuildId } from './fetch-pathbuilder-share';
 export default function PathbuilderInputModal(props: {
   open: boolean;
   loading?: boolean;
-  onAutomaticConfirm: (pathbuilderInput: string) => void;
+  onConfirm: (pathbuilderInput: string, jsonExportId: string) => void;
   onClose: () => void;
 }) {
   const [input, setInput] = useState('');
+  const [jsonExportId, setJsonExportId] = useState('');
   const buildId = extractBuildId(input);
+  const validExportId = /^\\d{1,12}$/.test(jsonExportId.trim());
 
   return (
     <Modal
@@ -21,7 +23,7 @@ export default function PathbuilderInputModal(props: {
       title={<Title order={3}>Import from Pathbuilder 2e</Title>}
       zIndex={1000}
     >
-      <Stack style={{ position: 'relative' }} gap={20}>
+      <Stack style={{ position: 'relative' }} gap={16}>
         <TextInput
           label='Pathbuilder share ID or link'
           placeholder='123456 or https://pathbuilder2e.com/launch.html?build=123456'
@@ -29,20 +31,37 @@ export default function PathbuilderInputModal(props: {
           onChange={(event) => setInput(event.currentTarget.value)}
           disabled={props.loading}
           error={input.trim() && !buildId ? 'Could not find a numeric share ID in that link' : undefined}
-          description={buildId && input.trim() !== buildId ? `Share ${buildId}` : undefined}
+          description={buildId && input.trim() !== buildId ? `Share ID: ${buildId}` : undefined}
+        />
+        <TextInput
+          label='Official JSON export ID'
+          placeholder='The number shown after Export → Export JSON'
+          value={jsonExportId}
+          onChange={(event) => setJsonExportId(event.currentTarget.value)}
+          disabled={props.loading}
+          error={jsonExportId.trim() && !validExportId ? 'Enter the numeric export ID' : undefined}
         />
         <Text fz='sm'>
-          WG will load the shared character in an isolated backend browser, invoke Pathbuilder's official JSON export,
-          and validate the export against the share before importing. No iframe, popup, browser extension, or userscript
-          is required. This can take up to a minute; if Pathbuilder blocks automated access, the import will fail closed.
+          Pathbuilder is blocking the server-side automatic browser with an anti-bot challenge. To continue without
+          bypassing that protection, open the same character in Pathbuilder, choose Export → Export JSON, and copy the
+          numeric ID it generates. Enter that export ID here along with the character's share ID. They are different IDs.
         </Text>
         <Text fz='sm'>
+          WG retrieves the share and calculated JSON separately, then compares the character identity before import.
+          If the export cannot be fetched, the IDs do not match, or a required selection cannot be resolved, the import
+          stops rather than guessing.
+        </Text>
+        <Text fz='sm'>
+          <Anchor href='https://www.pathbuilder2e.com/beta/app.html' target='_blank' rel='noreferrer'>
+            Open Pathbuilder 2e
+          </Anchor>
+          {' · '}
           <Anchor
             href='https://github.com/EvelynLimaB/wanderers-guide/blob/feature/pathbuilder-1to1-import/docs/pathbuilder-browser-export-bridge.md'
             target='_blank'
             rel='noreferrer'
           >
-            How automatic import works
+            Import instructions
           </Anchor>
         </Text>
         <Group justify='flex-end' wrap='wrap'>
@@ -51,13 +70,13 @@ export default function PathbuilderInputModal(props: {
           </Button>
           <Button
             loading={props.loading}
-            disabled={!buildId || Boolean(input.trim() && !buildId)}
+            disabled={!buildId || !validExportId}
             onClick={() => {
-              if (!buildId) return;
-              props.onAutomaticConfirm(input.trim());
+              if (!buildId || !validExportId) return;
+              props.onConfirm(input.trim(), jsonExportId.trim());
             }}
           >
-            Import automatically
+            Import with JSON export
           </Button>
         </Group>
       </Stack>
