@@ -76,6 +76,5 @@ export function assertPathbuilderDerivedMatchesShare(
 }
 
 function normalizeBackgroundIdentity(value: string): string {
-  return normalizeIdentity(value.trim().replace(/^background[_\\s]+/i, ''));
-}
+  return normalizeIdentity(value.trim().replace(/^background[_\s]+/i, ''));
 }
