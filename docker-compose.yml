@@ -6,30 +6,7 @@
 name: wanderers-guide
 
 services:
-  pathbuilder-automation:
-    build:
-      context: ./pathbuilder-automation
-    environment:
-      SUPABASE_URL: ${PUBLIC_SUPABASE_URL}
-      PATHBUILDER_SUPABASE_URL: ${PATHBUILDER_SUPABASE_URL:-}
-      SUPABASE_ANON_KEY: ${ANON_KEY}
-      PORT: 8080
-    expose:
-      - "8080"
-    init: true
-    shm_size: "1gb"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-    restart: unless-stopped
-
   frontend:
-    depends_on:
-      pathbuilder-automation:
-        condition: service_healthy
     build:
       context: ./frontend
       args:
