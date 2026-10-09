@@ -1,47 +1,41 @@
-# Pathbuilder browser-derived export bridge
+# Automatic Pathbuilder JSON import
 
-This bridge requests Pathbuilder's **own calculated export payload** from the official browser UI. It does not guess a JSON export ID or bypass Cloudflare. The official Pathbuilder app computes the stats and submits the normal `POST /app/post_json.php` request; the userscript forwards that request's `build` object to the WG page.
+Wanderer's Guide requests the calculated JSON directly from Pathbuilder's official web application through a small backend browser worker. The end user only supplies the Pathbuilder share ID/link and clicks **Import automatically**; no iframe, popup, userscript or browser extension is needed.
 
-## Import flow
+## Flow
 
-1. In Wanderer's Guide, paste a Pathbuilder share ID or link.
-2. Choose **Load in iframe** to display the character inside the import modal.
-3. Choose **Import via iframe**. WG sends a nonce-bound request to the frame; the userscript waits for the requested share to load, asks for consent, triggers Pathbuilder's official Export JSON action, then sends the calculated object back to WG.
-4. WG verifies the message origin, source window, nonce and share ID, parses the schema, and checks the export identity against the share before using derived fields.
-5. If Pathbuilder refuses to load in an iframe, choose **Import in separate window** instead. The popup path uses the same helper and validation.
+1. The WG frontend obtains the active Supabase access token and sends the numeric share ID to the same-origin `POST /api/pathbuilder/derive` endpoint.
+2. Nginx forwards that request to the internal `pathbuilder-automation` container. The worker validates the Supabase session through `/auth/v1/user`, applies rate limits and opens a fresh Chromium context.
+3. The browser visits the fixed Pathbuilder URL `https://pathbuilder2e.com/launch.html?build=<share-id>`, verifies that the requested shared character was loaded, and waits for the official UI to become ready.
+4. The worker clicks Pathbuilder's own **Export JSON** menu item. It intercepts the browser's `POST /app/post_json.php` locally, captures the calculated `build` object and returns a harmless success response to the UI. The JSON export payload is not uploaded to Pathbuilder's JSON storage endpoint by this workflow.
+5. WG schema-validates the response, fetches the share payload, compares the character identity, then combines calculated data with the share's choices and Custom Files. The importer continues to block identity mismatches and unresolved mandatory selections.
 
-The helper requires a userscript manager such as Violentmonkey. A normal WG web page cannot silently install it.
+## Deploy
 
-## Why this exists
-
-The share endpoint (`fetch_emailed.php`) preserves editor selections and custom files, but some shared payloads omit derived fields such as `keyability`. The old importer queried `json.php?id=<share-id>`, assuming the share ID was also a JSON export ID. That assumption is unsafe because export IDs can be reused. The browser bridge triggers Pathbuilder's official Export JSON action and captures the calculated payload from that request.
-
-## Install
-
-1. Install **Violentmonkey** (or a compatible userscript manager) in Firefox/Zen.
-2. Open your running WG instance and choose **Import from Pathbuilder**.
-3. Click **Install helper from this WG** and accept the userscript manager's installation prompt.
-4. Return to WG and refresh the page.
-5. Load the share in an iframe or choose the separate-window path, then approve the transfer dialog shown by Pathbuilder.
-
-## Security and correctness
-
-- WG accepts responses only from the exact `https://pathbuilder2e.com` origin and the exact iframe/popup window it contacted, with a per-request cryptographic nonce.
-- The userscript replies only to the parent frame or opener that requested the export and shows a consent dialog naming the recipient origin.
-- The helper refuses to export unless the requested share ID was successfully loaded in the Pathbuilder UI.
-- The importer compares share/export name, class and level; it also checks ancestry and heritage when both sources provide them. Any identity mismatch blocks import.
-- Only the calculated export payload is sent to WG. The raw share payload and Custom Files remain sourced from `fetch_emailed.php`.
-- Cross-origin policy still applies: the iframe does not grant WG direct access to Pathbuilder's DOM or storage. Messages work because the installed helper explicitly relays the data.
-- Pathbuilder's current `X-Frame-Options` / `Content-Security-Policy: frame-ancestors` behavior has not been confirmed here. If framing is blocked, the separate-window path is the fallback; the import times out with an actionable error instead of claiming success.
-- The helper depends on the Pathbuilder UI continuing to use `#sidenav-json` and `POST /app/post_json.php`. It fails closed if expected data or identity is absent.
-
-## Validation
-
-Run from `frontend/`:
+The worker is part of the repository's Docker Compose stack. Rebuild the stack after pulling this branch:
 
 ```bash
-npm run test:pathbuilder-import
-npm run build
+docker compose up -d --build
 ```
 
-Automated tests cover message nonces, share IDs, schema parsing and identity mismatch rejection. A live-browser smoke test is still required to verify frame permissions, userscript injection and the current Pathbuilder DOM/export behavior.
+The worker reads `PUBLIC_SUPABASE_URL` and `ANON_KEY` from the existing Compose environment. It has no published host port; Nginx exposes only the authenticated same-origin route. If the deployment is using a static frontend without the Compose worker, automatic export is not available until the worker and reverse-proxy route are deployed.
+
+## Reliability and security
+
+- The API accepts a numeric share ID only; it never accepts an arbitrary navigation URL.
+- The worker validates the Supabase user token, applies per-user and Nginx request limits, bounds request sizes and limits concurrent browser contexts.
+- Browser contexts are isolated per request and closed afterwards. The worker does not save character exports.
+- The frontend validates the returned JSON against the Pathbuilder-derived schema, then checks name, class and level against the share before using it. Ancestry and heritage are compared when both are present.
+- The worker uses the official browser UI without anti-bot evasion. If Pathbuilder presents a challenge, changes its UI, or cannot load the share, the import fails closed with an error. It does not bypass those controls.
+- The share's own data is still authoritative for character choices and Custom Files. If Pathbuilder omits a mandatory selection from both the share and the calculated export, the 1:1 importer may still reject that build rather than inventing the choice.
+
+## Tests
+
+Run the unit tests from the repository root:
+
+```bash
+cd pathbuilder-automation
+npm test
+```
+
+The worker tests cover numeric share IDs, minimum export identity fields, endpoint input validation, health checks and authentication gating. They do not validate live Pathbuilder availability or the current production DOM. A real import is still required to verify that Pathbuilder allows the worker's browser session and that its current export control continues to work.
