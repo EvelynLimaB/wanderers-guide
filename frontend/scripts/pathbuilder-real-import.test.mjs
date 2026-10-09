@@ -198,7 +198,7 @@ try {
     absWorkingDir: root,
     stdin: {
       contents: `
-        export { importFromPathbuilderShare, buildCharacter } from './src/process/import/pathbuilder/pathbuilder-share-importer.ts';
+        export { importFromPathbuilderShare, preflightPathbuilderImport, buildCharacter } from './src/process/import/pathbuilder/pathbuilder-share-importer.ts';
         export { importFromContentPackage } from '@content/content-store';
       `,
       resolveDir: root,
@@ -239,31 +239,34 @@ try {
   let shareRequests = 0;
   let derivedRequests = 0;
 
-  const importBuild = async (build) =>
+  const createFetch = (build) => async (url, init = {}) => {
+    if (url.includes('/app/fetch_emailed.php')) {
+      shareRequests++;
+      assert.equal(init.method, 'POST');
+      assert.deepEqual(JSON.parse(init.body), { id: '1597410' });
+      return new Response(JSON.stringify({
+        success: true,
+        version: '121',
+        build: JSON.stringify(build),
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+
+    if (url.includes('/json.php')) {
+      derivedRequests++;
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Build not found.',
+      }), { status: 404, headers: { 'content-type': 'application/json' } });
+    }
+
+    throw new Error('Unexpected URL: ' + url);
+  };
+
+  const importBuild = async (build, selectionOverrides = {}) =>
     importer.importFromPathbuilderShare('1597410', {
       silent: true,
-      fetchImpl: async (url, init = {}) => {
-        if (url.includes('/app/fetch_emailed.php')) {
-          shareRequests++;
-          assert.equal(init.method, 'POST');
-          assert.deepEqual(JSON.parse(init.body), { id: '1597410' });
-          return new Response(JSON.stringify({
-            success: true,
-            version: '121',
-            build: JSON.stringify(build),
-          }), { status: 200, headers: { 'content-type': 'application/json' } });
-        }
-
-        if (url.includes('/json.php')) {
-          derivedRequests++;
-          return new Response(JSON.stringify({
-            success: false,
-            error: 'Build not found.',
-          }), { status: 404, headers: { 'content-type': 'application/json' } });
-        }
-
-        throw new Error('Unexpected URL: ' + url);
-      },
+      selectionOverrides,
+      fetchImpl: createFetch(build),
     });
 
   assert.equal(fixture.build.characterData.keyability, undefined);
@@ -281,7 +284,32 @@ try {
 
   shareRequests = 0;
   derivedRequests = 0;
-  const outcome = await importBuild(certifiedBuild);
+
+  // Simulate the new UI wizard explicitly answering each missing required
+  // operation choice before the persistence/creation path is invoked.
+  const selectionOverrides = {};
+  const preflightFetch = createFetch(certifiedBuild);
+  let preflightStatus = 'selection-required';
+  for (let attempt = 0; attempt < 64; attempt++) {
+    const preflight = await importer.preflightPathbuilderImport('1597410', {
+      fetchImpl: preflightFetch,
+      selectionOverrides,
+    });
+    preflightStatus = preflight.status;
+    if (preflight.status === 'ready') break;
+    assert.equal(preflight.status, 'selection-required', preflight.error ?? 'Preflight failed unexpectedly.');
+    assert.ok(
+      preflight.selection.options.length > 0,
+      `fixture has a required selection with no eligible options: ${preflight.selection.title}`
+    );
+    selectionOverrides[preflight.selection.path] = preflight.selection.options[0].value;
+  }
+  assert.equal(preflightStatus, 'ready', 'preflight should converge after explicit answers');
+
+  // Exclude preflight reads from the assertions for the actual import call.
+  shareRequests = 0;
+  derivedRequests = 0;
+  const outcome = await importBuild(certifiedBuild, selectionOverrides);
 
   assert.equal(shareRequests, 1);
   assert.equal(derivedRequests, 0);
