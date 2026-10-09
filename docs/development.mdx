@@ -286,7 +286,7 @@ npm run docker:start
 ./data/create-db-docker.sh
 ```
 
-The loader strips `pg_dump`'s `\\restrict` and `\\unrestrict` client directives so the dump can be loaded by the Postgres 15 `psql` bundled with the self-hosted stack.
+The loader strips `pg_dump`'s `\restrict` and `\unrestrict` client directives so the dump can be loaded by the Postgres 15 `psql` bundled with the self-hosted stack.
 
 This wipes and reloads the public schema. Run it only for a disposable local database;
 back up any local characters or homebrew you want to keep first.
