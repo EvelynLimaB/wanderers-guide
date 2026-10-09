@@ -50,7 +50,7 @@ export default function PathbuilderInputModal(props: {
     const answers = { ...manualSelections };
     if (selectionPrompt) {
       if (!selectedChoice || !selectionPrompt.options.some((option) => option.value === selectedChoice)) return;
-      answers[selectionPrompt.path] = selectedChoice;
+      answers[selectionPrompt.key] = selectedChoice;
     }
 
     const result = await props.onConfirm(input.trim(), jsonExportId.trim(), answers);
@@ -58,7 +58,12 @@ export default function PathbuilderInputModal(props: {
 
     if (result.status === 'selection-required') {
       setSelectionPrompt(result.selection);
-      setSelectedChoice(answers[result.selection.path] ?? null);
+      const previousChoice = answers[result.selection.key];
+      setSelectedChoice(
+        previousChoice && result.selection.options.some((option) => option.value === previousChoice)
+          ? previousChoice
+          : null
+      );
       return;
     }
 
