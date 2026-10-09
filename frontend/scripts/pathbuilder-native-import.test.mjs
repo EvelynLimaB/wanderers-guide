@@ -363,8 +363,8 @@ await assert.rejects(
   buildCharacter(
     unresolvedSelectionFixture,
     content,
-    customItems,
-    fallbackSpells,
+    new Map(),
+    new Map(),
     null,
     [],
     null
