@@ -372,12 +372,19 @@ export function Component() {
             <PathbuilderInputModal
               open={openedPathbuilderModal}
               loading={loadingImportCharacter}
-              onConfirm={async (pathbuilderId, jsonExportId) => {
+              onConfirm={async (pathbuilderId, jsonExportId, selectionOverrides) => {
                 setLoadingImportCharacter(true);
                 try {
-                  const character = await importFromPathbuilderWithExportId(pathbuilderId, jsonExportId);
-                  refetch();
-                  if (character) setOpenedPathbuilderModal(false);
+                  const result = await importFromPathbuilderWithExportId(
+                    pathbuilderId,
+                    jsonExportId,
+                    selectionOverrides
+                  );
+                  if (result.status === 'imported') {
+                    refetch();
+                    setOpenedPathbuilderModal(false);
+                  }
+                  return result;
                 } finally {
                   setLoadingImportCharacter(false);
                 }
