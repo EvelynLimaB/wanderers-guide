@@ -1,0 +1,14 @@
+{
+  "name": "wg-pathbuilder-automation",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Authenticated server-side browser automation for Pathbuilder's official calculated JSON export",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.64.0"
+  }
+}
