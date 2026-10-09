@@ -400,3 +400,20 @@ await assert.rejects(
   ),
   /Pathbuilder 1:1 selection mapping failed:/
 );
+
+// The preflight variant must return a structured prompt, not throw, so the UI
+// can collect an explicit user choice before it persists any import data.
+const preflightOutcome = await buildCharacter(
+  unresolvedSelectionFixture,
+  content,
+  customItems,
+  fallbackSpells,
+  null,
+  [],
+  null,
+  { preflightOnly: true }
+);
+assert.equal(preflightOutcome.status, 'selection-required');
+assert.equal(typeof preflightOutcome.selection.path, 'string');
+assert.equal(typeof preflightOutcome.selection.title, 'string');
+assert.ok(Array.isArray(preflightOutcome.selection.options));
