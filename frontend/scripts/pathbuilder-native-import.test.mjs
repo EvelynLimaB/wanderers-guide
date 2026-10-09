@@ -268,6 +268,7 @@ const content = {
       ],
       meta_data: { archetype_trait: true },
     },
+    { id: 5002, name: 'Synthetic Option', type: 'feat', level: 1, traits: [WIZARD_TRAIT], operations: [], meta_data: {} },
     ...[2, 3, 4, 5, 7].map((level) => ({
       id: 6000 + level,
       name: 'Attribute Boosts',
