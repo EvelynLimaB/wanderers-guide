@@ -11,6 +11,7 @@ services:
       context: ./pathbuilder-automation
     environment:
       SUPABASE_URL: ${PUBLIC_SUPABASE_URL}
+      PATHBUILDER_SUPABASE_URL: ${PATHBUILDER_SUPABASE_URL:-}
       SUPABASE_ANON_KEY: ${ANON_KEY}
       PORT: 8080
     expose:
