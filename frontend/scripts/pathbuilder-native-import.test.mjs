@@ -346,6 +346,7 @@ const preflightOutcome = await buildCharacter(
   { preflightOnly: true }
 );
 assert.equal(preflightOutcome.status, 'selection-required');
+assert.ok(preflightOutcome.selection.key);
 assert.ok(preflightOutcome.selection.path);
 assert.ok(preflightOutcome.selection.title);
 assert.ok(preflightOutcome.selection.level >= 1);
