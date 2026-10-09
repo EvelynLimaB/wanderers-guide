@@ -15,7 +15,7 @@ import {
   resolveBuild,
   stripCategoryPrefix,
 } from '../src/process/import/pathbuilder/pathbuilder-resolve.ts';
-import { extractBuildId, fetchPathbuilderShare } from '../src/process/import/pathbuilder/fetch-pathbuilder-share.ts';
+import { PATHBUILDER_DERIVED_ENDPOINT, extractBuildId, fetchPathbuilderDerived, fetchPathbuilderShare } from '../src/process/import/pathbuilder/fetch-pathbuilder-share.ts';
 import { findFreeArchetypeBranch, getAbilityBoostOriginForPath } from '../src/process/import/pathbuilder/pathbuilder-selection-routing.ts';
 import { PathbuilderShareBuildSchema } from '../src/schemas/pathbuilder.ts';
 
@@ -69,6 +69,29 @@ test('the captured v121 share payload passes the wire schema and fetch parser', 
     assert.equal(fetched.formatVersion, '121');
     assert.equal(fetched.build.listCustomFiles?.[0]?.type, 1);
   }
+});
+
+test('official JSON export is fetched only by the separately supplied export ID', async () => {
+  const calculated = {
+    name: 'Kasane',
+    class: 'Champion',
+    level: 7,
+    abilities: { str: 19 },
+  };
+  let requestedUrl = '';
+
+  const fetched = await fetchPathbuilderDerived('476951', {
+    fetchImpl: async (input) => {
+      requestedUrl = String(input);
+      return new Response(JSON.stringify({ success: true, build: calculated }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  assert.equal(requestedUrl, `${PATHBUILDER_DERIVED_ENDPOINT}?id=476951`);
+  assert.deepEqual(fetched, calculated);
 });
 
 test('identity is read from characterData, not from a derived sheet', () => {
