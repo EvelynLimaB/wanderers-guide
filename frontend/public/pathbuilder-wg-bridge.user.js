@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Wanderer's Guide - Pathbuilder Export Bridge
 // @namespace    https://github.com/EvelynLimaB/wanderers-guide
-// @version      1.0.0
-// @description  Sends Pathbuilder's own calculated Export JSON to a Wanderer's Guide import tab.
+// @version      1.1.0
+// @description  Sends Pathbuilder's calculated Export JSON to the requesting WG iframe or window.
 // @match        https://pathbuilder2e.com/app.html*
 // @run-at       document-start
 // @grant        none
