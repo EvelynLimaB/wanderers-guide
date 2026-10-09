@@ -1021,7 +1021,8 @@ export function buildCharacter(
   fallbackSpellsByName: Map<string, Spell>,
   customSourceId: number | null,
   warnings: string[],
-  derived?: import('@schemas/pathbuilder').PathbuilderDerivedBuild | null
+  derived?: import('@schemas/pathbuilder').PathbuilderDerivedBuild | null,
+  buildOptions?: { preflightOnly?: false; selectionOverrides?: Record<string, string> }
 ): Promise<Character | null>;
 export function buildCharacter(
   resolved: ResolvedBuild,
@@ -1551,11 +1552,9 @@ async function resolveSelections(
           } else if (options.length === 1) {
             result = options[0];
           } else {
-            throw new Error(
-              `Pathbuilder 1:1 key ability is not present in the share payload and WG exposes multiple key-ability candidates: ${options
-                .map((option) => option.name ?? option.title ?? option._select_uuid)
-                .join(', ')}; selection path: ${found.path}`
-            );
+            // The key ability was omitted from the share. Leave it unresolved here
+            // so the preflight UI can ask the user rather than aborting the import.
+            requestedSelections = [];
           }
         } else if (keyAbilitySelection && resolved.identity.keyAbility) {
           requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: found.level }];
