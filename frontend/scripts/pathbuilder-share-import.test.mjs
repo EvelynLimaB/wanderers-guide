@@ -148,6 +148,51 @@ test('Pathbuilder ability tokens map to native WG attribute labels', () => {
   }
 });
 
+/** Invalid indexes must be visible to the strict importer rather than being silently dropped. */
+test('invalid ability indexes are reported instead of silently disappearing', () => {
+  const invalid = resolveBuild({
+    characterData: {
+      characterName: 'Invalid boost fixture',
+      characterLevel: 2,
+      keyability: 'str',
+      hashMapAbilityBoosts: { '1': [0, 6] },
+      hashMapAncestryFreeBoostSelections: { '0': -1 },
+      backgroundBoostLimitedSelection: 6,
+      getBackgroundBoostFreeSelection: 2,
+      listPlayerWeapons: [{ weaponName: 'Longsword', attackAbilityRef: 6 }],
+    },
+  });
+
+  assert.deepEqual(
+    invalid.abilityBoosts.map(({ ability, origin }) => ({ ability, origin })),
+    [
+      { ability: 'str', origin: 'levelled' },
+      { ability: 'wis', origin: 'background' },
+    ]
+  );
+  assert.deepEqual(
+    invalid.unresolved.map(({ ref, reason }) => ({ ref, reason })),
+    [
+      {
+        ref: 'hashMapAbilityBoosts[1]',
+        reason: 'Pathbuilder ability index 6 is outside the supported range 0..5',
+      },
+      {
+        ref: 'hashMapAncestryFreeBoostSelections[0]',
+        reason: 'Pathbuilder ability index -1 is outside the supported range 0..5',
+      },
+      {
+        ref: 'backgroundBoostLimitedSelection',
+        reason: 'Pathbuilder ability index 6 is outside the supported range 0..5',
+      },
+      {
+        ref: 'listPlayerWeapons[0].attackAbilityRef',
+        reason: 'Pathbuilder ability index 6 is outside the supported range 0..5',
+      },
+    ]
+  );
+});
+
 /** Verify the full imported boost set for Arsene can be represented by native WG selectors. */
 test('Arsene ability boosts retain every Pathbuilder choice', () => {
   const arsene = resolveBuild(
