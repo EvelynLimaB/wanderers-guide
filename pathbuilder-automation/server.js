@@ -176,6 +176,16 @@ function looksLikeChallenge(text, title) {
   return /just a moment|verify you are human|checking your browser|cloudflare/i.test(`${title}\n${text}`);
 }
 
+async function getChallengeError(page) {
+  const title = await page.title().catch(() => '');
+  const body = await page.locator('body').innerText({ timeout: 2_000 }).catch(() => '');
+  if (!looksLikeChallenge(body, title)) return null;
+  return new ServiceError(
+    503,
+    'Pathbuilder presented an anti-bot challenge. WG cannot complete this automatic import until Pathbuilder permits the request.'
+  );
+}
+
 /**
  * Open the share in an ordinary Playwright browser and invoke Pathbuilder's own
  * Export JSON action. We intercept post_json.php locally and never upload the
@@ -242,13 +252,33 @@ export async function derivePathbuilderBuild(shareId) {
     }
   });
 
+  let phase = 'opening the Pathbuilder share page';
   try {
     await page.goto(`${PATHBUILDER_ORIGIN}/launch.html?build=${encodeURIComponent(id)}`, {
       waitUntil: 'domcontentloaded',
       timeout: BROWSER_TIMEOUT_MS,
     });
 
-    const shareResponse = await shareResponsePromise;
+    phase = 'waiting for the shared-character request';
+    let shareResponse;
+    try {
+      // Do not spend a full minute waiting blindly if the worker is shown an
+      // anti-bot page or the share API never starts.
+      shareResponse = await withTimeout(
+        shareResponsePromise,
+        30_000,
+        'Pathbuilder did not request the shared character within 30 seconds.'
+      );
+    } catch (error) {
+      const challengeError = await getChallengeError(page);
+      if (challengeError) throw challengeError;
+      if (error instanceof ServiceError) throw error;
+      throw new ServiceError(
+        504,
+        'Pathbuilder opened, but its shared-character request did not complete. The share may be blocked or failed to load.'
+      );
+    }
+
     if (!shareResponse.ok()) {
       throw new ServiceError(502, `Pathbuilder share endpoint returned HTTP ${shareResponse.status()}.`);
     }
@@ -266,6 +296,7 @@ export async function derivePathbuilderBuild(shareId) {
       throw new ServiceError(502, 'Pathbuilder share did not contain character data.');
     }
 
+    phase = 'waiting for the Pathbuilder character interface';
     try {
       await page.waitForFunction(() => {
         const main = document.getElementById('main-container');
@@ -278,25 +309,37 @@ export async function derivePathbuilderBuild(shareId) {
           document.getElementById('sidenav-json');
       }, null, { timeout: BROWSER_TIMEOUT_MS });
     } catch {
-      const title = await page.title().catch(() => '');
-      const body = await page.locator('body').innerText({ timeout: 2_000 }).catch(() => '');
-      if (looksLikeChallenge(body, title)) {
-        throw new ServiceError(503, 'Pathbuilder presented an anti-bot challenge. WG cannot complete this automatic import until Pathbuilder permits the request.');
-      }
-      throw new ServiceError(504, 'Pathbuilder did not finish loading the shared character. Retry later; no data was imported.');
+      const challengeError = await getChallengeError(page);
+      if (challengeError) throw challengeError;
+      throw new ServiceError(504, 'Pathbuilder returned the share data, but its character interface did not finish loading.');
     }
 
+    phase = 'clicking Pathbuilder Export JSON';
     await page.locator('#sidenav-json').click({ timeout: 15_000 });
+    phase = 'waiting for the calculated JSON export';
     return await withTimeout(
       captured.promise,
       20_000,
       'Pathbuilder did not produce its calculated JSON export in time.'
     );
   } catch (error) {
-    if (error instanceof ServiceError) throw error;
+    if (error instanceof ServiceError) {
+      console.error(`[pathbuilder-automation] phase=${phase} status=${error.status}: ${error.message}`);
+      throw error;
+    }
     const message = error instanceof Error ? error.message : 'Unknown browser automation failure.';
+    console.error(`[pathbuilder-automation] phase=${phase}: ${message}`);
     if (/timeout|timed out/i.test(message)) {
-      throw new ServiceError(504, 'Pathbuilder did not respond in time. Retry later; no data was imported.');
+      const challengeError = await getChallengeError(page);
+      if (challengeError) throw challengeError;
+      const phaseMessages = {
+        'opening the Pathbuilder share page': 'Pathbuilder did not finish opening the share page.',
+        'waiting for the shared-character request': 'Pathbuilder did not send the shared-character request.',
+        'waiting for the Pathbuilder character interface': 'Pathbuilder did not finish loading the character interface.',
+        'clicking Pathbuilder Export JSON': 'The Pathbuilder Export JSON control did not respond.',
+        'waiting for the calculated JSON export': 'Pathbuilder did not produce its calculated JSON export in time.',
+      };
+      throw new ServiceError(504, `${phaseMessages[phase] ?? 'Pathbuilder did not respond in time'} Retry later; no data was imported.`);
     }
     throw new ServiceError(502, 'Could not open or export the character from Pathbuilder. Check connectivity and retry.');
   } finally {
