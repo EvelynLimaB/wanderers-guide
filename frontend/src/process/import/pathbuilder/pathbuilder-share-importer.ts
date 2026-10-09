@@ -181,6 +181,11 @@ export async function importFromPathbuilderShare(
     const warnings = resolved.unresolved
       .filter((u) => u.kind !== 'spell-source')
       .map((u) => `${u.kind}: ${u.ref} (${u.reason})`);
+    if (warnings.length > 0) {
+      throw new Error(
+        `Pathbuilder 1:1 import blocked by unresolved source data: ${warnings.join('; ')}`
+      );
+    }
     if (resolved.hints.length > 0) {
       console.info('Pathbuilder import notes:', resolved.hints);
     }
