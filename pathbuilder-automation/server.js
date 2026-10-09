@@ -1,6 +1,6 @@
 import http from 'node:http';
-import { isIP } from 'node:net';
-import { chromium } from 'playwright';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export const PATHBUILDER_ORIGIN = 'https://pathbuilder2e.com';
 export const MAX_REQUEST_BODY_BYTES = 16 * 1024;
@@ -131,6 +131,7 @@ function enforceUserRateLimit(userId) {
 
 async function getBrowser() {
   if (!browserPromise) {
+    const { chromium } = await import('playwright');
     browserPromise = chromium.launch({ headless: true }).catch((error) => {
       browserPromise = undefined;
       throw error;
@@ -202,8 +203,12 @@ export async function derivePathbuilderBuild(shareId) {
     (response) => requestHasShareId(response.request(), id),
     { timeout: BROWSER_TIMEOUT_MS }
   );
+  // Avoid an unhandled rejection if navigation fails before we await the response.
+  void shareResponsePromise.catch(() => {});
 
   const captured = createDeferred();
+  // The route can reject before the click promise settles.
+  void captured.promise.catch(() => {});
   let exportRequestSeen = false;
 
   await page.route('**/app/post_json.php', async (route) => {
@@ -347,7 +352,7 @@ export function createHttpServer() {
   });
 }
 
-if (process.argv[1] && new URL(import.meta.url).pathname === new URL(`file://${process.argv[1]}`).pathname) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const server = createHttpServer();
   server.listen(PORT, '0.0.0.0', () => {
     process.stdout.write(`WG Pathbuilder automation listening on port ${PORT}\n`);
