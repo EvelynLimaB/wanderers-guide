@@ -20,7 +20,10 @@ import { Character } from '@schemas/content';
 
 import { importFromPathbuilderShare } from './pathbuilder-share-importer';
 import { showNotification } from '@mantine/notifications';
-import { requestPathbuilderDerivedViaBrowser } from './pathbuilder-browser-bridge';
+import {
+  requestPathbuilderDerivedViaBrowser,
+  requestPathbuilderDerivedViaIframe,
+} from './pathbuilder-browser-bridge';
 import { extractBuildId } from './fetch-pathbuilder-share';
 
 export async function importFromPathbuilder(pathbuilderInput: string | number): Promise<Character | null> {
@@ -42,7 +45,10 @@ export async function importFromPathbuilder(pathbuilderInput: string | number): 
  * Import using the live Pathbuilder application to obtain its calculated Export
  * JSON. This deliberately avoids assuming the share ID is also a JSON export ID.
  */
-export async function importFromPathbuilderViaBrowser(pathbuilderInput: string | number): Promise<Character | null> {
+export async function importFromPathbuilderViaBrowser(
+  pathbuilderInput: string | number,
+  iframe?: HTMLIFrameElement
+): Promise<Character | null> {
   const buildId = extractBuildId(pathbuilderInput);
   if (!buildId) {
     showNotification({
@@ -55,7 +61,9 @@ export async function importFromPathbuilderViaBrowser(pathbuilderInput: string |
   }
 
   try {
-    const derivedOverride = await requestPathbuilderDerivedViaBrowser(buildId);
+    const derivedOverride = iframe
+      ? await requestPathbuilderDerivedViaIframe(buildId, iframe)
+      : await requestPathbuilderDerivedViaBrowser(buildId);
     const result = await importFromPathbuilderShare(pathbuilderInput, { derivedOverride });
     if (!result.ok) {
       console.error(`Pathbuilder browser-assisted import failed: ${result.error}`);
