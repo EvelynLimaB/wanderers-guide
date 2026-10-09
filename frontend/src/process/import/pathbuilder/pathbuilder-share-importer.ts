@@ -1517,8 +1517,12 @@ async function resolveSelections(
         context: 'CHARACTER-BUILDER',
       },
     });
-    const found = findFirstSelection(results, checked);
-    if (found) {
+    let found = findFirstSelection(results, checked);
+    let resolvedAny = false;
+    let pendingSelection: PathbuilderSelectionPrompt | null = null;
+    // Resolve independent selectors from this operation snapshot together. A
+    // selected parent may reveal new children, so rerun the engine after this batch.
+    while (found) {
       const selectionId = found.selection?.selection?.id ?? '';
       const selectionKey = selectionId ? `${selectionId}:${found.level}` : '';
       const options = found.selection?.selection?.options ?? [];
@@ -1626,7 +1630,7 @@ async function resolveSelections(
         result = findPathbuilderOption(requestedSelections, options, found.level);
       }
       if (!result) {
-        return {
+        pendingSelection = {
           path: found.path,
           title: selectionTitle,
           description: found.selection?.selection?.description,
@@ -1639,6 +1643,7 @@ async function resolveSelections(
               : {}),
           })),
         };
+        break;
       }
       if (result) {
         chosen[found.path] = result._select_uuid;
@@ -1665,14 +1670,20 @@ async function resolveSelections(
         }
       }
       checked.add(found.path);
-    } else {
-      hasSelections = false;
+      resolvedAny = true;
+      found = findFirstSelection(results, checked);
     }
-    if (++iteration > Math.max(256, selections.length * 8 + 64)) {
-      throw new Error(
-        `Pathbuilder 1:1 selection resolution did not converge after ${iteration} iterations`
-      );
+
+    if (resolvedAny) {
+      if (++iteration > Math.max(64, selections.length + 16)) {
+        throw new Error(
+          `Pathbuilder 1:1 selection resolution did not converge after ${iteration} batches`
+        );
+      }
+      continue;
     }
+    if (pendingSelection) return pendingSelection;
+    hasSelections = false;
   }
   return null;
 }
