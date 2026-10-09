@@ -304,7 +304,7 @@ try {
       preflight.selection.options.length > 0,
       `fixture has a required selection with no eligible options: ${preflight.selection.title}`
     );
-    selectionOverrides[preflight.selection.path] = preflight.selection.options[0].value;
+    selectionOverrides[preflight.selection.key] = preflight.selection.options[0].value;
     preflight = await importer.preflightPathbuilderImport('1597410', {
       fetchImpl: createFetch(certifiedBuild),
       selectionOverrides,
