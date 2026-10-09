@@ -64,6 +64,8 @@ export type PathbuilderImportOptions = {
 };
 
 export type PathbuilderSelectionPrompt = {
+  /** Stable across operation-result paths that change when grants are rebuilt. */
+  key: string;
   path: string;
   title: string;
   description?: string;
@@ -1623,14 +1625,17 @@ async function resolveSelections(
         ) ?? null;
       }
 
-      if (!result && selectionOverrides[found.path]) {
-        result = manualOptions.find((option) => option._select_uuid === selectionOverrides[found.path]) ?? null;
+      const manualSelectionUuid =
+        (selectionKey ? selectionOverrides[selectionKey] : undefined) ?? selectionOverrides[found.path];
+      if (!result && manualSelectionUuid) {
+        result = manualOptions.find((option) => option._select_uuid === manualSelectionUuid) ?? null;
       }
       if (!result) {
         result = findPathbuilderOption(requestedSelections, options, found.level);
       }
       if (!result) {
         pendingSelection = {
+          key: selectionKey || found.path,
           path: found.path,
           title: selectionTitle,
           description: found.selection?.selection?.description,
