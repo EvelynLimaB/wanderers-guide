@@ -130,6 +130,15 @@ export async function importFromPathbuilderShare(
       return { ok: false, error: shared.error, warnings: [] };
     }
 
+    // An explicitly supplied official export ID is mandatory input. Never silently
+    // continue with only the share payload when its calculated export was requested.
+    if (options.derivedOverride === undefined && options.derivedBuildId && !fetchedDerived) {
+      const error = `Pathbuilder JSON export ${options.derivedBuildId} could not be retrieved. Confirm that you used Pathbuilder's Export → Export JSON and copied the generated export ID. No character was imported.`;
+      closeNotification();
+      notify({ title: 'Pathbuilder JSON export unavailable', message: error, color: 'red', icon: null, autoClose: false });
+      return { ok: false, error, warnings: [] };
+    }
+
     if (derived) {
       assertPathbuilderDerivedMatchesShare(shared.build.characterData, derived);
     }
