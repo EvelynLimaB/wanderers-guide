@@ -1175,7 +1175,7 @@ export async function buildCharacter(
   }
   if (missingSelection) {
     throw new Error(
-      `Required selection "${missingSelection.title}" at level ${missingSelection.level} has no confirmed value. Preflight must complete before final import.`
+      `Pathbuilder 1:1 selection mapping failed: level ${missingSelection.level}; requested: none; available: ${missingSelection.options.map((option) => option.label).join(', ') || 'none'}; selection path: ${missingSelection.path}; selector: ${missingSelection.title}`
     );
   }
 
