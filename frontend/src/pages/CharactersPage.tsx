@@ -13,7 +13,7 @@ import { importFromFTC } from '@import/ftc/import-from-ftc';
 import importFromGUIDECHAR from '@import/guidechar/import-from-guidechar';
 import importFromJSON from '@import/json/import-from-json';
 import PathbuilderInputModal from '@import/pathbuilder/PathbuilderInputModal';
-import { importFromPathbuilder, importFromPathbuilderViaBrowser } from '@import/pathbuilder/import-from-pathbuilder';
+import { importFromPathbuilderAutomatically } from '@import/pathbuilder/import-from-pathbuilder';
 import {
   ActionIcon,
   Box,
@@ -371,23 +371,12 @@ export function Component() {
             </VisuallyHidden>
             <PathbuilderInputModal
               open={openedPathbuilderModal}
-              onConfirm={async (pathbuilderId) => {
-                setOpenedPathbuilderModal(false);
+              loading={loadingImportCharacter}
+              onAutomaticConfirm={async (pathbuilderId) => {
                 setLoadingImportCharacter(true);
                 try {
-                  await importFromPathbuilder(pathbuilderId);
+                  const character = await importFromPathbuilderAutomatically(pathbuilderId);
                   refetch();
-                } finally {
-                  setLoadingImportCharacter(false);
-                }
-              }}
-              onBrowserConfirm={async (pathbuilderId, iframe) => {
-                setLoadingImportCharacter(true);
-                try {
-                  const character = await importFromPathbuilderViaBrowser(pathbuilderId, iframe);
-                  refetch();
-                  // Keep the modal (and iframe) mounted on failure so the user can retry
-                  // with the separate-window fallback if Pathbuilder refuses framing.
                   if (character) setOpenedPathbuilderModal(false);
                 } finally {
                   setLoadingImportCharacter(false);
