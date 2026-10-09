@@ -438,6 +438,26 @@ export function resolveBuild(
   const weapons = resolveWeapons(cd.listPlayerWeapons ?? undefined, customFiles, unresolved);
   const buffs = resolveActiveCustomBuffs(cd.hashMapActiveCustomBuffs ?? undefined, customFiles, unresolved);
   const spells = resolveSpells(cd.hashMapPlayerSpells ?? undefined, options.derived);
+  const keyAbilityFromShare = cd.keyability;
+  const keyAbilityFromDerived = options.derived?.keyability;
+  if (keyAbilityFromShare !== undefined && keyAbilityFromShare !== null && !parsePathbuilderAbility(keyAbilityFromShare)) {
+    unresolved.push({
+      kind: 'variant',
+      ref: 'characterData.keyability',
+      reason: `Unsupported Pathbuilder key ability token "${String(keyAbilityFromShare)}"`,
+    });
+  } else if (
+    (keyAbilityFromShare === undefined || keyAbilityFromShare === null) &&
+    keyAbilityFromDerived !== undefined &&
+    keyAbilityFromDerived !== null &&
+    !parsePathbuilderAbility(keyAbilityFromDerived)
+  ) {
+    unresolved.push({
+      kind: 'variant',
+      ref: 'derived.keyability',
+      reason: `Unsupported Pathbuilder key ability token "${String(keyAbilityFromDerived)}"`,
+    });
+  }
   for (const [weaponIndex, weapon] of (cd.listPlayerWeapons ?? []).entries()) {
     const index = weapon.attackAbilityRef;
     if (index === undefined || index === null) continue;
