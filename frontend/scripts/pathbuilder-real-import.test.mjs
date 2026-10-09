@@ -288,18 +288,33 @@ try {
   // Simulate the new UI wizard explicitly answering each missing required
   // operation choice before the persistence/creation path is invoked.
   const selectionOverrides = {};
-  const preflight = await importer.preflightPathbuilderImport('1597410', {
+  let preflight = await importer.preflightPathbuilderImport('1597410', {
     fetchImpl: createFetch(certifiedBuild),
     selectionOverrides,
   });
   assert.equal(preflight.status, 'selection-required', 'fixture should expose its omitted required choice');
   assert.match(preflight.selection.title, /deific weapon/i);
-  assert.ok(
-    preflight.selection.options.length > 0,
-    `fixture has a required selection with no eligible options: ${preflight.selection.title}`
-  );
-  // Simulate the user selecting a visible, eligible option in the import wizard.
-  selectionOverrides[preflight.selection.path] = preflight.selection.options[0].value;
+
+  // Simulate the user answering each required choice in order. Later prompts can
+  // appear only after earlier options have been applied to the selection tree.
+  let preflightReady = false;
+  for (let attempt = 0; attempt < 64; attempt++) {
+    assert.equal(preflight.status, 'selection-required', preflight.error ?? 'Preflight failed unexpectedly.');
+    assert.ok(
+      preflight.selection.options.length > 0,
+      `fixture has a required selection with no eligible options: ${preflight.selection.title}`
+    );
+    selectionOverrides[preflight.selection.path] = preflight.selection.options[0].value;
+    preflight = await importer.preflightPathbuilderImport('1597410', {
+      fetchImpl: createFetch(certifiedBuild),
+      selectionOverrides,
+    });
+    if (preflight.status === 'ready') {
+      preflightReady = true;
+      break;
+    }
+  }
+  assert.equal(preflightReady, true, 'preflight should finish after explicit choices');
 
   // Exclude preflight reads from the assertions for the actual import call.
   shareRequests = 0;
