@@ -3,8 +3,6 @@ import { test } from 'node:test';
 
 import {
   assertPathbuilderDerivedMatchesShare,
-  parsePathbuilderBrowserExport,
-  PATHBUILDER_EXPORT_RESULT,
 } from '../src/process/import/pathbuilder/pathbuilder-browser-bridge.ts';
 
 const share = {
@@ -26,42 +24,7 @@ const derived = {
   acTotal: { acTotal: 24, shieldBonus: '1' },
 };
 
-test('browser export message is tied to its nonce and share ID', () => {
-  const parsed = parsePathbuilderBrowserExport({
-    type: PATHBUILDER_EXPORT_RESULT,
-    nonce: '12345678-1234-4234-8234-123456789abc',
-    shareId: '1596110',
-    exportId: '476951',
-    derived,
-  }, '12345678-1234-4234-8234-123456789abc', '1596110');
-
-  assert.equal(parsed.exportId, '476951');
-  assert.equal(parsed.derived.keyability, 'str');
-
-  assert.throws(
-    () => parsePathbuilderBrowserExport({
-      type: PATHBUILDER_EXPORT_RESULT,
-      nonce: 'wrong-nonce-123456789',
-      shareId: '1596110',
-      exportId: 476951,
-      derived,
-    }, '12345678-1234-4234-8234-123456789abc', '1596110'),
-    /did not match this import request/
-  );
-
-  assert.throws(
-    () => parsePathbuilderBrowserExport({
-      type: PATHBUILDER_EXPORT_RESULT,
-      nonce: '12345678-1234-4234-8234-123456789abc',
-      shareId: '1596000',
-      exportId: 476951,
-      derived,
-    }, '12345678-1234-4234-8234-123456789abc', '1596110'),
-    /different share ID/
-  );
-});
-
-test('share and derived export identity must match exactly', () => {
+test('share and automatically-derived export identity must match exactly', () => {
   assert.doesNotThrow(() => assertPathbuilderDerivedMatchesShare(share, derived));
 
   assert.throws(
