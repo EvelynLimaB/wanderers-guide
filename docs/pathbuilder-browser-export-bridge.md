@@ -8,11 +8,11 @@ The share endpoint (`fetch_emailed.php`) preserves editor selections and custom 
 
 ## Install
 
-1. Install the **Violentmonkey** userscript manager in Firefox/Zen.
-2. Open [the helper script](https://raw.githubusercontent.com/EvelynLimaB/wanderers-guide/feature/pathbuilder-1to1-import/frontend/public/pathbuilder-wg-bridge.user.js) in this repository.
-3. Create a new userscript in Violentmonkey, replace its contents with the helper file, and save it.
-4. Refresh Wanderer's Guide and choose **Import from Pathbuilder → Import via browser**.
-5. Allow the Pathbuilder popup if prompted. In the Pathbuilder tab, confirm the consent dialog. The helper forwards data only to the tab that opened it.
+1. Install the **Violentmonkey** userscript manager in Firefox/Zen if it is not already installed.
+2. Open your own running Wanderer's Guide instance and choose **Import from Pathbuilder**.
+3. Click **Install helper from this WG**. The helper is served by that same WG instance at `/pathbuilder-wg-bridge.user.js`; no copying script text from GitHub is required.
+4. Confirm the userscript installation prompt in Violentmonkey, then return to WG and refresh the page.
+5. Choose **Import via browser**, allow the Pathbuilder popup if prompted, and approve the data-transfer dialog in the Pathbuilder tab.
 
 ## Security and correctness
 
@@ -31,5 +31,7 @@ Run from `frontend/`:
 npm run test:pathbuilder-import
 npm run build
 ```
+
+The helper is served from the WG frontend's `public/` assets, so a deployed frontend publishes it automatically alongside the app. A regular web page cannot silently install a userscript: a compatible manager must already be installed and the user must accept the manager's installation prompt. If the manager is absent, the import dialog still offers share-only import and browser-assisted import fails with an explicit timeout instead of silently claiming success.
 
 The automated tests validate message nonces, share IDs, schema parsing and identity mismatch rejection. A real-browser smoke test is still required after installing the userscript; unit tests cannot guarantee the live Pathbuilder DOM/export behavior remains unchanged.

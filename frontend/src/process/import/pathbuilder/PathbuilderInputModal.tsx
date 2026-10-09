@@ -30,17 +30,26 @@ export default function PathbuilderInputModal(props: {
         />
         <Text fs='italic' fz='sm'>
           Browser-assisted import obtains Pathbuilder-calculated stats and validates the character identity.
-          It requires the browser helper to be installed.
+          Install the helper directly from this WG instance first. A userscript manager such as Violentmonkey
+          is required by browser security; WG cannot install it silently.
         </Text>
-        <Text fz='sm'>
+        <Group gap='xs'>
+          <Anchor
+            href='/pathbuilder-wg-bridge.user.js'
+            target='_blank'
+            rel='noreferrer'
+          >
+            Install helper from this WG
+          </Anchor>
+          <Text c='dimmed' fz='sm'>·</Text>
           <Anchor
             href='https://github.com/EvelynLimaB/wanderers-guide/blob/feature/pathbuilder-1to1-import/docs/pathbuilder-browser-export-bridge.md'
             target='_blank'
             rel='noreferrer'
           >
-            Install the browser helper
+            Instructions
           </Anchor>
-        </Text>
+        </Group>
         <Group justify='flex-end' wrap='wrap'>
           <Button variant='default' onClick={props.onClose}>
             Cancel
