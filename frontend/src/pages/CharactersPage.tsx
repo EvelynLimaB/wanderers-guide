@@ -381,12 +381,14 @@ export function Component() {
                   setLoadingImportCharacter(false);
                 }
               }}
-              onBrowserConfirm={async (pathbuilderId) => {
-                setOpenedPathbuilderModal(false);
+              onBrowserConfirm={async (pathbuilderId, iframe) => {
                 setLoadingImportCharacter(true);
                 try {
-                  await importFromPathbuilderViaBrowser(pathbuilderId);
+                  const character = await importFromPathbuilderViaBrowser(pathbuilderId, iframe);
                   refetch();
+                  // Keep the modal (and iframe) mounted on failure so the user can retry
+                  // with the separate-window fallback if Pathbuilder refuses framing.
+                  if (character) setOpenedPathbuilderModal(false);
                 } finally {
                   setLoadingImportCharacter(false);
                 }
