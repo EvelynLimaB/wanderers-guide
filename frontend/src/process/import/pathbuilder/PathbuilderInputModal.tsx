@@ -12,7 +12,7 @@ export default function PathbuilderInputModal(props: {
   const [input, setInput] = useState('');
   const [jsonExportId, setJsonExportId] = useState('');
   const buildId = extractBuildId(input);
-  const validExportId = /^\\d{1,12}$/.test(jsonExportId.trim());
+  const validExportId = /^\d{1,12}$/.test(jsonExportId.trim());
 
   return (
     <Modal
