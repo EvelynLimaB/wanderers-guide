@@ -129,7 +129,8 @@ services:
 
   functions:
     profiles: ["self-hosted"]
-    image: supabase/edge-runtime:v1.58.2
+    # Keep in sync with the current Edge Runtime: shared helpers use npm: specifiers.
+    image: supabase/edge-runtime:v1.77.4
     depends_on:
       db:
         condition: service_healthy
