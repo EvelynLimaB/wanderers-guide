@@ -26,6 +26,9 @@ services:
     restart: unless-stopped
 
   frontend:
+    depends_on:
+      pathbuilder-automation:
+        condition: service_healthy
     build:
       context: ./frontend
       args:
