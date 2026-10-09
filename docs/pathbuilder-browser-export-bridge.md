@@ -12,11 +12,19 @@ Wanderer's Guide requests the calculated JSON directly from Pathbuilder's offici
 
 ## Deploy
 
-The worker is part of the repository's Docker Compose stack. Rebuild the stack after pulling this branch:
+The worker is part of the repository's Compose stack. Since this deployment uses Podman, rebuild with the Podman Compose provider after pulling this branch:
 
 ```bash
-docker compose up -d --build
+podman compose up -d --build
 ```
+
+If your installation exposes the provider directly instead of through `podman compose`, use:
+
+```bash
+podman-compose up -d --build
+```
+
+Before starting the stack, you can validate the Compose file with `podman compose config` (or `podman-compose config`). The `podman compose` subcommand delegates to an installed Compose provider, so supported flags and Compose behavior depend on that provider. See the [official Podman Compose documentation](https://docs.podman.io/en/latest/markdown/podman-compose.1.html).
 
 The worker reads `PUBLIC_SUPABASE_URL` and `ANON_KEY` from the existing Compose environment. For a self-hosted Supabase stack where the public URL is `http://localhost:8000`, set `PATHBUILDER_SUPABASE_URL=http://kong:8000` in `.env` so the worker can validate the user's session across the Compose network. For externally hosted Supabase, the default public URL is normally correct. The worker has no published host port; Nginx exposes only the authenticated same-origin route. If the deployment is using a static frontend without the Compose worker, automatic export is not available until the worker and reverse-proxy route are deployed.
 
