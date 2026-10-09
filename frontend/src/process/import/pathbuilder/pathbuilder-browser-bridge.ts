@@ -108,28 +108,51 @@ export function assertPathbuilderDerivedMatchesShare(
 }
 
 /**
- * Open Pathbuilder's official UI and request its calculated Export JSON through
- * the installed userscript. The share remains authoritative for choices/custom files.
+ * Request Pathbuilder's official calculated export through either a popup or an
+ * embedded frame. The frame/popup only transports messages; it never grants
+ * the WG page direct access to Pathbuilder's cross-origin DOM.
  */
 export function requestPathbuilderDerivedViaBrowser(
   shareId: string,
   options: { timeoutMs?: number; retryIntervalMs?: number } = {}
 ): Promise<PathbuilderDerivedBuild> {
+  return requestPathbuilderDerived(shareId, null, options);
+}
+
+/** Use an already-loaded Pathbuilder iframe. The caller must keep it mounted until this promise settles. */
+export function requestPathbuilderDerivedViaIframe(
+  shareId: string,
+  iframe: HTMLIFrameElement,
+  options: { timeoutMs?: number; retryIntervalMs?: number } = {}
+): Promise<PathbuilderDerivedBuild> {
+  if (!iframe?.contentWindow) {
+    return Promise.reject(new Error('The Pathbuilder iframe is not ready yet. Load the character in the frame and retry.'));
+  }
+  return requestPathbuilderDerived(shareId, iframe, options);
+}
+
+function requestPathbuilderDerived(
+  shareId: string,
+  iframe: HTMLIFrameElement | null,
+  options: { timeoutMs?: number; retryIntervalMs?: number }
+): Promise<PathbuilderDerivedBuild> {
   if (typeof window === 'undefined') {
     return Promise.reject(new Error('Browser-assisted Pathbuilder export requires a browser window.'));
   }
-  if (!/^\d+$/.test(shareId)) {
+  if (!/^\\d+$/.test(shareId)) {
     return Promise.reject(new Error('A numeric Pathbuilder share ID is required.'));
   }
 
   const nonceBytes = new Uint8Array(24);
   window.crypto.getRandomValues(nonceBytes);
   const nonce = Array.from(nonceBytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-  const url = new URL('/launch.html', PATHBUILDER_APP_ORIGIN);
-  url.searchParams.set('build', shareId);
+  const popup = iframe ? null : window.open(
+    new URL('/launch.html', PATHBUILDER_APP_ORIGIN).toString() + '?build=' + encodeURIComponent(shareId),
+    '_blank',
+    'popup,width=1100,height=850'
+  );
 
-  const popup = window.open(url.toString(), '_blank', 'popup,width=1100,height=850');
-  if (!popup) {
+  if (!iframe && !popup) {
     return Promise.reject(
       new Error('The browser blocked the Pathbuilder window. Allow popups for Wanderer’s Guide and retry.')
     );
@@ -137,6 +160,12 @@ export function requestPathbuilderDerivedViaBrowser(
 
   const timeoutMs = options.timeoutMs ?? 60000;
   const retryIntervalMs = options.retryIntervalMs ?? 700;
+  const targetWindow = iframe?.contentWindow ?? popup;
+
+  if (!targetWindow) {
+    if (popup && !popup.closed) popup.close();
+    return Promise.reject(new Error('Could not access the Pathbuilder frame/window.'));
+  }
 
   return new Promise<PathbuilderDerivedBuild>((resolve, reject) => {
     let finished = false;
@@ -153,9 +182,9 @@ export function requestPathbuilderDerivedViaBrowser(
       finished = true;
       cleanup();
       try {
-        if (!popup.closed) popup.close();
+        if (popup && !popup.closed) popup.close();
       } catch {
-        // Cross-origin close may be restricted; request completion does not depend on it.
+        // Cross-origin close may be restricted; the import does not depend on it.
       }
       if (error) reject(error);
       else if (result) resolve(result);
@@ -163,7 +192,7 @@ export function requestPathbuilderDerivedViaBrowser(
     };
 
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== PATHBUILDER_APP_ORIGIN || event.source !== popup) return;
+      if (event.origin !== PATHBUILDER_APP_ORIGIN || event.source !== targetWindow) return;
       const data = event.data as BridgeMessage | null;
       if (!data || typeof data !== 'object' || data.nonce !== nonce) return;
 
@@ -183,22 +212,26 @@ export function requestPathbuilderDerivedViaBrowser(
 
     const sendRequest = () => {
       if (finished) return;
-      if (popup.closed) {
+      if (popup?.closed) {
         finish(new Error('The Pathbuilder window was closed before the export completed.'));
+        return;
+      }
+      if (iframe && !iframe.isConnected) {
+        finish(new Error('The Pathbuilder iframe was closed before the export completed.'));
         return;
       }
       if (Date.now() - startedAt > timeoutMs) {
         finish(new Error(
-          'Timed out waiting for Pathbuilder. Install/enable the Wanderer’s Guide Pathbuilder browser helper, then retry.'
+          'Timed out waiting for Pathbuilder. Check whether the page is allowed in an iframe and whether the WG Pathbuilder helper is installed. You can retry using the separate-window option.'
         ));
         return;
       }
       try {
-        // Retrying is required because launch.html redirects to app.html. Messages
-        // sent while the popup is navigating are intentionally retried.
-        popup.postMessage({ type: PATHBUILDER_EXPORT_REQUEST, nonce, shareId }, PATHBUILDER_APP_ORIGIN);
+        // Retrying covers launch.html redirects and iframe navigation. Requests
+        // sent before app.html is ready are intentionally retried.
+        targetWindow.postMessage({ type: PATHBUILDER_EXPORT_REQUEST, nonce, shareId }, PATHBUILDER_APP_ORIGIN);
       } catch {
-        // The next interval retries after navigation completes.
+        // Retry after navigation completes.
       }
     };
 
