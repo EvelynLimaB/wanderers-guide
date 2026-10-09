@@ -131,11 +131,14 @@ function enforceUserRateLimit(userId) {
 
 async function getBrowser() {
   if (!browserPromise) {
-    const { chromium } = await import('playwright');
-    browserPromise = chromium.launch({ headless: true }).catch((error) => {
-      browserPromise = undefined;
-      throw error;
-    });
+    // Assign the in-flight promise before awaiting the dynamic import so two
+    // authenticated requests cannot race into launching duplicate browsers.
+    browserPromise = import('playwright')
+      .then(({ chromium }) => chromium.launch({ headless: true }))
+      .catch((error) => {
+        browserPromise = undefined;
+        throw error;
+      });
   }
   return browserPromise;
 }
