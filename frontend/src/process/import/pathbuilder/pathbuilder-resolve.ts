@@ -269,23 +269,46 @@ export function resolveEquipment(
   return { loose, containers: [...containers.values()] };
 }
 
-export function resolveAbilityBoosts(boosts: Record<string, number[]> | undefined): ResolvedAbilityBoost[] {
+function recordInvalidAbilityIndex(
+  unresolved: UnresolvedRef[],
+  ref: string,
+  index: number | undefined
+): void {
+  if (abilityAt(index) !== undefined) return;
+  unresolved.push({
+    kind: 'variant',
+    ref,
+    reason: `Pathbuilder ability index ${String(index)} is outside the supported range 0..5`,
+  });
+}
+
+export function resolveAbilityBoosts(
+  boosts: Record<string, number[]> | undefined,
+  unresolved: UnresolvedRef[]
+): ResolvedAbilityBoost[] {
   const out: ResolvedAbilityBoost[] = [];
   for (const [level, indices] of Object.entries(boosts ?? {})) {
     for (const index of indices ?? []) {
       const ability = abilityAt(index);
       if (ability) out.push({ level: Number(level), ability, origin: 'levelled' });
+      else recordInvalidAbilityIndex(unresolved, `hashMapAbilityBoosts[${level}]`, index);
     }
   }
   return out.sort((a, b) => a.level - b.level);
 }
 
 /** Ancestry free boosts are stored as an index map; all are level-1 choices. */
-export function resolveAncestryFreeBoosts(selections: Record<string, number> | undefined): ResolvedAbilityBoost[] {
-  return Object.values(selections ?? {})
-    .map((index) => abilityAt(index))
-    .filter((ability): ability is PathbuilderAbility => ability !== undefined)
-    .map((ability) => ({ level: 1, ability, origin: 'ancestry' }));
+export function resolveAncestryFreeBoosts(
+  selections: Record<string, number> | undefined,
+  unresolved: UnresolvedRef[]
+): ResolvedAbilityBoost[] {
+  const out: ResolvedAbilityBoost[] = [];
+  for (const [slot, index] of Object.entries(selections ?? {})) {
+    const ability = abilityAt(index);
+    if (ability) out.push({ level: 1, ability, origin: 'ancestry' });
+    else recordInvalidAbilityIndex(unresolved, `hashMapAncestryFreeBoostSelections[${slot}]`, index);
+  }
+  return out;
 }
 
 /**
@@ -294,12 +317,20 @@ export function resolveAncestryFreeBoosts(selections: Record<string, number> | u
  */
 export function resolveBackgroundBoosts(
   limitedSelection: number | undefined,
-  freeSelection: number | undefined
+  freeSelection: number | undefined,
+  unresolved: UnresolvedRef[]
 ): ResolvedAbilityBoost[] {
-  return [limitedSelection, freeSelection]
-    .map((index) => abilityAt(index))
-    .filter((ability): ability is PathbuilderAbility => ability !== undefined)
-    .map((ability) => ({ level: 1, ability, origin: 'background' }));
+  const out: ResolvedAbilityBoost[] = [];
+  for (const [field, index] of [
+    ['backgroundBoostLimitedSelection', limitedSelection],
+    ['getBackgroundBoostFreeSelection', freeSelection],
+  ] as const) {
+    if (index === undefined) continue;
+    const ability = abilityAt(index);
+    if (ability) out.push({ level: 1, ability, origin: 'background' });
+    else recordInvalidAbilityIndex(unresolved, field, index);
+  }
+  return out;
 }
 
 export function resolveSkillIncreases(increases: Record<string, string[]> | undefined): ResolvedSkillIncrease[] {
@@ -407,6 +438,13 @@ export function resolveBuild(
   const weapons = resolveWeapons(cd.listPlayerWeapons ?? undefined, customFiles, unresolved);
   const buffs = resolveActiveCustomBuffs(cd.hashMapActiveCustomBuffs ?? undefined, customFiles, unresolved);
   const spells = resolveSpells(cd.hashMapPlayerSpells ?? undefined, options.derived);
+  for (const [weaponIndex, weapon] of (cd.listPlayerWeapons ?? []).entries()) {
+    const index = weapon.attackAbilityRef;
+    if (index === undefined || index === null) continue;
+    if (abilityAt(index) === undefined) {
+      recordInvalidAbilityIndex(unresolved, `listPlayerWeapons[${weaponIndex}].attackAbilityRef`, index);
+    }
+  }
 
   // Armor: the share payload may contain only potency/runes or a Custom File UUID.
   // json.php, when available, includes the resolved armor name, so prefer that as
@@ -492,11 +530,12 @@ export function resolveBuild(
       gradual_attribute_boosts: cd.gradualAbilityBoost === true,
     },
     abilityBoosts: [
-      ...resolveAbilityBoosts(cd.hashMapAbilityBoosts ?? undefined),
-      ...resolveAncestryFreeBoosts(cd.hashMapAncestryFreeBoostSelections ?? undefined),
+      ...resolveAbilityBoosts(cd.hashMapAbilityBoosts ?? undefined, unresolved),
+      ...resolveAncestryFreeBoosts(cd.hashMapAncestryFreeBoostSelections ?? undefined, unresolved),
       ...resolveBackgroundBoosts(
         cd.backgroundBoostLimitedSelection ?? undefined,
-        cd.getBackgroundBoostFreeSelection ?? undefined
+        cd.getBackgroundBoostFreeSelection ?? undefined,
+        unresolved
       ),
     ].sort((a, b) => a.level - b.level),
     skillIncreases: resolveSkillIncreases(cd.hashMapSkillIncreases ?? undefined),
