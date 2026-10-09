@@ -1612,6 +1612,15 @@ async function resolveSelections(
           'Select a required option';
       const manualOptions = getManualSelectionOptions(options, selectionTitle, character, content);
 
+      // If Pathbuilder did record a heritage but WG's level-filtered selector
+      // omitted null-level heritage entries, resolve against the same ancestry-
+      // constrained fallback list instead of asking the user to repeat the choice.
+      if (!result && resolved.identity.heritage) {
+        result = manualOptions.find(
+          (option) => labelToVariable(option.name) === labelToVariable(resolved.identity.heritage!)
+        ) ?? null;
+      }
+
       if (!result && selectionOverrides[found.path]) {
         result = manualOptions.find((option) => option._select_uuid === selectionOverrides[found.path]) ?? null;
       }
