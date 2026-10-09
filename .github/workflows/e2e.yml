@@ -15,6 +15,10 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # The self-hosted services are profiled so normal frontend runs stay light.
+      # E2E needs the full Supabase stack for the Kong health check and DB tests.
+      COMPOSE_PROFILES: self-hosted
 
     steps:
       - uses: actions/checkout@v4
