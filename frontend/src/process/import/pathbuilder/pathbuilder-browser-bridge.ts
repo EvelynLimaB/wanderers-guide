@@ -139,7 +139,7 @@ function requestPathbuilderDerived(
   if (typeof window === 'undefined') {
     return Promise.reject(new Error('Browser-assisted Pathbuilder export requires a browser window.'));
   }
-  if (!/^\\d+$/.test(shareId)) {
+  if (!/^\d+$/.test(shareId)) {
     return Promise.reject(new Error('A numeric Pathbuilder share ID is required.'));
   }
 
