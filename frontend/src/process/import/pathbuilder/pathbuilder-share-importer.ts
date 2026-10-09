@@ -43,7 +43,7 @@ import { labelToVariable } from '@variables/variable-utils';
 import { cloneDeep } from 'lodash-es';
 
 import { extractBuildId, fetchPathbuilderDerived, fetchPathbuilderShare } from './fetch-pathbuilder-share';
-import { assertPathbuilderDerivedMatchesShare } from './pathbuilder-browser-bridge';
+import { assertPathbuilderDerivedMatchesShare } from './pathbuilder-export-identity';
 import { pathbuilderAbilityLabel, resolveBuild } from './pathbuilder-resolve';
 import { PathbuilderCustomFile, ResolvedBuild, ResolvedItemRef } from './types';
 import { findFreeArchetypeBranch, getAbilityBoostOriginForPath } from './pathbuilder-selection-routing';
