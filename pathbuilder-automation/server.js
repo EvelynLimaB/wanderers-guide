@@ -9,7 +9,7 @@ export const USER_RATE_WINDOW_MS = 60_000;
 export const BROWSER_TIMEOUT_MS = 60_000;
 
 const PORT = Number(process.env.PORT ?? 8080);
-const SUPABASE_URL = String(process.env.SUPABASE_URL ?? '').replace(/\/$/, '');
+const SUPABASE_URL = String(process.env.PATHBUILDER_SUPABASE_URL || process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_ANON_KEY = String(process.env.SUPABASE_ANON_KEY ?? '');
 const MAX_CONCURRENT_BROWSERS = 2;
 const activeByUser = new Map();
