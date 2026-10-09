@@ -76,7 +76,9 @@ jobs:
           node /tmp/mint-keys.js
 
       - name: Bring up docker stack
-        run: docker compose up -d --wait --wait-timeout 180
+        # Studio is an optional admin UI and its healthcheck is unrelated to E2E.
+        # --scale=0 keeps it out while starting the backend services in the self-hosted profile.
+        run: docker compose up -d --wait --wait-timeout 180 --scale studio=0
 
       # `--wait` only blocks on services with healthchecks (currently just db).
       # Backstop with a curl loop on kong + the frontend.
