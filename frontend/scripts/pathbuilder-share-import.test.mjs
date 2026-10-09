@@ -148,6 +148,41 @@ test('Pathbuilder ability tokens map to native WG attribute labels', () => {
   }
 });
 
+/** Unsupported explicit key ability tokens are distinct from omitted key abilities. */
+test('invalid explicit key ability tokens are reported as unresolved', () => {
+  const fromShare = resolveBuild({
+    characterData: {
+      characterName: 'Invalid key ability fixture',
+      className: 'Wizard',
+      keyability: 'intelligence',
+    },
+  });
+  assert.deepEqual(fromShare.unresolved, [
+    {
+      kind: 'variant',
+      ref: 'characterData.keyability',
+      reason: 'Unsupported Pathbuilder key ability token "intelligence"',
+    },
+  ]);
+
+  const fromDerived = resolveBuild(
+    { characterData: { characterName: 'Invalid derived fixture', className: 'Wizard' } },
+    { derived: { keyability: 'mystery' } }
+  );
+  assert.deepEqual(fromDerived.unresolved, [
+    {
+      kind: 'variant',
+      ref: 'derived.keyability',
+      reason: 'Unsupported Pathbuilder key ability token "mystery"',
+    },
+  ]);
+
+  const omitted = resolveBuild({
+    characterData: { characterName: 'Missing key ability fixture', className: 'Wizard' },
+  });
+  assert.deepEqual(omitted.unresolved, []);
+});
+
 /** Invalid indexes must be visible to the strict importer rather than being silently dropped. */
 test('invalid ability indexes are reported instead of silently disappearing', () => {
   const invalid = resolveBuild({
