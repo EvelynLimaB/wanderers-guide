@@ -13,7 +13,7 @@ import { importFromFTC } from '@import/ftc/import-from-ftc';
 import importFromGUIDECHAR from '@import/guidechar/import-from-guidechar';
 import importFromJSON from '@import/json/import-from-json';
 import PathbuilderInputModal from '@import/pathbuilder/PathbuilderInputModal';
-import { importFromPathbuilderAutomatically } from '@import/pathbuilder/import-from-pathbuilder';
+import { importFromPathbuilderWithExportId } from '@import/pathbuilder/import-from-pathbuilder';
 import {
   ActionIcon,
   Box,
@@ -372,10 +372,10 @@ export function Component() {
             <PathbuilderInputModal
               open={openedPathbuilderModal}
               loading={loadingImportCharacter}
-              onAutomaticConfirm={async (pathbuilderId) => {
+              onConfirm={async (pathbuilderId, jsonExportId) => {
                 setLoadingImportCharacter(true);
                 try {
-                  const character = await importFromPathbuilderAutomatically(pathbuilderId);
+                  const character = await importFromPathbuilderWithExportId(pathbuilderId, jsonExportId);
                   refetch();
                   if (character) setOpenedPathbuilderModal(false);
                 } finally {
