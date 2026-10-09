@@ -20,14 +20,21 @@
   let activeExport = null;
   const handledNonces = new Set();
 
-  function sendToOpener(targetOrigin, message) {
-    if (!window.opener || window.opener.closed || !targetOrigin || targetOrigin === 'null') return;
-    window.opener.postMessage(message, targetOrigin);
+  function getRequesterWindow() {
+    if (window.parent !== window) return window.parent;
+    if (window.opener && !window.opener.closed) return window.opener;
+    return null;
+  }
+
+  function sendToRequester(targetOrigin, message) {
+    const requester = getRequesterWindow();
+    if (!requester || requester.closed || !targetOrigin || targetOrigin === 'null') return;
+    requester.postMessage(message, targetOrigin);
   }
 
   function failRequest(request, message) {
     if (activeExport?.nonce === request.nonce) activeExport = null;
-    sendToOpener(request.targetOrigin, {
+    sendToRequester(request.targetOrigin, {
       type: ERROR,
       nonce: request.nonce,
       shareId: request.shareId,
@@ -104,7 +111,7 @@
           }
 
           activeExport = null;
-          sendToOpener(request.targetOrigin, {
+          sendToRequester(request.targetOrigin, {
             type: RESULT,
             nonce: request.nonce,
             shareId: request.shareId,
@@ -124,9 +131,10 @@
     return new Promise((resolve, reject) => {
       const started = Date.now();
       const timer = window.setInterval(() => {
-        if (!window.opener || window.opener.closed) {
+        const requester = getRequesterWindow();
+        if (!requester || requester.closed) {
           window.clearInterval(timer);
-          reject(new Error('The Wanderer’s Guide import window was closed.'));
+          reject(new Error('The Wanderer’s Guide frame/window that requested the export was closed.'));
           return;
         }
 
@@ -160,7 +168,8 @@
 
   window.addEventListener('message', async (event) => {
     if (event.origin === 'null' || event.origin === ORIGIN) return;
-    if (!window.opener || event.source !== window.opener) return;
+    const requester = getRequesterWindow();
+    if (!requester || event.source !== requester) return;
 
     const request = event.data;
     if (!request || request.type !== REQUEST) return;
@@ -177,7 +186,7 @@
         'Wanderer’s Guide at ' + targetOrigin +
         ' requests the calculated stats for the currently loaded Pathbuilder character ' +
         '(share ID ' + request.shareId + ').\n\n' +
-        'The JSON data will be sent only to the tab that opened this window. Continue?'
+        'The JSON data will be sent only to the Wanderer’s Guide frame/window that requested this export. Continue?'
       );
       if (!accepted) {
         failRequest({ ...request, targetOrigin }, 'Pathbuilder export was cancelled.');
