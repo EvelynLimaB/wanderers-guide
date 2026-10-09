@@ -1534,6 +1534,11 @@ async function resolveSelections(
       const skillSelection = isSkillSelection(options, found.selection?.selection);
       const languageSelection = isLanguageSelection(found.selection?.selection);
       const keyAbilitySelection = isKeyAbilitySelection(found.selection?.selection);
+      const implicitKeyAbilitySelection =
+        attributeSelection &&
+        found.path.startsWith('class_') &&
+        classAttributeSelectionIndex === 0 &&
+        !resolved.identity.keyAbility;
       let requestedSelections: { name: string; level: number }[] = [];
       let result: Pick<ObjectWithUUID, '_select_uuid'> | null = null;
 
@@ -1544,9 +1549,9 @@ async function resolveSelections(
 
       if (attributeSelection) {
         const isClassAttributeSelection = found.path.startsWith('class_');
-        const implicitKeyAbilitySelection =
+        const isFirstClassAttributeSelection =
           isClassAttributeSelection && classAttributeSelectionIndex === 0;
-        if (implicitKeyAbilitySelection) {
+        if (isFirstClassAttributeSelection) {
           if (resolved.identity.keyAbility) {
             requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: found.level }];
           } else if (options.length === 1) {
@@ -1600,10 +1605,11 @@ async function resolveSelections(
         if (heritage) result = heritage;
       }
 
-      const selectionTitle =
-        found.selection?.selection?.title ??
-        found.selection?.selection?.description ??
-        'Select a required option';
+      const selectionTitle = implicitKeyAbilitySelection
+        ? 'Select a Key Ability'
+        : found.selection?.selection?.title ??
+          found.selection?.selection?.description ??
+          'Select a required option';
       const manualOptions = getManualSelectionOptions(options, selectionTitle, character, content);
 
       if (!result && selectionOverrides[found.path]) {
