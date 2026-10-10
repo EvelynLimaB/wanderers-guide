@@ -1691,6 +1691,11 @@ async function resolveSelections(
       found = findFirstSelection(results, checked);
     }
 
+    // A required choice with no trustworthy Pathbuilder match must be surfaced
+    // immediately. Continuing to rerun the operation engine while holding this
+    // unresolved selector can repeat expensive calculation batches and delay the
+    // preflight/fail-closed result until the global calculation timeout.
+    if (pendingSelection) return pendingSelection;
     if (resolvedAny) {
       if (++iteration > Math.max(64, selections.length + 16)) {
         throw new Error(
@@ -1699,7 +1704,6 @@ async function resolveSelections(
       }
       continue;
     }
-    if (pendingSelection) return pendingSelection;
     hasSelections = false;
   }
   return null;
