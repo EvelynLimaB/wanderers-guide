@@ -10,7 +10,7 @@ globalThis.document = { documentElement: { style: {} }, addEventListener() {}, r
 
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const { build } = createRequire(join(root, 'package.json'))('esbuild');
+const { build, stop } = createRequire(join(root, 'package.json'))('esbuild');
 const here = dirname(fileURLToPath(import.meta.url));
 const bundleDir = await mkdtemp(join(tmpdir(), 'wg-pathbuilder-import-'));
 
@@ -105,7 +105,8 @@ export async function upsertVersatileHeritage() { return null; }`;
 const requests = 'export async function makeRequest(_endpoint, body) { return { ...body, id: body.id === undefined ? 9001 : body.id }; }';
 
 const outfile = join(bundleDir, 'importer.mjs');
-await build({
+try {
+  await build({
   absWorkingDir: root,
   stdin: {
     contents: 'export { buildCharacter } from "./src/process/import/pathbuilder/pathbuilder-share-importer.ts";',
@@ -160,7 +161,11 @@ export function getIconFromContentType() { return undefined; }
       },
     },
   ],
-});
+  });
+} finally {
+  // The esbuild JS API keeps a child service alive; stop it once bundling is done.
+  await stop();
+}
 
 const { buildCharacter } = await import(pathToFileURL(outfile).href);
 
