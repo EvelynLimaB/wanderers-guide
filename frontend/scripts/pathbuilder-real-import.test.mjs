@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 globalThis.window = { location: { origin: 'http://localhost' }, addEventListener() {}, removeEventListener() {} };
 globalThis.document = { documentElement: { style: {} }, addEventListener() {}, removeEventListener() {} };
 
-import { build } from 'esbuild';
+import { build, stop } from 'esbuild';
 import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -422,5 +422,11 @@ try {
     await engine.cleanup();
   }
 } finally {
-  await rm(bundleDir, { recursive: true, force: true });
+  try {
+    // This file and operation-test-harness share esbuild's singleton service.
+    // Close its worker/process so the test runner can exit on both success and failure.
+    await stop();
+  } finally {
+    await rm(bundleDir, { recursive: true, force: true });
+  }
 }
