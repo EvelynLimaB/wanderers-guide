@@ -1897,11 +1897,10 @@ function buildInventory(
     } else {
       warnings.push(`item: could not resolve armor "${resolved.armor.name}"`);
     }
-  } else if (resolved.armorRunes.length > 0 || resolved.armorPotency > 0) {
-    warnings.push(
-      `armor: runes [${resolved.armorRunes.join(', ')}] and potency +${resolved.armorPotency} were recorded but there is no armor to attach them to`
-    );
   }
+  // The resolver classifies rune/potency editor state without a selected armor as a
+  // non-blocking hint. Pathbuilder can retain this state after armor is cleared;
+  // the raw payload preserves it, and applying it to a nonexistent item would be wrong.
 
   return items;
 }
