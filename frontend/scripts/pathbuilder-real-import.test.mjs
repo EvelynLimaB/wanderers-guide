@@ -8,6 +8,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 globalThis.window = { location: { origin: 'http://localhost' }, addEventListener() {}, removeEventListener() {} };
 globalThis.document = { documentElement: { style: {} }, addEventListener() {}, removeEventListener() {} };
 
+// This integration test replaces all network/request boundaries with fixtures.
+// Keep Supabase's auth client from opening Node's real BroadcastChannel, which
+// creates a referenced MessagePort and prevents the standalone test process exiting.
+globalThis.BroadcastChannel = class TestBroadcastChannel {
+  addEventListener() {}
+  removeEventListener() {}
+  postMessage() {}
+  close() {}
+};
+
 import { build, stop } from 'esbuild';
 import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
 
