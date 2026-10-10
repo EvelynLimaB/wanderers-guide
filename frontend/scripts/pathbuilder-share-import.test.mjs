@@ -205,26 +205,29 @@ test('invalid ability indexes are reported instead of silently disappearing', ()
       { ability: 'con', origin: 'background' },
     ]
   );
+  const expectedUnresolved = [
+    {
+      ref: 'hashMapAbilityBoosts[1]',
+      reason: 'Pathbuilder ability index 6 is outside the supported range 0..5',
+    },
+    {
+      ref: 'hashMapAncestryFreeBoostSelections[0]',
+      reason: 'Pathbuilder ability index -1 is outside the supported range 0..5',
+    },
+    {
+      ref: 'backgroundBoostLimitedSelection',
+      reason: 'Pathbuilder ability index 6 is outside the supported range 0..5',
+    },
+    {
+      ref: 'listPlayerWeapons[0].attackAbilityRef',
+      reason: 'Pathbuilder ability index 6 is outside the supported range 0..5',
+    },
+  ].sort((a, b) => a.ref.localeCompare(b.ref));
   assert.deepEqual(
-    invalid.unresolved.map(({ ref, reason }) => ({ ref, reason })),
-    [
-      {
-        ref: 'hashMapAbilityBoosts[1]',
-        reason: 'Pathbuilder ability index 6 is outside the supported range 0..5',
-      },
-      {
-        ref: 'hashMapAncestryFreeBoostSelections[0]',
-        reason: 'Pathbuilder ability index -1 is outside the supported range 0..5',
-      },
-      {
-        ref: 'backgroundBoostLimitedSelection',
-        reason: 'Pathbuilder ability index 6 is outside the supported range 0..5',
-      },
-      {
-        ref: 'listPlayerWeapons[0].attackAbilityRef',
-        reason: 'Pathbuilder ability index 6 is outside the supported range 0..5',
-      },
-    ]
+    invalid.unresolved
+      .map(({ ref, reason }) => ({ ref, reason }))
+      .sort((a, b) => a.ref.localeCompare(b.ref)),
+    expectedUnresolved
   );
 });
 
