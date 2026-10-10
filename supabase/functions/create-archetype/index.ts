@@ -7,7 +7,7 @@ import {
   upsertData,
   upsertResponseWrapper,
 } from '../_shared/helpers.ts';
-import type { Archetype, Trait } from '../_shared/content';
+import type { Archetype, Trait } from '../_shared/content.d.ts';
 
 serve(async (req: Request) => {
   return await connect(req, async (client, body) => {

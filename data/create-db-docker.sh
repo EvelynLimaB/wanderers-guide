@@ -1,28 +1,57 @@
 #!/usr/bin/env bash
-# Load schema.sql + data.sql into the dockerized Postgres, then grant the
-# Supabase roles access. Run AFTER `docker compose up -d`.
+# Load schema.sql + data.sql into the containerized Postgres, then grant the
+# Supabase roles access. Run AFTER `docker compose up -d` / `podman-compose up -d`.
 #
 # Usage:  ./create-db-docker.sh [container-name]
-# Defaults to the container name produced by docker-compose.yml.
+#
+# Runtime and container name are auto-detected: docker compose names containers
+# with hyphens (wanderers-guide-db-1) while podman-compose v1 uses underscores
+# (wanderers-guide_db_1). Override either if detection guesses wrong:
+#   CONTAINER_RUNTIME=podman ./create-db-docker.sh wanderers-guide_db_1
 
 set -euo pipefail
 
-CONTAINER="${1:-wanderers-guide-db-1}"
 DB_USER="${DB_USER:-postgres}"
 DB_NAME="${DB_NAME:-postgres}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
-  echo "Error: container '$CONTAINER' is not running. Did you run 'docker compose up -d'?" >&2
+RUNTIME="${CONTAINER_RUNTIME:-}"
+if [ -z "$RUNTIME" ]; then
+  for candidate in docker podman; do
+    if command -v "$candidate" >/dev/null 2>&1; then RUNTIME="$candidate"; break; fi
+  done
+fi
+if [ -z "$RUNTIME" ]; then
+  echo "Error: neither docker nor podman is on PATH." >&2
   exit 1
 fi
 
+DB_NAME_RE="^wanderers-guide[-_]db([-_][0-9]+)?$"
+if [ $# -ge 1 ]; then
+  CONTAINER="$1"
+else
+  CONTAINER="$("$RUNTIME" ps --format '{{.Names}}' | grep -E "$DB_NAME_RE" | head -n1 || true)"
+  if [ -z "$CONTAINER" ]; then
+    echo "Error: no running wanderers-guide db container found via '$RUNTIME ps'." >&2
+    echo "       Start the stack first, or pass the container name explicitly:" >&2
+    echo "         $0 <container-name>" >&2
+    exit 1
+  fi
+fi
+
+if ! "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
+  echo "Error: container '$CONTAINER' is not running. Did you run '$RUNTIME compose up -d'?" >&2
+  exit 1
+fi
+
+echo "==> Using $RUNTIME container '$CONTAINER'"
+
 run_psql_quiet() {
-  docker exec -i "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -q
+  "$RUNTIME" exec -i "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -q
 }
 
 run_psql() {
-  docker exec -i "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1
+  "$RUNTIME" exec -i "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1
 }
 
 # 1. The dump references a 'github' CI role; create it if missing so GRANT
@@ -62,13 +91,13 @@ BEGIN
 END $$;
 SQL
 
-# 4. Load schema. The dump was made with pg_dump 16/17 and uses \restrict /
-#    \unrestrict meta-commands that older psql clients don't recognise. Strip
+# 4. Load schema. The dump was made with pg_dump 16/17 and uses \\restrict /
+#    \\unrestrict meta-commands that older psql clients don't recognise. Strip
 #    those before piping in.
 #    CREATE TRIGGER statements are stripped too: pg_dump --table dumps triggers
 #    but never their functions, so loading them here fails. The migrations
 #    replayed in step 8 own every trigger (drop if exists + recreate alongside
-#    the function) — which imposes the invariant that any trigger added to prod
+#    the function). This imposes the invariant that any trigger added to prod
 #    must come from a migration, or local/CI databases will silently lack it.
 echo "==> Loading schema.sql"
 sed -e '/^\\restrict /d' -e '/^\\unrestrict /d' -e '/^CREATE TRIGGER /d' "$SCRIPT_DIR/schema.sql" | run_psql_quiet
@@ -91,7 +120,7 @@ SQL
 
 # 7. Trigger that auto-creates a public_user row on auth signup, so users can
 #    register normally instead of needing a manual Studio insert.
-echo "==> Installing auth → public_user trigger"
+echo "==> Installing auth -> public_user trigger"
 run_psql < "$SCRIPT_DIR/auth-trigger.sql"
 
 # 8. Apply migrations. schema.sql is a prod dump that lags whatever landed in

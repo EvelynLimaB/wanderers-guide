@@ -1,7 +1,7 @@
 // @ts-ignore
 import { serve } from 'std/server';
 import { connect, fetchData } from '../_shared/helpers.ts';
-import type { Creature, CreatureRecordType, Hazard } from '../_shared/content';
+import type { Creature, CreatureRecordType, Hazard } from '../_shared/content.d.ts';
 
 serve(async (req: Request) => {
   return await connect(req, async (client, body) => {

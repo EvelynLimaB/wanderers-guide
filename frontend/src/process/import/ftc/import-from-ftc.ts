@@ -375,7 +375,7 @@ export async function importFromFTC(d: FTC) {
   });
 }
 
-function findMatchingOption(selections: { name: string; level: number }[], options: ObjectWithUUID[], level: number) {
+export function findMatchingOption(selections: { name: string; level: number }[], options: ObjectWithUUID[], level: number) {
   for (const selection of selections.filter((s) => s.level === level)) {
     if (selection.name === 'RANDOM') {
       return selectRandom(options);
@@ -391,7 +391,7 @@ function findMatchingOption(selections: { name: string; level: number }[], optio
   return null;
 }
 
-function findFirstSelection(
+export function findFirstSelection(
   resultPackage: OperationCharacterResultPackage,
   checked: Set<string>
 ): {

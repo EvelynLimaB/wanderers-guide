@@ -1,10 +1,13 @@
 name: CI
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    branches:
+      - main
+      - feature/pathbuilder-1to1-import
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -23,11 +26,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        id: install_deps
         run: npm ci --legacy-peer-deps --no-audit --no-fund
 
       - name: Release inventory and compatibility regression tests
@@ -51,7 +55,14 @@ jobs:
         run: npm run lint
 
       - name: Typecheck
+        id: typecheck
         run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Pathbuilder export identity tests
+        run: npm run test:pathbuilder-export-identity
+
+      - name: Pathbuilder import regression tests
+        run: npm run test:pathbuilder-import
 
       - name: Rules and content audit regression tests
         run: |
@@ -62,6 +73,7 @@ jobs:
       # Vite envs are baked in at build time; createClient() throws on empty
       # values, so use placeholders for a build-only check.
       - name: Build
+        if: always() && steps.install_deps.outcome == 'success' && steps.typecheck.outcome == 'success'
         env:
           VITE_SUPABASE_URL: http://localhost:8000
           VITE_SUPABASE_KEY: ci-placeholder

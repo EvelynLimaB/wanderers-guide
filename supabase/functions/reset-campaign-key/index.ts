@@ -1,6 +1,6 @@
 // @ts-ignore
 import { serve } from 'std/server';
-import type { Campaign } from '../_shared/content';
+import type { Campaign } from '../_shared/content.d.ts';
 import {
   connect,
   createServiceClient,

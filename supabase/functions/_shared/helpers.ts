@@ -14,7 +14,7 @@ import type {
   JSendResponse,
   PublicUser,
   Trait,
-} from './content';
+} from './content.d.ts';
 
 /**
  * Structured, one-line JSON log for failure/anomaly paths, so incidents are
@@ -417,7 +417,8 @@ export type TableName =
   | 'spell'
   | 'creature'
   | 'language'
-  | 'encounter';
+  | 'encounter'
+  | 'pathbuilder_import';
 
 interface SelectFilter {
   column: string;

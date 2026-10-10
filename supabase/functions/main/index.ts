@@ -35,7 +35,9 @@ serve(async (req: Request) => {
       cpuTimeSoftLimitMs: 30 * 1000,
       cpuTimeHardLimitMs: 60 * 1000,
       noModuleCache: false,
-      importMapPath: '/home/deno/functions/import_map.json',
+      context: {
+        importMapPath: '/home/deno/functions/import_map.json',
+      },
       envVars,
     });
 

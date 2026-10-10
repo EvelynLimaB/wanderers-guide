@@ -1,4 +1,4 @@
-import { Variable, AttributeValue, ProficiencyType } from './variables';
+import { Variable, AttributeValue, ProficiencyType } from './variables.d.ts';
 
 export type Operation =
   | OperationAdjValue
