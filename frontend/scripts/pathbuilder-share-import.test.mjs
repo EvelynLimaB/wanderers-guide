@@ -202,7 +202,7 @@ test('invalid ability indexes are reported instead of silently disappearing', ()
     invalid.abilityBoosts.map(({ ability, origin }) => ({ ability, origin })),
     [
       { ability: 'str', origin: 'levelled' },
-      { ability: 'wis', origin: 'background' },
+      { ability: 'con', origin: 'background' },
     ]
   );
   assert.deepEqual(
