@@ -8,6 +8,16 @@ import { resolveBuild } from '../src/process/import/pathbuilder/pathbuilder-reso
 globalThis.window = { location: { origin: 'http://localhost' }, addEventListener() {}, removeEventListener() {} };
 globalThis.document = { documentElement: { style: {} }, addEventListener() {}, removeEventListener() {} };
 
+// This integration test replaces all network/request boundaries with fixtures.
+// Keep Supabase's auth client from opening Node's real BroadcastChannel, which
+// creates a referenced MessagePort and prevents the standalone test process exiting.
+globalThis.BroadcastChannel = class TestBroadcastChannel {
+  addEventListener() {}
+  removeEventListener() {}
+  postMessage() {}
+  close() {}
+};
+
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const { build, stop } = createRequire(join(root, 'package.json'))('esbuild');
