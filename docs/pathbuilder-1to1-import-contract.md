@@ -26,6 +26,8 @@ The Pathbuilder importer must reproduce the character represented by the share p
 
 The captured share payload is level 7 Kasane, Automaton / Hunter Automaton, Champion, with ancestry paragon and free archetype enabled. The checked-in PDF oracle records ability scores 18/14/16/10/12/16, AC 24, HP 99, Speed 45, Perception +10, Fort +14, Ref +11, Will +12, Athletics +18, plus the listed attacks and focus/innate spell state.
 
+When Pathbuilder omits `playerArmor.armorName`, its model default is `Unarmored`. If that payload still contains a nonzero armor potency, preserve the sheet's resulting AC item bonus without inventing a physical armor item. Property-rune state without a base item remains intact in import provenance, but is not treated as an active armor effect.
+
 The real json.php?id=1597410 endpoint returned 404 during capture. The absence of derived data is therefore a tested and supported condition, not a reason to fabricate a derived fixture.
 
 ## Non-goals

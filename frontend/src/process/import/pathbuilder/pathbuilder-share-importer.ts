@@ -1304,6 +1304,24 @@ function buildPathbuilderCustomOperations(
     operations.push(...customEffectOperations(buff.custom, Math.max(1, buff.stacks), warnings));
   }
 
+  // Pathbuilder omits PlayerArmor.armorName when its model value is the default
+  // "Unarmored". The v121 golden sheet still counts a retained potency value toward
+  // AC (build 1597410: unarmored baseline 23, sheet oracle 24 at potency +1). Preserve
+  // that calculated item bonus without fabricating a physical armor item. Property
+  // runes with no base armor stay in the raw import snapshot and grant no armor effect.
+  if (!resolved.armor && resolved.armorPotency > 0) {
+    operations.push({
+      id: crypto.randomUUID(),
+      type: 'addBonusToValue',
+      data: {
+        variable: 'AC_BONUS',
+        value: `+${resolved.armorPotency}`,
+        type: 'item',
+        text: '',
+      },
+    });
+  }
+
   return operations;
 }
 

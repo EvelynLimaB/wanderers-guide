@@ -341,6 +341,16 @@ try {
   );
   assert.equal(outcome.character?.id, 9001);
   assert.equal(outcome.character?.name, 'Kasane');
+  assert.ok(
+    outcome.character?.custom_operations?.some(
+      (operation) =>
+        operation.type === 'addBonusToValue' &&
+        operation.data.variable === 'AC_BONUS' &&
+        operation.data.type === 'item' &&
+        operation.data.value === '+1'
+    ),
+    '1597410 potency on Pathbuilder default Unarmored state must be represented as an AC item bonus'
+  );
 
   const engine = await createOperationEngine();
   try {

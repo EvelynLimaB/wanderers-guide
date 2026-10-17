@@ -502,12 +502,12 @@ export function resolveBuild(
       unresolved.splice(originalUnresolvedLength);
     }
   } else if (armorRaw && ((armorRaw.potency ?? 0) > 0 || (armorRaw.listPropertyRunes?.length ?? 0) > 0)) {
-    // Pathbuilder can retain rune/potency editor state after the armor entry has
-    // been cleared. The level-7 golden sheet is explicitly unarmored, so this is
-    // not a missing armor record. Preserve the raw state in provenance and surface
-    // it as a non-blocking note rather than manufacturing an unresolved mechanic.
+    // Pathbuilder's PlayerArmor model defaults an omitted armorName to "Unarmored".
+    // Some v121 share payloads retain potency/property-rune editor state in that
+    // default state. The importer preserves this raw state; its potency is represented
+    // as an AC item bonus during character construction, without inventing an armor.
     hints.push(
-      `Pathbuilder has armor rune/potency state without an equipped armor name; preserving raw armor state without applying it`
+      `Pathbuilder has armor rune/potency state without a named armor; preserving the default Unarmored state and its raw rune data`
     );
   }
 
