@@ -378,7 +378,13 @@ try {
       '1597410 AC must match the PDF oracle'
     );
     assert.equal(engine.getFinalHealthValue('CHARACTER'), 99, '1597410 HP must match the PDF oracle');
-    assert.equal(engine.getFinalVariableValue('CHARACTER', 'SPEED').total, 45, '1597410 speed must match the PDF oracle');
+    const speedValue = engine.getFinalVariableValue('CHARACTER', 'SPEED');
+    const speedBonuses = engine.getVariableBonuses('CHARACTER', 'SPEED');
+    assert.equal(
+      speedValue.total,
+      45,
+      `1597410 speed must match the PDF oracle; base=${speedValue.value}; bonuses=${JSON.stringify(speedBonuses)}; selections=${JSON.stringify(outcome.character.operation_data?.selections)}; equipped speed items=${JSON.stringify(outcome.character.inventory.items.filter((entry) => entry.is_equipped && entry.item?.operations?.some((operation) => operation.type === 'addBonusToValue' && operation.data.variable === 'SPEED')).map((entry) => ({ name: entry.item.name, operations: entry.item.operations.filter((operation) => operation.type === 'addBonusToValue' && operation.data.variable === 'SPEED') })))}`
+    );
 
     const prof = (name) => engine.getFinalProfValue('CHARACTER', name);
     assert.equal(prof('PERCEPTION'), '+10');
