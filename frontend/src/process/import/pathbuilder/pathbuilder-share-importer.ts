@@ -480,7 +480,8 @@ async function ensureCustomContent(
       continue;
     }
 
-    const item = await createReferenceItem(ref, sourceId, warnings);
+    const semanticKind = classifyReferenceSemanticKind(ref, resolved);
+    const item = await createReferenceItem(ref, sourceId, warnings, semanticKind, traits, content.items);
     if (item) byUuid.set(`unresolved:${ref.raw.toLowerCase()}`, item);
   }
 
@@ -495,14 +496,8 @@ async function ensureCustomContent(
       continue;
     }
 
-    const semanticKind = resolved.weapons.some((weapon) => weapon === ref)
-      ? 'weapon'
-      : resolved.armor === ref
-        ? 'armor'
-        : resolved.shield === ref
-          ? 'shield'
-          : 'equipment';
-    const item = await createReferenceItem(ref, sourceId, warnings, semanticKind, traits);
+    const semanticKind = classifyReferenceSemanticKind(ref, resolved);
+    const item = await createReferenceItem(ref, sourceId, warnings, semanticKind, traits, content.items);
     if (item) byUuid.set(`ref:${labelToVariable(ref.name)}`, item);
   }
 
@@ -542,15 +537,67 @@ const PATHBUILDER_ITEM_ALIASES: Record<string, string[]> = {
   [labelToVariable('Mask (Ordinary)')]: ['Ordinary Mask'],
 };
 
-async function createReferenceItem(
+/**
+ * Determine which WG equipment slot a Pathbuilder reference belongs to so the
+ * materialized reference item gets weapon/armor/shield metadata when warranted.
+ * Uses identity against the resolved build plus the raw-reference kind recorded
+ * by the resolver as fallbacks (previously unresolvedRefs defaulted every
+ * reference — including weapons — to 'equipment', skipping inheritance).
+ */
+function classifyReferenceSemanticKind(
+  ref: ResolvedItemRef,
+  resolved: Pick<ResolvedBuild, 'weapons' | 'armor' | 'shield'>
+): 'weapon' | 'armor' | 'shield' | 'equipment' {
+  if (resolved.weapons.some((weapon) => weapon === ref)) return 'weapon';
+  if (resolved.armor === ref) return 'armor';
+  if (resolved.shield === ref) return 'shield';
+  const rawKind = ref.unresolvedKind ?? ref.custom?.type;
+  if (rawKind === 1 || rawKind === 'Weapon' || rawKind === 'weapon') return 'weapon';
+  if (rawKind === 2 || rawKind === 'Armor' || rawKind === 'armor') return 'armor';
+  if (rawKind === 3 || rawKind === 'Shield' || rawKind === 'shield') return 'shield';
+  return 'equipment';
+}
+
+/**
+ * Materialize a Pathbuilder item that WG has no content record for.
+ *
+ * Exported for regression coverage (`scripts/pathbuilder-base-weapon.test.mjs`).
+ * Fidelity policy (contract §3/§4): when the reference's prose names a WG weapon,
+ * inherit that base weapon's proficiency category/group via `inferBaseWeapon`;
+ * otherwise leave the category unset rather than fabricating 'simple', which
+ * would silently import martial/advanced weapons at the wrong proficiency tier.
+ */
+export async function createReferenceItem(
   ref: ResolvedItemRef,
   sourceId: number,
   warnings: string[],
   semanticKind: 'weapon' | 'armor' | 'shield' | 'equipment' = 'equipment',
-  traits: Map<string, number> = new Map()
+  traits: Map<string, number> = new Map(),
+  catalogItems: Item[] = []
 ): Promise<Item | null> {
   const specialUnarmed = new RegExp('\\bSPECIAL\\s+UNARMED\\s*\\(\\s*\\d+d(?:4|6|8|10|12)\\s*\\)', 'i').test(ref.raw);
   const damageMatch = new RegExp('\\(\\s*(\\d+)d(4|6|8|10|12)\\s*\\)', 'i').exec(ref.raw);
+  // Same inheritance rule as Custom Files (see inferBaseWeapon): when the
+  // reference's prose names a WG weapon we know, adopt that weapon's category
+  // and group instead of assuming 'simple'. A fabricated simple-category
+  // weapon would silently import at the wrong proficiency tier.
+  const inferredBase =
+    semanticKind === 'weapon' && !specialUnarmed
+      ? inferBaseWeapon(
+          { name: ref.name, description: ref.raw, weaponTraits: null } as PathbuilderCustomFile,
+          catalogItems
+        )
+      : undefined;
+  const baseCategory = inferredBase?.meta_data?.category;
+  const validBaseCategory =
+    typeof baseCategory === 'string' && ItemMetaCategorySchema.safeParse(baseCategory).success
+      ? (baseCategory as NonNullable<NonNullable<Item['meta_data']>['category']>)
+      : undefined;
+  if (semanticKind === 'weapon' && !specialUnarmed && !validBaseCategory) {
+    console.info(
+      `Pathbuilder reference weapon "${ref.name}" has no unique WG base-weapon match; importing with unset proficiency category`
+    );
+  }
   const displayTraits = semanticKind === 'weapon' && specialUnarmed
     ? ['Agile', 'Finesse', 'Magical', 'Nonlethal', 'Unarmed']
     : [];
@@ -590,8 +637,10 @@ async function createReferenceItem(
       bulk: {},
       ...(isWeapon
         ? {
-            category: specialUnarmed ? 'unarmed_attack' : 'simple',
-            group: specialUnarmed ? 'brawling' : undefined,
+            category: specialUnarmed ? 'unarmed_attack' : validBaseCategory,
+            group: specialUnarmed
+              ? 'brawling'
+              : (mapMetaGroup(inferredBase?.meta_data?.group) ?? inferredBase?.meta_data?.group),
             damage: {
               dice: damageMatch ? Number(damageMatch[1]) : 1,
               die: damageMatch ? `d${damageMatch[2]}` : 'd4',

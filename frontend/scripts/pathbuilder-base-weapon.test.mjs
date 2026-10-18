@@ -45,7 +45,7 @@ try {
       absWorkingDir: root,
       stdin: {
         contents: `
-          export { inferBaseWeapon } from './src/process/import/pathbuilder/pathbuilder-share-importer.ts';
+          export { inferBaseWeapon, createReferenceItem } from './src/process/import/pathbuilder/pathbuilder-share-importer.ts';
           export { parseCustomFileJson } from './src/process/import/pathbuilder/pathbuilder-resolve.ts';
         `,
         resolveDir: root,
@@ -76,8 +76,23 @@ try {
   await rm(bundleDir, { recursive: true, force: true }).catch(() => {});
 }
 
-const { inferBaseWeapon, parseCustomFileJson } = mod;
+const { inferBaseWeapon, createReferenceItem, parseCustomFileJson } = mod;
 assert.equal(typeof inferBaseWeapon, 'function', 'inferBaseWeapon must be exported for regression coverage');
+assert.equal(typeof createReferenceItem, 'function', 'createReferenceItem must be exported for regression coverage');
+
+// `createReferenceItem` persists through upsertItem -> makeRequest -> supabase.functions.invoke.
+// Capture the payload instead of reaching the network so these assertions stay hermetic.
+let lastUpsertedItem = null;
+globalThis.fetch = async (url, init) => {
+  if (String(url).includes('/functions/v1/create-item')) {
+    lastUpsertedItem = JSON.parse(init.body).item ?? JSON.parse(init.body);
+  }
+  return new Response(JSON.stringify({ status: 'success', data: true }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+};
+const traitsMap = new Map([['agile', 11], ['finesse', 12], ['magical', 13], ['nonlethal', 14], ['unarmed', 15]]);
 
 // ─── fixture input: the real Custom File from golden build 1597410 ────────────
 
@@ -183,6 +198,58 @@ const catalog = [
   ];
   const base = inferBaseWeapon(crimsonBlade, mixedCatalog);
   assert.equal(base?.name, 'Bastard Sword', 'only WEAPON-group rows may become base weapons');
+}
+
+// ─── createReferenceItem: the Step-2 fix (no fabricated 'simple' fallback) ─────
+
+const ref = (name, raw) => ({ kind: 'unresolved', name, raw, quantity: 1 });
+
+{
+  // A reference weapon whose prose names a WG weapon inherits its category/group
+  // instead of being stamped 'simple' (the old hardcoded fallback).
+  const warnings = [];
+  lastUpsertedItem = null;
+  const created = await createReferenceItem(
+    ref('Runesword Blade', 'a +1 striking bastard sword'),
+    77,
+    warnings,
+    'weapon',
+    traitsMap,
+    catalog
+  );
+  assert.ok(created, 'the reference item must be materialized');
+  assert.equal(lastUpsertedItem.meta_data.category, 'martial', 'matched references inherit the base proficiency category');
+  assert.equal(lastUpsertedItem.meta_data.group, 'sword');
+  assert.deepEqual(warnings, [], 'inheriting a category is not a warning condition');
+}
+
+{
+  // No unique match: the category stays unset — never a fabricated 'simple' —
+  // and the ambiguity is logged (contract §2 determinism requirement).
+  const warnings = [];
+  const logged = [];
+  const originalInfo = console.info;
+  console.info = (...args) => logged.push(args.join(' '));
+  try {
+    await createReferenceItem(ref('Voidscythe', 'a weapon of pure void energy'), 77, warnings, 'weapon', traitsMap, catalog);
+  } finally {
+    console.info = originalInfo;
+  }
+  assert.equal(lastUpsertedItem.meta_data.category, undefined, 'unmatched references must not claim simple proficiency');
+  assert.ok(
+    logged.some((line) => line.includes('Voidscythe') && line.includes('no unique WG base-weapon match')),
+    'an unmatched reference weapon must log the ambiguity decision'
+  );
+}
+
+{
+  // Special unarmed references keep their dedicated unarmed metadata.
+  lastUpsertedItem = null;
+  await createReferenceItem(ref('Automaton Slam', 'SPECIAL UNARMED (1d8)'), 77, [], 'weapon', traitsMap, catalog);
+  assert.equal(lastUpsertedItem.meta_data.category, 'unarmed_attack');
+  assert.equal(lastUpsertedItem.meta_data.group, 'brawling');
+  assert.deepEqual(lastUpsertedItem.meta_data.display_traits, ['Agile', 'Finesse', 'Magical', 'Nonlethal', 'Unarmed']);
+  assert.equal(lastUpsertedItem.hands, '1');
 }
 
 console.log('pathbuilder-base-weapon: all assertions passed');
