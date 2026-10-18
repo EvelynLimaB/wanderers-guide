@@ -777,7 +777,7 @@ async function createCustomItem(
               const candidate =
                 (customFile.group ?? '').toLowerCase().includes('brawling')
                   ? 'unarmed_attack'
-                  : baseDamage.category ?? '';
+                  : inferredBaseWeapon?.meta_data?.category ?? '';
               return ItemMetaCategorySchema.safeParse(candidate).success
                 ? (candidate as NonNullable<NonNullable<Item['meta_data']>['category']>)
                 : '';

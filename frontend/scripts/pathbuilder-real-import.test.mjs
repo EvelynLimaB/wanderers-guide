@@ -461,6 +461,8 @@ try {
     assert.ok(claw, 'Claw must exist in the imported inventory');
     assert.ok(stinger, 'Stinger must exist in the imported inventory');
     assert.ok(crimson, 'Crimson Blade must exist in the imported inventory');
+    assert.equal(crimson.meta_data?.category, 'martial', "Crimson Blade must inherit the Bastard Sword's martial proficiency category");
+    assert.equal(crimson.meta_data?.group, 'sword', "Crimson Blade must inherit the Bastard Sword's weapon group");
 
     const javelinStats = engine.getWeaponStats('CHARACTER', javelin);
     const daggerStats = engine.getWeaponStats('CHARACTER', dagger);
