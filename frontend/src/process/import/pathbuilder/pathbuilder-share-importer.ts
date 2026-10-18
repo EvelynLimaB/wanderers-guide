@@ -963,18 +963,35 @@ function customEffectOperations(
   return operations;
 }
 
-function inferBaseWeapon(customFile: PathbuilderCustomFile, items: Item[]): Item | undefined {
+/**
+ * Match a Custom File's prose to the WG weapon it is built from.
+ *
+ * Exported for regression coverage (`scripts/pathbuilder-base-weapon.test.mjs`):
+ * this is the single point where a custom weapon inherits its proficiency
+ * category, damage die, and group from base content, so its ambiguity rules must
+ * stay under test even when the full golden-parity suite cannot run.
+ *
+ * Ambiguity policy: a match counts only when exactly one *distinct weapon name*
+ * is longest among the candidates. Two different weapons sharing the longest
+ * matched name (e.g. "Bastard Sword" as printed in two sources) are the same
+ * logical weapon and remain deterministic because the candidate list preserves
+ * catalog order; but a genuine tie between different names returns `undefined`
+ * rather than guessing.
+ */
+export function inferBaseWeapon(customFile: PathbuilderCustomFile, items: Item[]): Item | undefined {
   const haystack = labelToVariable(
     [customFile.name, customFile.description, customFile.weaponTraits].filter(Boolean).join(' ')
   );
   const candidates = items
     .filter((item) => item.group === 'WEAPON')
-    .filter((item) => haystack.includes(labelToVariable(item.name)))
-    .sort((a, b) => b.name.length - a.name.length);
+    .filter((item) => haystack.includes(labelToVariable(item.name)));
 
   if (candidates.length === 0) return undefined;
-  if (candidates.length === 1) return candidates[0];
-  return candidates[0].name.length > candidates[1].name.length ? candidates[0] : undefined;
+  const longest = Math.max(...candidates.map((item) => item.name.length));
+  const winners = candidates.filter((item) => item.name.length === longest);
+  const distinctNames = new Set(winners.map((item) => item.name));
+  if (distinctNames.size !== 1) return undefined;
+  return winners[0];
 }
 
 function inferDamageTypeFromText(description: string | null | undefined): string | undefined {

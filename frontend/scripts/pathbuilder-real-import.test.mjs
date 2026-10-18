@@ -18,6 +18,13 @@ globalThis.BroadcastChannel = class TestBroadcastChannel {
   close() {}
 };
 
+// The bundled Supabase client requires a global WebSocket. Node 20 ships one
+// behind a flag, so provide the `ws` polyfill when running on older runtimes.
+if (typeof globalThis.WebSocket === 'undefined') {
+  const { WebSocket } = await import('ws');
+  globalThis.WebSocket = WebSocket;
+}
+
 import { build, stop } from 'esbuild';
 import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
 
