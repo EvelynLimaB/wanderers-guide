@@ -443,7 +443,9 @@ try {
     const inventoryItems = flattenInventory(outcome.character.inventory.items);
     const inventoryNames = inventoryItems.map((entry) => entry.item?.name);
     assert.equal(inventoryNames.filter((name) => name === 'Chalk').length, 10);
-    assert.equal(inventoryNames.filter((name) => name === 'Rations').length, 2);
+    // Pathbuilder labels the supply "Rations"; the intentional WG alias resolves
+    // it to the canonical "Rations (1 week)" content item.
+    assert.equal(inventoryNames.filter((name) => name === 'Rations (1 week)').length, 2);
     assert.equal(outcome.character.spells.list.length, 1);
 
     const weaponByName = (name) =>
