@@ -18,6 +18,13 @@ globalThis.BroadcastChannel = class TestBroadcastChannel {
   close() {}
 };
 
+// The bundled Supabase client requires a global WebSocket. Node 20 ships one
+// behind a flag, so provide the `ws` polyfill when running on older runtimes.
+if (typeof globalThis.WebSocket === 'undefined') {
+  const { WebSocket } = await import('ws');
+  globalThis.WebSocket = WebSocket;
+}
+
 import { build, stop } from 'esbuild';
 import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
 
@@ -292,6 +299,23 @@ try {
   const certifiedBuild = structuredClone(fixture.build);
   certifiedBuild.characterData.keyability = 'str';
 
+  // Layer 5 (online certification) stands-in fixture: json.php returned HTTP 404
+  // during capture (docs/pathbuilder-1to1-import-contract.md), so the tested
+  // supported condition is "derived data absent". The values below reproduce
+  // Pathbuilder's independently derived sheet state for build 1597410 as shown
+  // by the PDF oracle, letting the certification path run hermetically without
+  // live network access.
+  const derivedFixture = {
+    name: 'Kasane',
+    class: 'Champion',
+    level: 7,
+    ancestry: 'Automaton',
+    heritage: 'Hunter Automaton',
+    keyability: 'STR',
+    abilities: { str: 18, dex: 14, con: 16, int: 10, wis: 12, cha: 16 },
+    acTotal: { acTotal: 24 },
+  };
+
   shareRequests = 0;
   derivedRequests = 0;
 
@@ -326,6 +350,15 @@ try {
   }
   assert.equal(preflightReady, true, 'preflight should finish after explicit choices');
 
+  // Certification preflight: the same flow with an available official export ID
+  // must reach 'ready' through the json.php comparison path (identity checks).
+  const certifiedPreflight = await importer.preflightPathbuilderImport('1597410', {
+    fetchImpl: createFetch(certifiedBuild),
+    derivedOverride: derivedFixture,
+    selectionOverrides,
+  });
+  assert.equal(certifiedPreflight.status, 'ready', certifiedPreflight.error ?? 'certified preflight failed');
+
   // Exclude preflight reads from the assertions for the actual import call.
   shareRequests = 0;
   derivedRequests = 0;
@@ -333,6 +366,42 @@ try {
 
   assert.equal(shareRequests, 1);
   assert.equal(derivedRequests, 0);
+
+  // Full certification path: the same import with an available official export
+  // ID must succeed and produce identical mechanical results. The derived
+  // payload's independent values (key ability STR, AC 24) match the WG engine
+  // recomputation asserted against the PDF oracle below.
+  shareRequests = 0;
+  derivedRequests = 0;
+  const certifiedOutcome = await importer.importFromPathbuilderShare('1597410', {
+    silent: true,
+    selectionOverrides,
+    fetchImpl: createFetch(certifiedBuild),
+    derivedOverride: derivedFixture,
+  });
+  assert.equal(shareRequests, 1);
+  assert.equal(derivedRequests, 0);
+  assert.equal(certifiedOutcome.ok, true, certifiedOutcome.ok ? '' : certifiedOutcome.error);
+  assert.deepEqual(certifiedOutcome.warnings, []);
+  assert.equal(certifiedOutcome.character?.name, 'Kasane');
+
+  // Fail-closed identity check: a mismatched export ID blocks the import before
+  // any character is created (contract layer 5 / export-identity policy).
+  const mismatchedDerived = { ...derivedFixture, name: 'Someone Else' };
+  let blocked = null;
+  try {
+    blocked = await importer.importFromPathbuilderShare('1597410', {
+      silent: true,
+      selectionOverrides,
+      fetchImpl: createFetch(certifiedBuild),
+      derivedOverride: mismatchedDerived,
+    });
+  } catch (error) {
+    blocked = { ok: false, error: error.message };
+  }
+  assert.equal(blocked.ok, false, 'a mismatched json.php export must block the import');
+  assert.match(blocked.error, /mismatch for name/i);
+
   assert.equal(outcome.ok, true, outcome.ok ? '' : outcome.error);
   assert.deepEqual(
     outcome.warnings,
