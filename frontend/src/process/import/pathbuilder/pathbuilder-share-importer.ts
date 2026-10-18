@@ -1433,7 +1433,13 @@ function getSpecialSelectionsForOperation(
   const matches = resolved.specialSelections
     .filter((special) => {
       const prompt = labelToVariable(special.prompt.replace(/^select\s+(?:an?\s+)?/i, ''));
-      return prompt === normalizedTitle;
+
+      // Pathbuilder labels this editor choice "Blessing of the Devoted", while WG's
+      // actual level-3 selector is titled "Select a Blessing". They are the same
+      // semantic choice; failing to alias them silently falls back to the first option.
+      const isBlessingSelector =
+        normalizedTitle === 'BLESSING' && prompt === 'BLESSING_OF_THE_DEVOTED';
+      return prompt === normalizedTitle || isBlessingSelector;
     })
     .map((special) => ({ name: special.value, level }));
 

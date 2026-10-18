@@ -341,6 +341,26 @@ try {
   );
   assert.equal(outcome.character?.id, 9001);
   assert.equal(outcome.character?.name, 'Kasane');
+
+  // The raw Pathbuilder prompt and WG selector title differ, but importing must retain
+  // the player's explicit Blessed Swiftness choice rather than accepting the first option.
+  const blessingFeature = content.abilityBlocks.find((block) => block.name === 'Blessing of the Devoted');
+  assert.ok(blessingFeature, 'test content must include the Blessing of the Devoted class feature');
+  const blessingSelector = blessingFeature.operations.find(
+    (operation) => operation.type === 'select' && operation.data?.title === 'Select a Blessing'
+  );
+  assert.ok(blessingSelector, 'Blessing of the Devoted must expose its blessing selector');
+  const blessingSelectionPath = `class-feature-${blessingFeature.id}_${blessingSelector.id}`;
+  const selectedBlessingId = outcome.character.operation_data?.selections?.[blessingSelectionPath];
+  assert.ok(selectedBlessingId, 'the imported character must resolve its blessing selection');
+  const selectedBlessingOption = blessingSelector.data.optionsPredefined.find(
+    (option) => String(option.id) === String(selectedBlessingId)
+  );
+  assert.ok(selectedBlessingOption, 'the selected blessing must map to a legal WG option');
+  const selectedBlessing = content.abilityBlocks.find(
+    (block) => block.id === selectedBlessingOption.operation?.data?.abilityBlockId
+  );
+  assert.equal(selectedBlessing?.name, 'Blessed Swiftness', 'Pathbuilder Blessed Swiftness choice must survive 1:1 import');
   assert.ok(
     outcome.character?.custom_operations?.some(
       (operation) =>
