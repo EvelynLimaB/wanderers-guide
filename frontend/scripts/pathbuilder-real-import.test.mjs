@@ -342,15 +342,13 @@ try {
   assert.equal(outcome.character?.id, 9001);
   assert.equal(outcome.character?.name, 'Kasane');
 
-  const hunterSheetSpeed = (outcome.character.custom_operations ?? []).filter(
+  const hunterSpeedAdjustment = (outcome.character.custom_operations ?? []).filter(
     (operation) =>
-      operation.type === 'addBonusToValue' &&
+      operation.type === 'adjValue' &&
       operation.data.variable === 'SPEED' &&
-      operation.data.value === 5 &&
-      operation.data.type === undefined &&
-      operation.data.text === ''
+      operation.data.value === 5
   );
-  assert.equal(hunterSheetSpeed.length, 1, 'Hunter Automaton sheet Speed adjustment must be present exactly once');
+  assert.equal(hunterSpeedAdjustment.length, 1, 'Hunter Automaton base Speed adjustment must be present exactly once');
 
   // The raw Pathbuilder prompt and WG selector title differ, but importing must retain
   // the player's explicit Blessed Swiftness choice rather than accepting the first option.
@@ -410,6 +408,7 @@ try {
     assert.equal(engine.getFinalHealthValue('CHARACTER'), 99, '1597410 HP must match the PDF oracle');
     const speedValue = engine.getFinalVariableValue('CHARACTER', 'SPEED');
     const speedBonuses = engine.getVariableBonuses('CHARACTER', 'SPEED');
+    assert.equal(speedValue.value, 30, '1597410 Hunter Automaton displayed quadruped Speed must adjust the baseline to 30 feet');
 
     const selectedFeatureNames = [...new Set(
       Object.values(outcome.character.operation_data?.selections ?? {})

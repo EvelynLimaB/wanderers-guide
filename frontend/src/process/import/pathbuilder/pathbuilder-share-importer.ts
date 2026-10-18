@@ -1304,8 +1304,10 @@ function buildPathbuilderCustomOperations(
   // The Pathbuilder sheet oracle for build 1597410 includes the Hunter Automaton
   // quadruped speed in its displayed Speed total. WG's shared heritage operation only
   // preserves the hands-free condition as explanatory text, so it contributes no
-  // numeric value. Reproduce Pathbuilder's sheet total with a character-scoped +5;
-  // do not mutate shared rules content or remove the original condition text.
+  // numeric value. Reproduce Pathbuilder's sheet total with an adjValue operation,
+  // not a typed bonus: the variable engine tracks base-speed adjustments separately so
+  // derived speeds inherit the same baseline. Do not mutate shared rules content or
+  // remove the original condition text.
   const hasHunterAutomatonHeritage =
     labelToVariable(resolved.identity.heritage ?? '') === 'HUNTER_AUTOMATON' ||
     resolved.feats.some(
@@ -1316,11 +1318,10 @@ function buildPathbuilderCustomOperations(
   if (hasHunterAutomatonHeritage) {
     operations.push({
       id: crypto.randomUUID(),
-      type: 'addBonusToValue',
+      type: 'adjValue',
       data: {
         variable: 'SPEED',
         value: 5,
-        text: '',
       },
     });
   }
