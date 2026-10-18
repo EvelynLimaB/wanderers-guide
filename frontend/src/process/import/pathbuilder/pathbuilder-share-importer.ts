@@ -861,7 +861,7 @@ function customEffectOperations(
   const operations: Operation[] = [];
   const emitted = new Set<string>();
 
-  const addBonusOperation = (variable: string, amount: number, text: string) => {
+  const addBonusOperation = (variable: string, amount: number) => {
     const key = `${variable}:${amount}`;
     if (emitted.has(key)) return;
     emitted.add(key);
@@ -872,7 +872,9 @@ function customEffectOperations(
         variable,
         value: amount,
         type: 'item',
-        text,
+        // These numeric effects are active as represented by the Pathbuilder payload.
+        // `text` is reserved for conditional modifiers and otherwise suppresses totals.
+        text: '',
       },
     });
   };
@@ -899,8 +901,7 @@ function customEffectOperations(
       if (variable) {
         addBonusOperation(
           variable,
-          amount,
-          `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder custom effect)`
+          amount
         );
       } else {
         warnings.push(
@@ -914,8 +915,7 @@ function customEffectOperations(
       if (variable) {
         addBonusOperation(
           variable,
-          amount,
-          `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder effect ${effect.effectType})`
+          amount
         );
       } else if (!effect.proficiencyName) {
         warnings.push(
@@ -940,16 +940,14 @@ function customEffectOperations(
       if (targets.toLowerCase().includes(skill.toLowerCase())) {
         addBonusOperation(
           `SKILL_${labelToVariable(skill)}`,
-          amount,
-          `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder custom description)`
+          amount
         );
       }
     }
     if (targets.toLowerCase().includes('speed')) {
       addBonusOperation(
         'SPEED',
-        amount,
-        `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder custom description)`
+        amount
       );
     }
   }
@@ -958,8 +956,7 @@ function customEffectOperations(
   if (speedMatch) {
     addBonusOperation(
       'SPEED',
-      Number(speedMatch[1]) * stackMultiplier,
-      `${customFile.name ?? 'Pathbuilder Custom'} (Pathbuilder custom description)`
+      Number(speedMatch[1]) * stackMultiplier
     );
   }
 

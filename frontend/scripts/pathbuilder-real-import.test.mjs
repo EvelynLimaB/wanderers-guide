@@ -380,10 +380,19 @@ try {
     assert.equal(engine.getFinalHealthValue('CHARACTER'), 99, '1597410 HP must match the PDF oracle');
     const speedValue = engine.getFinalVariableValue('CHARACTER', 'SPEED');
     const speedBonuses = engine.getVariableBonuses('CHARACTER', 'SPEED');
+
+    const selectedFeatureNames = [...new Set(
+      Object.values(outcome.character.operation_data?.selections ?? {})
+        .map((selection) => content.abilityBlocks.find((block) => String(block.id) === String(selection))?.name)
+        .filter((name) => typeof name === 'string')
+    )];
+    const movementFeatureSelections = selectedFeatureNames.filter((name) =>
+      /blessed|swiftness|hunter automaton|fleet/i.test(name)
+    );
     assert.equal(
       speedValue.total,
       45,
-      `1597410 speed must match the PDF oracle; base=${speedValue.value}; bonuses=${JSON.stringify(speedBonuses)}; selections=${JSON.stringify(outcome.character.operation_data?.selections)}; equipped speed items=${JSON.stringify(outcome.character.inventory.items.filter((entry) => entry.is_equipped && entry.item?.operations?.some((operation) => operation.type === 'addBonusToValue' && operation.data.variable === 'SPEED')).map((entry) => ({ name: entry.item.name, operations: entry.item.operations.filter((operation) => operation.type === 'addBonusToValue' && operation.data.variable === 'SPEED') })))}`
+      `1597410 speed must match the PDF oracle; base=${speedValue.value}; bonuses=${JSON.stringify(speedBonuses)}; selections=${JSON.stringify(outcome.character.operation_data?.selections)}; movement feature selections=${JSON.stringify(movementFeatureSelections)}; equipped speed items=${JSON.stringify(outcome.character.inventory.items.filter((entry) => entry.is_equipped && entry.item?.operations?.some((operation) => operation.type === 'addBonusToValue' && operation.data.variable === 'SPEED')).map((entry) => ({ name: entry.item.name, operations: entry.item.operations.filter((operation) => operation.type === 'addBonusToValue' && operation.data.variable === 'SPEED') })))}`
     );
 
     const prof = (name) => engine.getFinalProfValue('CHARACTER', name);
