@@ -437,13 +437,18 @@ try {
     assert.equal(prof('SKILL_SURVIVAL'), '+12');
     assert.equal(prof('SKILL_LORE_LEGAL'), '+9');
 
-    const inventoryNames = outcome.character.inventory.items.map((entry) => entry.item?.name);
+    // Inventory is hierarchical: items stored in the Backpack are nested in
+    // container_contents, so validate quantities across the complete tree.
+    const flattenInventory = (items) =>
+      items.flatMap((entry) => [entry, ...flattenInventory(entry.container_contents ?? [])]);
+    const inventoryItems = flattenInventory(outcome.character.inventory.items);
+    const inventoryNames = inventoryItems.map((entry) => entry.item?.name);
     assert.equal(inventoryNames.filter((name) => name === 'Chalk').length, 10);
     assert.equal(inventoryNames.filter((name) => name === 'Rations').length, 2);
     assert.equal(outcome.character.spells.list.length, 1);
 
     const weaponByName = (name) =>
-      outcome.character.inventory.items.find((entry) => entry.item?.name === name)?.item;
+      inventoryItems.find((entry) => entry.item?.name === name)?.item;
     const javelin = weaponByName('Javelin');
     const dagger = weaponByName('Dagger');
     const claw = weaponByName('Claw');
