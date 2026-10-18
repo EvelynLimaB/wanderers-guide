@@ -482,7 +482,7 @@ try {
 
     assert.equal(stingerStats.attack_bonus.total[0], 16, 'stinger first attack modifier must match the Pathbuilder sheet');
 
-    assert.equal(stingerStats.attack_bonus.total, 16);
+    assert.deepEqual(stingerStats.attack_bonus.total, [16, 11, 6], 'Stinger uses standard multiple-attack penalty values');
     assert.equal(stingerStats.damage.dice, 2);
     assert.equal(stingerStats.damage.die, 'd6');
 
