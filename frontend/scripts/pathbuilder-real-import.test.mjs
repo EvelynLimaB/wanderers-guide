@@ -342,6 +342,16 @@ try {
   assert.equal(outcome.character?.id, 9001);
   assert.equal(outcome.character?.name, 'Kasane');
 
+  const hunterSheetSpeed = (outcome.character.custom_operations ?? []).filter(
+    (operation) =>
+      operation.type === 'addBonusToValue' &&
+      operation.data.variable === 'SPEED' &&
+      operation.data.value === 5 &&
+      operation.data.type === undefined &&
+      operation.data.text === ''
+  );
+  assert.equal(hunterSheetSpeed.length, 1, 'Hunter Automaton sheet Speed adjustment must be present exactly once');
+
   // The raw Pathbuilder prompt and WG selector title differ, but importing must retain
   // the player's explicit Blessed Swiftness choice rather than accepting the first option.
   const blessingFeature = content.abilityBlocks.find((block) => block.name === 'Blessing of the Devoted');
@@ -406,9 +416,9 @@ try {
         .map((selection) => content.abilityBlocks.find((block) => String(block.id) === String(selection))?.name)
         .filter((name) => typeof name === 'string')
     )];
-    const movementFeatureSelections = selectedFeatureNames.filter((name) =>
-      /blessed|swiftness|hunter automaton|fleet/i.test(name)
-    );
+    const movementFeatureSelections = [
+      ...new Set([...selectedFeatureNames, selectedBlessing?.name].filter((name) => typeof name === 'string')),
+    ].filter((name) => /blessed|swiftness|hunter automaton|fleet/i.test(name));
     assert.equal(
       speedValue.total,
       45,

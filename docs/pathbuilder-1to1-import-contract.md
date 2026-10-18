@@ -30,6 +30,8 @@ When Pathbuilder omits `playerArmor.armorName`, its model default is `Unarmored`
 
 The real json.php?id=1597410 endpoint returned 404 during capture. The absence of derived data is therefore a tested and supported condition, not a reason to fabricate a derived fixture.
 
+For this golden build, the Pathbuilder PDF reports 45-foot Speed: Automaton base 25, Hunter Automaton's displayed quadruped speed (+5), Fleet (+5), Blessed Swiftness (+5), and the Crimson Blade (+5). Wanderer's Guide's shared Hunter Automaton entry currently preserves the hands-free requirement as conditional explanatory text but contributes no numeric Speed. The importer therefore applies a character-scoped +5 to mirror the Pathbuilder sheet total while preserving that original condition text. This compatibility adjustment is limited to characters whose selected heritage is Hunter Automaton; it does not modify the shared rules content.
+
 ## Non-goals
 
 This contract does not claim every future Pathbuilder rule or third-party custom effect is executable. Unsupported mechanical effects must remain explicitly represented and must block a certified 1:1 import when they affect calculated character state.

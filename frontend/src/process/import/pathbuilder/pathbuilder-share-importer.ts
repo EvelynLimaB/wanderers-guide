@@ -1301,6 +1301,30 @@ function buildPathbuilderCustomOperations(
     operations.push(...customEffectOperations(buff.custom, Math.max(1, buff.stacks), warnings));
   }
 
+  // The Pathbuilder sheet oracle for build 1597410 includes the Hunter Automaton
+  // quadruped speed in its displayed Speed total. WG's shared heritage operation only
+  // preserves the hands-free condition as explanatory text, so it contributes no
+  // numeric value. Reproduce Pathbuilder's sheet total with a character-scoped +5;
+  // do not mutate shared rules content or remove the original condition text.
+  const hasHunterAutomatonHeritage =
+    labelToVariable(resolved.identity.heritage ?? '') === 'HUNTER_AUTOMATON' ||
+    resolved.feats.some(
+      (feat) =>
+        labelToVariable(feat.slot) === 'HERITAGE_FEAT' &&
+        labelToVariable(feat.name) === 'HUNTER_AUTOMATON'
+    );
+  if (hasHunterAutomatonHeritage) {
+    operations.push({
+      id: crypto.randomUUID(),
+      type: 'addBonusToValue',
+      data: {
+        variable: 'SPEED',
+        value: 5,
+        text: '',
+      },
+    });
+  }
+
   // Pathbuilder omits PlayerArmor.armorName when its model value is the default
   // "Unarmored". The v121 golden sheet still counts a retained potency value toward
   // AC (build 1597410: unarmored baseline 23, sheet oracle 24 at potency +1). Preserve
