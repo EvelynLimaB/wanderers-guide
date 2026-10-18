@@ -137,7 +137,8 @@ describe('Pathbuilder 1:1 import UI', () => {
         };
         tick();
       });
-    }).then((outcome: string) => {
+    }).then((rawOutcome) => {
+      const outcome = String(rawOutcome);
       if (outcome === 'blocked-export-unavailable') {
         // Correct fail-closed behavior on a stack where json.php is unreachable.
         cy.log('Golden leg blocked by unavailable export ID — fail-closed verified.');
