@@ -468,25 +468,25 @@ try {
     const stingerStats = engine.getWeaponStats('CHARACTER', stinger);
     const crimsonStats = engine.getWeaponStats('CHARACTER', crimson);
 
-    assert.equal(javelinStats.attack_bonus.total, 14);
+    assert.equal(javelinStats.attack_bonus.total[0], 14, 'javelin first attack modifier must match the Pathbuilder sheet');
     assert.equal(javelinStats.damage.dice, 2);
     assert.equal(javelinStats.damage.die, 'd6');
 
-    assert.equal(daggerStats.attack_bonus.total, 16);
+    assert.equal(daggerStats.attack_bonus.total[0], 16, 'dagger first attack modifier must match the Pathbuilder sheet');
     assert.equal(daggerStats.damage.dice, 2);
     assert.equal(daggerStats.damage.die, 'd4');
 
-    assert.equal(clawStats.attack_bonus.total, 16);
+    assert.equal(clawStats.attack_bonus.total[0], 16, 'claw first attack modifier must match the Pathbuilder sheet');
     assert.equal(clawStats.damage.dice, 2);
     assert.equal(clawStats.damage.die, 'd4');
 
-    assert.equal(stingerStats.attack_bonus.total, 16);
+    assert.equal(stingerStats.attack_bonus.total[0], 16, 'stinger first attack modifier must match the Pathbuilder sheet');
 
     assert.equal(stingerStats.attack_bonus.total, 16);
     assert.equal(stingerStats.damage.dice, 2);
     assert.equal(stingerStats.damage.die, 'd6');
 
-    assert.equal(crimsonStats.attack_bonus.total, 16);
+    assert.equal(crimsonStats.attack_bonus.total[0], 16, 'crimson first attack modifier must match the Pathbuilder sheet');
     assert.equal(crimsonStats.damage.dice, 2);
     assert.equal(crimsonStats.damage.die, 'd12');
   } finally {
