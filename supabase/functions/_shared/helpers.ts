@@ -664,7 +664,16 @@ export async function fetchData<T = Record<string, any>>(
   // Postgres guarantees no row order across the separate chunk queries, so a plan flip
   // mid-pagination silently drops or duplicates rows — an HTTP 200 with a partial corpus
   // that clients then persist as complete. Every fetchData table has an `id` bigint PK.
-  const CHUNK_SIZE = 5000;
+  //
+  // CHUNK_SIZE must equal the smallest PostgREST `db-max-rows` cap any deployment might
+  // enforce on this stack. The loop only continues when a page comes back *exactly* full
+  // (`data.length === CHUNK_SIZE`), so if the server caps responses below CHUNK_SIZE
+  // (self-hosted stacks observed returning exactly 1000 rows regardless of the requested
+  // limit), every fetch silently stops after one truncated page — e.g. ability_block
+  // lists missing heritages such as Hunter Automaton, which blocks Pathbuilder imports
+  // at selection resolution. 1000 matches the lowest observed cap and is safe everywhere:
+  // larger caps just produce more (still correct) pages.
+  const CHUNK_SIZE = 1000;
   let lastId: number | null = null;
   let allRows: T[] = [];
   let hasMore = true;
