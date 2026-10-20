@@ -1739,6 +1739,15 @@ async function resolveSelections(
           current.selection?.selection?.description ??
           'Select a required option';
       const manualOptions = getManualSelectionOptions(options, selectionTitle, character, content);
+      const seenOptionIds = new Set<string>();
+      for (const option of manualOptions) {
+        if (seenOptionIds.has(option._select_uuid)) {
+          const message = `Pathbuilder selection options contain duplicate identifiers for "${selectionTitle}" at level ${current.level}: ${option._select_uuid}`;
+          console.error(message);
+          throw new Error(message);
+        }
+        seenOptionIds.add(option._select_uuid);
+      }
 
       // If Pathbuilder did record a heritage but WG's level-filtered selector
       // omitted null-level heritage entries, resolve against the same ancestry-
@@ -1765,7 +1774,7 @@ async function resolveSelections(
           level: current.level,
           options: manualOptions.map((option) => ({
             value: option._select_uuid,
-            label: String(option.name ?? option.title ?? option._select_uuid ?? 'Unnamed option'),
+            label: String(option._display_label ?? option.name ?? option.title ?? option._select_uuid ?? 'Unnamed option'),
             ...(typeof option.description === 'string' && option.description
               ? { description: option.description }
               : {}),
