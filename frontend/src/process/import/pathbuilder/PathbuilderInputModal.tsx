@@ -1,4 +1,4 @@
-import { Anchor, Button, Group, Modal, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Anchor, Box, Button, Group, Modal, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useEffect, useRef, useState } from 'react';
 
 import { extractBuildId } from './fetch-pathbuilder-share';
