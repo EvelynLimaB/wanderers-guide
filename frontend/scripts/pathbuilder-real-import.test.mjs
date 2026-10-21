@@ -452,6 +452,38 @@ try {
     false,
     'a matching derived AC value should not create an AC discrepancy warning'
   );
+  const chassisInventoryEntry = chassisOutcome.character.inventory.items.find(
+    (entry) => entry.item.name === 'Automaton Chassi (5th level)'
+  );
+  assert.ok(chassisInventoryEntry, 'the reconstructed chassis should exist as equipped armor');
+  assert.equal(chassisInventoryEntry.item.meta_data?.runes?.potency, 1);
+  assert.equal(
+    chassisInventoryEntry.item.meta_data?.runes?.resilient,
+    1,
+    'the derived resilient rune must survive armor reconstruction'
+  );
+
+  // A chassis feat must not rewrite a different explicitly named armor item.
+  const fullPlateOutcome = await importer.importFromPathbuilderShare('1597410', {
+    silent: true,
+    selectionOverrides,
+    fetchImpl: createFetch(certifiedBuild),
+    derivedOverride: {
+      ...derivedFixture,
+      armor: [{ name: 'Full Plate', pot: 1, res: 'resilient', worn: true }],
+      acTotal: { acTotal: 24 },
+    },
+  });
+  assert.equal(fullPlateOutcome.ok, true, fullPlateOutcome.ok ? '' : fullPlateOutcome.error);
+  const fullPlateEntry = fullPlateOutcome.character.inventory.items.find(
+    (entry) => entry.item.name === 'Full Plate'
+  );
+  assert.ok(fullPlateEntry, 'the explicitly identified armor should remain equipped');
+  assert.notEqual(
+    fullPlateEntry.item.meta_data?.category,
+    'unarmored_defense',
+    'the Reinforced Chassis rule must not overwrite a different armor item'
+  );
 
   // Fail-closed identity check: a mismatched export ID blocks the import before
   // any character is created (contract layer 5 / export-identity policy).
