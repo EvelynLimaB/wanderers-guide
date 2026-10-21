@@ -44,6 +44,7 @@ export const RequestTypeSchema = z.enum([
   'create-character',
   'create-pathbuilder-import',
   'create-pathbuilder-content-source',
+  'fetch-pathbuilder',
   'find-character',
   'update-character',
   'create-content-update',
