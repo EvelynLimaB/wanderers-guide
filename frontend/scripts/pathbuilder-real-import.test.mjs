@@ -324,10 +324,19 @@ try {
   const selectionOverrides = {};
   let preflight = await importer.preflightPathbuilderImport('1597410', {
     fetchImpl: createFetch(certifiedBuild),
+    derivedOverride: derivedFixture,
     selectionOverrides,
   });
   assert.equal(preflight.status, 'selection-required', 'fixture should expose its omitted required choice');
   assert.match(preflight.selection.title, /deific weapon/i);
+  assert.equal(preflight.snapshot.target?.ac?.total, 24, 'preflight exposes the official AC target');
+  assert.equal(
+    preflight.snapshot.target?.abilities.find((ability) => ability.key === 'str')?.score,
+    18,
+    'preflight exposes the official ability score target'
+  );
+  assert.equal(preflight.snapshot.current.abilities.length, 6, 'preflight exposes current WG ability modifiers');
+  assert.equal(typeof preflight.snapshot.current.acTotal === 'number' || preflight.snapshot.current.acTotal === null, true);
 
   // Simulate the user answering each required choice in order. Later prompts can
   // appear only after earlier options have been applied to the selection tree.
@@ -341,6 +350,7 @@ try {
     selectionOverrides[preflight.selection.key] = preflight.selection.options[0].value;
     preflight = await importer.preflightPathbuilderImport('1597410', {
       fetchImpl: createFetch(certifiedBuild),
+      derivedOverride: derivedFixture,
       selectionOverrides,
     });
     if (preflight.status === 'ready') {
@@ -358,6 +368,8 @@ try {
     selectionOverrides,
   });
   assert.equal(certifiedPreflight.status, 'ready', certifiedPreflight.error ?? 'certified preflight failed');
+  assert.equal(certifiedPreflight.snapshot.target?.ac?.total, 24);
+  assert.equal(certifiedPreflight.snapshot.current.abilities.length, 6);
 
   // Exclude preflight reads from the assertions for the actual import call.
   shareRequests = 0;
