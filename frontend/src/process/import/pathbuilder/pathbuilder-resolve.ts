@@ -170,7 +170,7 @@ function parsePathbuilderArmorResilience(value: string | null | undefined): numb
   ) {
     return 0;
   }
-  if (!normalized.includes('RESILIENT')) return 0;
+  if (!normalized.includes('RESILIENT')) return -1;
   if (normalized.includes('MAJOR') || /RESILIENT.*(?:_3|_III)$/.test(normalized)) return 3;
   if (normalized.includes('GREATER') || /RESILIENT.*(?:_2|_II)$/.test(normalized)) return 2;
   return 1;
@@ -501,7 +501,7 @@ export function resolveBuild(
       'Armor: Pathbuilder JSON includes armor rows but does not identify a unique worn item; none was selected automatically.'
     );
   }
-  if (derivedArmor?.res && parsePathbuilderArmorResilience(derivedArmor.res) === 0) {
+  if (derivedArmor?.res && parsePathbuilderArmorResilience(derivedArmor.res) === -1) {
     hints.push(
       `Armor: Pathbuilder JSON resilience rune "${derivedArmor.res}" could not be mapped to a known rank; its saving-throw bonus was not applied.`
     );
@@ -638,7 +638,7 @@ export function resolveBuild(
     // omitted by the share payload only when it identifies one unambiguous worn item.
     armorRunes: armorRaw?.listPropertyRunes ?? derivedArmor?.runes ?? [],
     armorPotency: armorRaw?.potency ?? derivedArmor?.pot ?? 0,
-    armorResilience: parsePathbuilderArmorResilience(derivedArmor?.res),
+    armorResilience: Math.max(0, parsePathbuilderArmorResilience(derivedArmor?.res)),
     shield,
     looseEquipment: loose,
     containers,
