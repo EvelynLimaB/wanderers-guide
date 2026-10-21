@@ -73,9 +73,44 @@ export type PathbuilderSelectionPrompt = {
   options: Array<{ value: string; label: string; description?: string }>;
 };
 
+export type PathbuilderTargetSummary = {
+  name?: string;
+  level?: number;
+  abilities: Array<{ key: string; label: string; score: number; modifier: number }>;
+  ac?: {
+    total?: number;
+    proficiency?: number;
+    ability?: number;
+    item?: number;
+    shield?: number | string | null;
+  };
+  proficiencies: Array<{ name: string; value: number; rank: string }>;
+  attributes: Array<{ name: string; value: number }>;
+  armor: Array<{
+    name: string;
+    display?: string;
+    worn?: boolean;
+    proficiency?: string;
+    potency?: number;
+    resilience?: string;
+    runes: string[];
+  }>;
+  resistances: string[];
+};
+
+export type PathbuilderCurrentSummary = {
+  abilities: Array<{ key: string; label: string; modifier: number }>;
+  acTotal: number | null;
+};
+
+export type PathbuilderPreflightSnapshot = {
+  target?: PathbuilderTargetSummary;
+  current: PathbuilderCurrentSummary;
+};
+
 export type PathbuilderSelectionPreflightOutcome =
-  | { status: 'ready' }
-  | { status: 'selection-required'; selection: PathbuilderSelectionPrompt }
+  | { status: 'ready'; snapshot: PathbuilderPreflightSnapshot }
+  | { status: 'selection-required'; selection: PathbuilderSelectionPrompt; snapshot: PathbuilderPreflightSnapshot }
   | { status: 'error'; error: string };
 
 /**
@@ -317,9 +352,13 @@ export async function preflightPathbuilderImport(
       { preflightOnly: true, selectionOverrides: options.selectionOverrides }
     );
 
+    const snapshot: PathbuilderPreflightSnapshot = {
+      target: derived ? summarizePathbuilderTargets(derived) : undefined,
+      current: preflight.current,
+    };
     return preflight.status === 'selection-required'
-      ? { status: 'selection-required', selection: preflight.selection }
-      : { status: 'ready' };
+      ? { status: 'selection-required', selection: preflight.selection, snapshot }
+      : { status: 'ready', snapshot };
   } catch (error) {
     return {
       status: 'error',
@@ -1103,7 +1142,10 @@ export function buildCharacter(
   warnings: string[],
   derived: import('@schemas/pathbuilder').PathbuilderDerivedBuild | null,
   buildOptions: { preflightOnly: true; selectionOverrides?: Record<string, string> }
-): Promise<{ status: 'ready' } | { status: 'selection-required'; selection: PathbuilderSelectionPrompt }>;
+): Promise<
+  | { status: 'ready'; current: PathbuilderCurrentSummary }
+  | { status: 'selection-required'; selection: PathbuilderSelectionPrompt; current: PathbuilderCurrentSummary }
+>;
 export async function buildCharacter(
   resolved: ResolvedBuild,
   content: Awaited<ReturnType<typeof fetchContentPackage>>,
@@ -1113,7 +1155,12 @@ export async function buildCharacter(
   warnings: string[],
   derived?: import('@schemas/pathbuilder').PathbuilderDerivedBuild | null,
   buildOptions: { preflightOnly?: boolean; selectionOverrides?: Record<string, string> } = {}
-): Promise<Character | null | { status: 'ready' } | { status: 'selection-required'; selection: PathbuilderSelectionPrompt }> {
+): Promise<
+  | Character
+  | null
+  | { status: 'ready'; current: PathbuilderCurrentSummary }
+  | { status: 'selection-required'; selection: PathbuilderSelectionPrompt; current: PathbuilderCurrentSummary }
+> {
   const character = {
     id: -1,
     created_at: '',
@@ -1239,9 +1286,10 @@ export async function buildCharacter(
     buildOptions.selectionOverrides
   );
   if (buildOptions.preflightOnly) {
+    const current = await calculatePathbuilderCurrentSummary(character, resolved, content, customItems);
     return missingSelection
-      ? { status: 'selection-required', selection: missingSelection }
-      : { status: 'ready' };
+      ? { status: 'selection-required', selection: missingSelection, current }
+      : { status: 'ready', current };
   }
   if (missingSelection) {
     throw new Error(
@@ -1291,6 +1339,179 @@ export async function buildCharacter(
     ...character,
     id: undefined, // remove the sentinel so the API creates a new row
   });
+}
+
+const PATHBUILDER_ABILITY_LABELS: Record<string, string> = {
+  str: 'STR',
+  dex: 'DEX',
+  con: 'CON',
+  int: 'INT',
+  wis: 'WIS',
+  cha: 'CHA',
+};
+
+const PATHBUILDER_PROFICIENCY_RANKS: Record<number, string> = {
+  0: 'Untrained',
+  2: 'Trained',
+  4: 'Expert',
+  6: 'Master',
+  8: 'Legendary',
+};
+
+function summarizePathbuilderTargets(
+  derived: import('@schemas/pathbuilder').PathbuilderDerivedBuild
+): PathbuilderTargetSummary {
+  const abilities = Object.entries(derived.abilities ?? {})
+    .filter(
+      (entry): entry is [string, number] =>
+        entry[0] in PATHBUILDER_ABILITY_LABELS && typeof entry[1] === 'number'
+    )
+    .map(([key, score]) => ({
+      key,
+      label: PATHBUILDER_ABILITY_LABELS[key],
+      score,
+      modifier: Math.floor((score - 10) / 2),
+    }));
+
+  const acSource = derived.acTotal;
+  const ac = acSource
+    ? {
+        total: acSource.acTotal,
+        proficiency: acSource.acProfBonus,
+        ability: acSource.acAbilityBonus,
+        item: acSource.acItemBonus,
+        shield: acSource.shieldBonus,
+      }
+    : undefined;
+
+  const proficiencies = Object.entries(derived.proficiencies ?? {})
+    .filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+    .map(([name, value]) => ({
+      name,
+      value,
+      rank: PATHBUILDER_PROFICIENCY_RANKS[value] ?? `Pathbuilder value ${value}`,
+    }));
+
+  const attributes = Object.entries(derived.attributes ?? {})
+    .filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+    .map(([name, value]) => ({ name, value }));
+
+  const armor = (derived.armor ?? [])
+    .filter((item) => typeof item.name === 'string' && item.name.length > 0)
+    .map((item) => ({
+      name: item.name!,
+      display: item.display ?? undefined,
+      worn: item.worn ?? undefined,
+      proficiency: item.prof ?? undefined,
+      potency: item.pot ?? undefined,
+      resilience: item.res ?? undefined,
+      runes: item.runes ?? [],
+    }));
+
+  return {
+    name: derived.name ?? undefined,
+    level: derived.level,
+    abilities,
+    ac,
+    proficiencies,
+    attributes,
+    armor,
+    resistances: derived.resistances ?? [],
+  };
+}
+
+/**
+ * Calculate a non-persistent snapshot with exactly the choices confirmed so far.
+ * Preflight has no persisted custom/reference items, so synthesize only the
+ * missing worn Reinforced Chassis armor row in memory when the normal inventory
+ * resolver cannot find it. This mirrors the same metadata applied during import.
+ */
+async function calculatePathbuilderCurrentSummary(
+  character: Character,
+  resolved: ResolvedBuild,
+  content: Awaited<ReturnType<typeof fetchContentPackage>>,
+  customItems: Map<string, Item>
+): Promise<PathbuilderCurrentSummary> {
+  const previewWarnings: string[] = [];
+  const previewCharacter = cloneDeep(character);
+  const inventoryItems = buildInventory(resolved, content, customItems, previewWarnings);
+  const reinforcedChassis = resolved.feats.some(
+    (feat) => labelToVariable(feat.name) === 'REINFORCED_CHASSIS'
+  );
+  const inventoryHasResolvedArmor = resolved.armor
+    ? inventoryItems.some((entry) => labelToVariable(entry.item.name) === labelToVariable(resolved.armor!.name))
+    : false;
+
+  if (resolved.armor && reinforcedChassis && !inventoryHasResolvedArmor) {
+    const referenceArmor = {
+      id: -1,
+      created_at: '',
+      name: resolved.armor.name,
+      price: null,
+      bulk: null,
+      level: 0,
+      rarity: 'COMMON',
+      traits: [],
+      description: '',
+      group: 'ARMOR',
+      hands: null,
+      size: 'MEDIUM',
+      craft_requirements: null,
+      usage: null,
+      operations: [],
+      content_source_id: -1,
+      version: '1.0',
+      meta_data: { bulk: {} },
+    } as Item;
+    const withRunes = withPathbuilderRunes(
+      referenceArmor,
+      resolved.armorPotency,
+      0,
+      resolved.armorRunes,
+      content,
+      previewWarnings
+    );
+    const item = withPathbuilderReinforcedChassis(withRunes, resolved);
+    inventoryItems.push({
+      id: 'pathbuilder-preflight-armor',
+      item,
+      is_formula: false,
+      is_equipped: true,
+      is_invested: false,
+      is_implanted: false,
+      container_contents: [],
+    });
+  }
+
+  previewCharacter.inventory = {
+    coins: { ...resolved.coins },
+    items: inventoryItems,
+  };
+
+  await executeOperations<OperationCharacterResultPackage>({
+    type: 'CHARACTER',
+    data: {
+      character: cloneDeep(previewCharacter),
+      content,
+      context: 'CHARACTER-SHEET',
+    },
+  });
+
+  const abilities = Object.entries(PATHBUILDER_ABILITY_LABELS).map(([key, label]) => ({
+    key,
+    label,
+    modifier: getFinalVariableValue('CHARACTER', `ATTRIBUTE_${key.toUpperCase()}`).total,
+  }));
+
+  const armor = getBestArmor('CHARACTER', previewCharacter.inventory)?.item;
+  let acTotal: number | null = null;
+  try {
+    acTotal = getFinalAcValue('CHARACTER', armor);
+  } catch (error) {
+    console.warn('Could not calculate Pathbuilder preflight AC preview:', error);
+  }
+
+  return { abilities, acTotal };
 }
 
 /**
