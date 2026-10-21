@@ -9,7 +9,7 @@ The Pathbuilder importer must reproduce the character represented by the share p
 1. A required Pathbuilder selection with no matching Wanderer's Guide option is a hard import failure. It must never be downgraded to a warning.
 2. Selection resolution is bounded and deterministic. A malformed or non-converging operation tree must fail before character creation.
 3. Character creation happens only after all required selections are resolved.
-4. Unresolved data that can be preserved losslessly is stored in import provenance; data that changes the mechanical character must not be presented as a successful 1:1 import.
+4. Unresolved data is retained in import provenance and explicitly reported. Character creation success is separate from mechanical parity: a known AC discrepancy or uncertain armor reference is non-blocking and must produce a field-level warning; a required selection or other fatal integrity failure remains blocking.
 5. Custom Files remain verbatim in provenance and are materialized as private WG content when needed.
 6. The importer must preserve Pathbuilder weapon state needed for the imported sheet, including potency, striking, property runes, selected attack ability, and two-hand state.
 7. Regression tests use captured real Pathbuilder payloads. Build 1597410 is the primary golden case and its PDF is the human-readable sheet oracle.
@@ -20,13 +20,13 @@ The Pathbuilder importer must reproduce the character represented by the share p
 - Resolution: every payload choice is represented in the normalized build.
 - Construction: WG operations converge to a fully populated Character without unresolved required selections.
 - Mechanical parity: the operation engine's final values are compared to golden expected values where an independent Pathbuilder derived payload is unavailable.
-- Online certification: when json.php is available, its independent derived values are compared before create-character.
+- Online certification: when json.php is available, identity and other fatal integrity checks run before creation. AC differences are recorded as non-blocking diagnostics so a stale or incomplete armor export cannot prevent character creation.
 
 ## Golden build 1597410
 
-The captured share payload is level 7 Kasane, Automaton / Hunter Automaton, Champion, with ancestry paragon and free archetype enabled. The checked-in PDF oracle records ability scores 18/14/16/10/12/16, AC 24, HP 99, Speed 45, Perception +10, Fort +14, Ref +11, Will +12, Athletics +18, plus the listed attacks and focus/innate spell state.
+The captured share payload is level 7 Kasane, Automaton / Hunter Automaton, Champion, with ancestry paragon and free archetype enabled. The checked-in PDF oracle records ability scores 18/14/16/10/12/16, HP 99, Speed 45, Perception +10, Fort +14, Ref +11, Will +12, Athletics +18, plus the listed attacks and focus/innate spell state. The later Defense-tab screenshot supplied for this same build shows AC 27 with the level-5 Reinforced Chassis, a +1 potency rune, and the Raiment property rune; the old PDF/derived fixture value of AC 24 must therefore be treated as a contradictory source value, not as proof that AC 27 is wrong.
 
-When Pathbuilder omits `playerArmor.armorName`, its model default is `Unarmored`. If that payload still contains a nonzero armor potency, preserve the sheet's resulting AC item bonus without inventing a physical armor item. Property-rune state without a base item remains intact in import provenance, but is not treated as an active armor effect.
+When Pathbuilder omits `playerArmor.armorName`, do not infer that an Automaton is unarmored solely from the model default. If both Automaton ancestry and the selected Reinforced Chassis feat are recorded, reconstruct the appropriate chassis tier from character level and carry over the share's armor rune/potency state. For other builds, orphaned rune/potency data does not create a free AC bonus or an invented armor item: preserve it in import provenance and emit a non-blocking warning. If the JSON target and the resulting WG AC differ, create the character and report both values, their numerical difference, and the source evidence that explains—or fails to explain—the discrepancy.
 
 The real json.php?id=1597410 endpoint returned 404 during capture. The absence of derived data is therefore a tested and supported condition, not a reason to fabricate a derived fixture.
 
