@@ -1506,7 +1506,8 @@ async function calculatePathbuilderCurrentSummary(
       resolved.armorRunes,
       content,
       previewWarnings,
-      'armor warning'
+      'armor warning',
+      resolved.armorResilience
     );
     const item = withPathbuilderReinforcedChassis(withRunes, resolved);
     inventoryItems.push({
@@ -2176,9 +2177,10 @@ function withPathbuilderRunes(
   propertyNames: string[],
   content: Awaited<ReturnType<typeof fetchContentPackage>>,
   warnings: string[],
-  warningPrefix = 'rune'
+  warningPrefix = 'rune',
+  resilient = 0
 ): Item {
-  if (potency <= 0 && striking <= 0 && propertyNames.length === 0) return item;
+  if (potency <= 0 && striking <= 0 && propertyNames.length === 0 && resilient <= 0) return item;
 
   const copy = cloneDeep(item);
   const existing = copy.meta_data ?? ({ bulk: {} } as NonNullable<Item['meta_data']>);
@@ -2186,6 +2188,7 @@ function withPathbuilderRunes(
 
   if (potency > 0) runes.potency = potency;
   if (striking > 0) runes.striking = striking;
+  if (resilient > 0) runes.resilient = Math.min(resilient, 3);
 
   const properties = [];
   for (const name of propertyNames) {
@@ -2340,7 +2343,8 @@ function buildInventory(
           resolved.armorRunes,
           content,
           warnings,
-          'armor warning'
+          'armor warning',
+          resolved.armorResilience
         ),
         resolved
       );
