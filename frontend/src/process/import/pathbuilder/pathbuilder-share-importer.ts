@@ -732,7 +732,11 @@ export async function createReferenceItem(
     return created;
   } catch (error) {
     console.warn(`Could not create Pathbuilder reference item "${ref.name}":`, error);
-    warnings.push(`item: failed to create Pathbuilder reference for "${ref.name}"`);
+    warnings.push(
+      semanticKind === 'armor'
+        ? `armor warning: could not persist reference armor "${ref.name}"; the character will still be created, but armor effects and AC may be incomplete`
+        : `item: failed to create Pathbuilder reference for "${ref.name}"`
+    );
     return null;
   }
 }
@@ -1497,7 +1501,8 @@ async function calculatePathbuilderCurrentSummary(
       0,
       resolved.armorRunes,
       content,
-      previewWarnings
+      previewWarnings,
+      'armor warning'
     );
     const item = withPathbuilderReinforcedChassis(withRunes, resolved);
     inventoryItems.push({
