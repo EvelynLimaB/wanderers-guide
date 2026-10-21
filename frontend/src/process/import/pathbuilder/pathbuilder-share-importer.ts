@@ -1915,6 +1915,37 @@ function withPathbuilderRunes(
 }
 
 /**
+ * Pathbuilder exports the Remastered Automaton chassis as a synthetic armor row.
+ * Its AC item bonus scales with character level and cannot be inferred from a generic
+ * reference-item record (which may only carry the armor-rune potency). Rebuild the
+ * actual Reinforced Chassis statistics on the per-character copy of the imported item.
+ *
+ * Guns & Gears errata: +3 base, +4 from level 5, +5 from level 10; Dex cap +1.
+ * The Remastered chassis uses unarmored proficiency and has no legacy armor penalties.
+ */
+function withPathbuilderReinforcedChassis(item: Item, resolved: ResolvedBuild): Item {
+  const hasReinforcedChassis = resolved.feats.some(
+    (feat) => labelToVariable(feat.name) === 'REINFORCED_CHASSIS'
+  );
+  if (!hasReinforcedChassis) return item;
+
+  const baseAcBonus = resolved.identity.level >= 10 ? 5 : resolved.identity.level >= 5 ? 4 : 3;
+  const copy = cloneDeep(item);
+  const existing = copy.meta_data ?? ({ bulk: {} } as NonNullable<Item['meta_data']>);
+  copy.meta_data = {
+    ...existing,
+    category: 'unarmored_defense',
+    ac_bonus: baseAcBonus,
+    dex_cap: 1,
+    check_penalty: 0,
+    speed_penalty: 0,
+    strength: 0,
+    bulk: existing.bulk ?? {},
+  };
+  return copy;
+}
+
+/**
  * Rebuild the inventory, including the container hierarchy and Pathbuilder rune state.
  *
  * Pathbuilder stores quantities on references, while WG represents inventory quantity
@@ -2006,13 +2037,16 @@ function buildInventory(
   if (resolved.armor) {
     const armor = findInventoryItem(resolved.armor, content, customItems);
     if (armor) {
-      const item = withPathbuilderRunes(
-        armor,
-        resolved.armorPotency,
-        0,
-        resolved.armorRunes,
-        content,
-        warnings
+      const item = withPathbuilderReinforcedChassis(
+        withPathbuilderRunes(
+          armor,
+          resolved.armorPotency,
+          0,
+          resolved.armorRunes,
+          content,
+          warnings
+        ),
+        resolved
       );
       items.push(...toInventoryItems(resolved.armor, item, true));
     } else {
