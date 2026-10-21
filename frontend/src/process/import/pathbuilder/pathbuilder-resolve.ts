@@ -473,8 +473,18 @@ export function resolveBuild(
   // the lookup name while preserving the original Pathbuilder reference in raw.
   const armorRaw = cd.playerArmor;
   const derivedArmors = options.derived?.armor ?? [];
-  const derivedArmor = derivedArmors.find((entry) => entry.worn === true) ?? derivedArmors[0];
+  const wornArmors = derivedArmors.filter((entry) => entry.worn === true);
+  const derivedArmor = wornArmors.length === 1 ? wornArmors[0] : undefined;
   const derivedArmorName = derivedArmor?.name ?? undefined;
+  if (wornArmors.length > 1) {
+    hints.push(
+      'Armor: Pathbuilder JSON marks multiple armor rows as worn; none was selected automatically because the equipped item is ambiguous.'
+    );
+  } else if (wornArmors.length === 0 && derivedArmors.length > 0) {
+    hints.push(
+      'Armor: Pathbuilder JSON includes armor rows but does not identify a unique worn item; none was selected automatically.'
+    );
+  }
   const hasReinforcedChassis = feats.some(
     (feat) => labelToVariable(feat.name) === 'REINFORCED_CHASSIS'
   );
