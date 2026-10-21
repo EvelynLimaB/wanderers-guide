@@ -427,11 +427,39 @@ test('custom references, quantities, containers and runes are preserved', () => 
   assert.equal(resolved.containers[0].items.find((item) => item.name === 'Rations')?.quantity, 2);
 });
 
-test('armor rune state without an equipped armor name is preserved without a false unresolved warning', () => {
-  assert.equal(resolved.armor, undefined);
+test('missing shared armor name is reconstructed from an Automaton Reinforced Chassis feat', () => {
+  assert.equal(resolved.armor?.name, 'Automaton Chassi (10th level)');
+  assert.equal(resolved.armor?.kind, 'standard');
   assert.equal(resolved.armorRunes.includes('Raiment'), true);
   assert.equal(resolved.armorPotency, 1);
   assert.equal(resolved.unresolved.some((entry) => entry.kind === 'armor'), false);
+  assert.ok(
+    resolved.hints.some((hint) => /reconstructed the automaton reinforced chassis/i.test(hint)),
+    'the inferred armor must be recorded in import diagnostics'
+  );
+});
+
+test('armor rune state alone does not invent armor for an ordinary build', () => {
+  const build = structuredClone(fixture.build);
+  for (const [slot, value] of Object.entries(build.characterData.hashMapFeatSelections ?? {})) {
+    if (String(value).toLowerCase().includes('reinforced chassis')) {
+      delete build.characterData.hashMapFeatSelections[slot];
+    }
+  }
+
+  const withoutChassis = resolveBuild(build, {
+    buildId: fixture.build_id,
+    formatVersion: fixture.format_version,
+  });
+
+  assert.equal(withoutChassis.armor, undefined);
+  assert.equal(withoutChassis.armorRunes.includes('Raiment'), true);
+  assert.equal(withoutChassis.armorPotency, 1);
+  assert.equal(withoutChassis.unresolved.some((entry) => entry.kind === 'armor'), false);
+  assert.ok(
+    withoutChassis.hints.some((hint) => /preserving the default unarmored state/i.test(hint)),
+    'ordinary characters must retain ambiguous rune state without fabricated armor'
+  );
 });
 
 test('build id extraction accepts ids/URLs and rejects arbitrary text', () => {
