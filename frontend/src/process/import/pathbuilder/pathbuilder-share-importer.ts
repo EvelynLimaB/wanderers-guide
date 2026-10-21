@@ -1752,7 +1752,18 @@ function getSpecialSelectionsForOperation(
       // semantic choice; failing to alias them silently falls back to the first option.
       const isBlessingSelector =
         normalizedTitle === 'BLESSING' && prompt === 'BLESSING_OF_THE_DEVOTED';
-      return prompt === normalizedTitle || isBlessingSelector;
+
+      // Pathbuilder records Champion's Lay on Hands choice under the slot
+      // "Devotion Spells" with prompt "Select Initial Devotion Spell". WG's
+      // equivalent content may label the same native operation "Select a Focus
+      // Spell". Match these only when both the recorded slot and selector title
+      // identify a devotion/focus spell, rather than prompting the user again.
+      const isDevotionSpellSelector =
+        labelToVariable(special.slot) === 'DEVOTION_SPELLS' &&
+        /\b(?:devotion|focus)\s+spell\b/i.test(title) &&
+        /\b(?:devotion|focus)\s+spell\b/i.test(special.prompt);
+
+      return prompt === normalizedTitle || isBlessingSelector || isDevotionSpellSelector;
     })
     .map((special) => ({ name: special.value, level }));
 
