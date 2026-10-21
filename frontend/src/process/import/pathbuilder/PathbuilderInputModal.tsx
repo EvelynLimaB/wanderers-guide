@@ -13,6 +13,15 @@ function formatSigned(value: number): string {
   return value > 0 ? `+${value}` : String(value);
 }
 
+function formatTargetName(name: string): string {
+  const known: Record<string, string> = {
+    classDC: 'Class DC',
+    acrobatics: 'Acrobatics',
+    athletics: 'Athletics',
+  };
+  return known[name] ?? name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (first) => first.toUpperCase());
+}
+
 function formatAttributeName(name: string): string {
   const names: Record<string, string> = {
     speed: 'Speed',
@@ -327,12 +336,40 @@ export default function PathbuilderInputModal(props: {
                           ))}
                         </Stack>
                       ) : null}
+                      {displayedSnapshot.target?.proficiencies.length ? (
+                        <Stack gap={2}>
+                          <Text size='xs' c='dimmed'>
+                            Key proficiency targets:{' '}
+                            {displayedSnapshot.target.proficiencies
+                              .filter((entry) =>
+                                ['perception', 'fortitude', 'reflex', 'will', 'classDC', 'light', 'medium', 'heavy', 'unarmored', 'simple', 'martial', 'advanced'].includes(entry.name)
+                              )
+                              .map((entry) => `${formatTargetName(entry.name)} ${entry.rank}`)
+                              .join(' · ') || 'not present in export'}
+                          </Text>
+                          <details>
+                            <summary style={{ cursor: 'pointer', fontSize: 'var(--mantine-font-size-xs)' }}>
+                              All proficiency targets from JSON
+                            </summary>
+                            <Text size='xs' mt={4}>
+                              {displayedSnapshot.target.proficiencies
+                                .map((entry) => `${formatTargetName(entry.name)}: ${entry.rank}`)
+                                .join(' · ')}
+                            </Text>
+                          </details>
+                        </Stack>
+                      ) : null}
                       {displayedSnapshot.target?.attributes.length ? (
                         <Text size='xs' c='dimmed'>
-                          Pathbuilder raw attributes: {displayedSnapshot.target.attributes
+                          Other Pathbuilder targets: {displayedSnapshot.target.attributes
                             .filter((entry) => ['speed', 'speedBonus', 'ancestryhp', 'classhp', 'bonushp', 'bonushpPerLevel'].includes(entry.name))
                             .map((entry) => `${formatAttributeName(entry.name)} ${entry.value}`)
                             .join(' · ')}
+                        </Text>
+                      ) : null}
+                      {displayedSnapshot.target?.resistances.length ? (
+                        <Text size='xs' c='dimmed'>
+                          Resistances: {displayedSnapshot.target.resistances.join(' · ')}
                         </Text>
                       ) : null}
                     </Stack>
