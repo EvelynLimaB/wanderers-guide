@@ -144,6 +144,8 @@ export default function PathbuilderInputModal(props: {
                   value={selectedChoice}
                   onChange={setSelectedChoice}
                   disabled={props.loading}
+                  // The parent Modal uses z-index 1000; keep the portaled dropdown above it.
+                  comboboxProps={{ zIndex: 1001 }}
                 />
                 {selectedOption?.description && <Text size='sm'>{selectedOption.description}</Text>}
               </>
