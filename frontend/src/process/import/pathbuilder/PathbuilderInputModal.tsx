@@ -246,6 +246,12 @@ export default function PathbuilderInputModal(props: {
                   >
                     <Stack gap={7}>
                       <Text fw={700}>Live stat preview</Text>
+                      {displayedSnapshot.target?.name || displayedSnapshot.target?.level !== undefined ? (
+                        <Text size='sm' fw={600}>
+                          Official JSON: {displayedSnapshot.target.name ?? 'Unnamed character'}
+                          {displayedSnapshot.target.level !== undefined ? ` · Level ${displayedSnapshot.target.level}` : ''}
+                        </Text>
+                      ) : null}
                       <Text size='xs' c='dimmed'>
                         Official Pathbuilder JSON targets compared with the Wanderer’s Guide calculation for the
                         currently selected option. This preview does not save a character.
@@ -359,7 +365,9 @@ export default function PathbuilderInputModal(props: {
                           </details>
                         </Stack>
                       ) : null}
-                      {displayedSnapshot.target?.attributes.length ? (
+                      {displayedSnapshot.target?.attributes.some((entry) =>
+                        ['speed', 'speedBonus', 'ancestryhp', 'classhp', 'bonushp', 'bonushpPerLevel'].includes(entry.name)
+                      ) ? (
                         <Text size='xs' c='dimmed'>
                           Other Pathbuilder targets: {displayedSnapshot.target.attributes
                             .filter((entry) => ['speed', 'speedBonus', 'ancestryhp', 'classhp', 'bonushp', 'bonushpPerLevel'].includes(entry.name))
