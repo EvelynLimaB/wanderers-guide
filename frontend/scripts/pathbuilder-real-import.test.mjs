@@ -341,8 +341,15 @@ try {
   // Simulate the user answering each required choice in order. Later prompts can
   // appear only after earlier options have been applied to the selection tree.
   let preflightReady = false;
+  const promptTitles = [];
   for (let attempt = 0; attempt < 64; attempt++) {
     assert.equal(preflight.status, 'selection-required', preflight.error ?? 'Preflight failed unexpectedly.');
+    promptTitles.push(preflight.selection.title);
+    assert.doesNotMatch(
+      preflight.selection.title,
+      /heritage|devotion spell|focus spell/i,
+      'heritage and Lay on Hands are already recorded in the share payload and must resolve automatically'
+    );
     assert.ok(
       preflight.selection.options.length > 0,
       `fixture has a required selection with no eligible options: ${preflight.selection.title}`
@@ -359,6 +366,7 @@ try {
     }
   }
   assert.equal(preflightReady, true, 'preflight should finish after explicit choices');
+  assert.ok(promptTitles.some((title) => /deific weapon/i.test(title)), 'the genuinely omitted deific weapon choice remains manual');
 
   // Certification preflight: the same flow with an available official export ID
   // must reach 'ready' through the json.php comparison path (identity checks).
