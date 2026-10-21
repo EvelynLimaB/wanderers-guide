@@ -475,6 +475,11 @@ export function resolveBuild(
   const derivedArmors = options.derived?.armor ?? [];
   const derivedArmor = derivedArmors.find((entry) => entry.worn === true) ?? derivedArmors[0];
   const derivedArmorName = derivedArmor?.name ?? undefined;
+  const hasReinforcedChassis = feats.some(
+    (feat) => labelToVariable(feat.name) === 'REINFORCED_CHASSIS'
+  );
+  const isAutomaton =
+    labelToVariable(cd.ancestry ?? options.derived?.ancestry ?? '') === 'AUTOMATON';
 
   let armor: ResolvedItemRef | undefined;
   const rawArmorName = armorRaw?.armorName;
@@ -503,13 +508,37 @@ export function resolveBuild(
     if (armor.kind === 'standard') {
       unresolved.splice(originalUnresolvedLength);
     }
-  } else if (armorRaw && ((armorRaw.potency ?? 0) > 0 || (armorRaw.listPropertyRunes?.length ?? 0) > 0)) {
+  } else if (
+    armorRaw &&
+    ((armorRaw.potency ?? 0) > 0 || (armorRaw.listPropertyRunes?.length ?? 0) > 0) &&
+    !(hasReinforcedChassis && isAutomaton)
+  ) {
     // Pathbuilder's PlayerArmor model defaults an omitted armorName to "Unarmored".
-    // Some v121 share payloads retain potency/property-rune editor state in that
-    // default state. The importer preserves this raw state; its potency is represented
-    // as an AC item bonus during character construction, without inventing an armor.
+    // Preserve that ambiguity for ordinary characters instead of inventing armor.
     hints.push(
       `Pathbuilder has armor rune/potency state without a named armor; preserving the default Unarmored state and its raw rune data`
+    );
+  }
+
+  // Some Pathbuilder share links omit the synthetic armor row for an Automaton's
+  // Reinforced Chassis even though the feat and ancestry are present. The chassis is
+  // granted by that rules choice, and its level tier plus recorded rune state are
+  // enough to reconstruct the known baseline without guessing arbitrary armor.
+  // Do not override a different explicitly named armor or an unresolved Custom File.
+  const isUnarmoredReference =
+    armor?.kind === 'standard' && labelToVariable(armor.name) === 'UNARMORED';
+  if (hasReinforcedChassis && isAutomaton && (!armor || isUnarmoredReference)) {
+    const characterLevel = cd.characterLevel ?? options.derived?.level ?? 1;
+    const chassisTier = characterLevel >= 10 ? '10th' : characterLevel >= 5 ? '5th' : '1st';
+    const inferredName = `Automaton Chassi (${chassisTier} level)`;
+    armor = {
+      kind: 'standard',
+      name: inferredName,
+      raw: `inferred: Reinforced Chassis at level ${characterLevel}`,
+      quantity: 1,
+    };
+    hints.push(
+      `Armor: Reconstructed the Automaton Reinforced Chassis (${chassisTier} level) because the share payload omitted its armor name; recorded potency and property runes were retained.`
     );
   }
 
@@ -535,8 +564,8 @@ export function resolveBuild(
     formatVersion: options.formatVersion,
     identity: {
       name: cd.characterName ?? 'Unknown Wanderer',
-      level: cd.characterLevel ?? 1,
-      ancestry: cd.ancestry ?? undefined,
+      level: cd.characterLevel ?? options.derived?.level ?? 1,
+      ancestry: cd.ancestry ?? options.derived?.ancestry ?? undefined,
       // Some v121 share payloads omit characterData.heritage but preserve the
       // selected heritage in hashMapFeatSelections["Heritage Feat"]. Prefer that
       // explicit editor choice, then the calculated JSON value, over asking again.
