@@ -163,7 +163,14 @@ const STRIKING_LABELS: Record<number, string> = {
 /** Convert json.php's armor resilience label to WG's numeric rune rank. */
 function parsePathbuilderArmorResilience(value: string | null | undefined): number {
   const normalized = labelToVariable(value ?? '');
-  if (!normalized || !normalized.includes('RESILIENT')) return 0;
+  if (
+    !normalized ||
+    ['0', 'NONE', 'NO_RUNE', 'NORUNE', 'UNARMED', 'N_A', 'NOT_APPLICABLE'].includes(normalized) ||
+    /^(?:NO|NOT)_/.test(normalized)
+  ) {
+    return 0;
+  }
+  if (!normalized.includes('RESILIENT')) return 0;
   if (normalized.includes('MAJOR') || /RESILIENT.*(?:_3|_III)$/.test(normalized)) return 3;
   if (normalized.includes('GREATER') || /RESILIENT.*(?:_2|_II)$/.test(normalized)) return 2;
   return 1;
