@@ -385,6 +385,44 @@ try {
   assert.deepEqual(certifiedOutcome.warnings, []);
   assert.equal(certifiedOutcome.character?.name, 'Kasane');
 
+  // Regression: Pathbuilder represents the Remastered Automaton's Reinforced
+  // Chassis as a synthetic worn-armor row. At level 7 it grants +4 AC, and the
+  // +1 potency rune raises the total item bonus to +5 (10 + proficiency 11 +
+  // capped Dexterity 1 + item bonus 5 = AC 27). A generic reference item must
+  // not erase the chassis's level-scaled armor bonus.
+  const chassisDerivedFixture = {
+    ...derivedFixture,
+    armor: [
+      {
+        name: 'Automaton Chassi (5th level)',
+        qty: 1,
+        prof: 'unarmored',
+        pot: 1,
+        res: 'resilient',
+        runes: ['Raiment'],
+        worn: true,
+      },
+    ],
+    acTotal: {
+      acProfBonus: 11,
+      acAbilityBonus: 1,
+      acItemBonus: 5,
+      acTotal: 27,
+      shieldBonus: '1',
+    },
+  };
+  const chassisOutcome = await importer.importFromPathbuilderShare('1597410', {
+    silent: true,
+    selectionOverrides,
+    fetchImpl: createFetch(certifiedBuild),
+    derivedOverride: chassisDerivedFixture,
+  });
+  assert.equal(
+    chassisOutcome.ok,
+    true,
+    chassisOutcome.ok ? '' : `Reinforced Chassis level-scaling regression: ${chassisOutcome.error}`
+  );
+
   // Fail-closed identity check: a mismatched export ID blocks the import before
   // any character is created (contract layer 5 / export-identity policy).
   const mismatchedDerived = { ...derivedFixture, name: 'Someone Else' };
