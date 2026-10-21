@@ -398,12 +398,15 @@ test('json.php-derived armor data recovers an armor name missing from playerArmo
     buildId: fixture.build_id,
     formatVersion: fixture.format_version,
     derived: {
-      armor: [{ name: 'Full Plate', pot: 1, worn: true }],
+      armor: [{ name: 'Full Plate', pot: 1, res: 'greater resilient', worn: true }],
     },
   });
 
   assert.equal(derivedResolved.armor?.name, 'Full Plate');
   assert.equal(derivedResolved.armor?.raw, 'be5e11f6-4459-4080-9107-8145dd57014b');
+  assert.equal(derivedResolved.armorPotency, 1);
+  assert.equal(derivedResolved.armorResilience, 2);
+  assert.equal(derivedResolved.armorRunes.includes('Raiment'), true);
   assert.equal(derivedResolved.unresolved.some((entry) => entry.kind === 'armor'), false);
 });
 
