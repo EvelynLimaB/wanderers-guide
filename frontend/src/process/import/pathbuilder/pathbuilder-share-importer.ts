@@ -233,7 +233,7 @@ export async function importFromPathbuilderShare(
       console.info('Pathbuilder import notes:', resolved.hints);
       for (const hint of resolved.hints) {
         if (
-          /^Armor: (?:Reconstructed the Automaton Reinforced Chassis|Pathbuilder JSON marks multiple armor rows|Pathbuilder JSON includes armor rows)/i.test(
+          /^Armor: (?:Reconstructed the Automaton Reinforced Chassis|Pathbuilder JSON marks multiple armor rows|Pathbuilder JSON includes armor rows|Pathbuilder JSON resilience rune)/i.test(
             hint
           )
         ) {
