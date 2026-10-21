@@ -216,14 +216,26 @@ export async function importFromPathbuilderShare(
 
     const warnings = resolved.unresolved
       .filter((u) => u.kind !== 'spell-source')
-      .map((u) => `${u.kind}: ${u.ref} (${u.reason})`);
-    if (warnings.length > 0) {
+      .map((u) =>
+        u.kind === 'armor'
+          ? `armor warning: Pathbuilder armor reference "${u.ref}" could not be resolved (${u.reason}). The character will still be created, but armor effects and AC may differ.`
+          : `${u.kind}: ${u.ref} (${u.reason})`
+      );
+    const blockingUnresolvedWarnings = warnings.filter(
+      (warning) => !warning.startsWith('armor warning:')
+    );
+    if (blockingUnresolvedWarnings.length > 0) {
       throw new Error(
-        `Pathbuilder 1:1 import blocked by unresolved source data: ${warnings.join('; ')}`
+        `Pathbuilder 1:1 import blocked by unresolved source data: ${blockingUnresolvedWarnings.join('; ')}`
       );
     }
     if (resolved.hints.length > 0) {
       console.info('Pathbuilder import notes:', resolved.hints);
+      for (const hint of resolved.hints) {
+        if (/^Armor: Reconstructed the Automaton Reinforced Chassis/i.test(hint)) {
+          warnings.push(`armor warning: ${hint}`);
+        }
+      }
     }
     if (importId === null) {
       warnings.push('provenance: the raw payload could not be saved, so this character cannot be re-imported later');
@@ -269,11 +281,21 @@ export async function importFromPathbuilderShare(
       return { ok: false, error: 'Wanderer\u2019s Guide rejected the character', resolved, warnings };
     }
 
+    const prioritizedWarnings = [
+      ...warnings.filter((warning) => warning.startsWith('AC mismatch:')),
+      ...warnings.filter((warning) => warning.startsWith('armor warning:')),
+      ...warnings.filter(
+        (warning) =>
+          !warning.startsWith('AC mismatch:') && !warning.startsWith('armor warning:')
+      ),
+    ];
+    const visibleWarnings = prioritizedWarnings.slice(0, 3);
+    const remainingWarningCount = warnings.length - visibleWarnings.length;
     notify({
       title: 'Import complete',
       message:
         warnings.length > 0
-          ? `Imported "${character.name}" with ${warnings.length} unmapped detail${warnings.length === 1 ? '' : 's'}`
+          ? `Imported "${character.name}" with warnings: ${visibleWarnings.join(' • ')}${remainingWarningCount > 0 ? ` • and ${remainingWarningCount} more warning(s)` : ''}`
           : `Imported "${character.name}"`,
       icon: null,
       color: warnings.length > 0 ? 'yellow' : undefined,
@@ -1326,10 +1348,15 @@ export async function buildCharacter(
   character.details!.conditions = [];
 
   if (derived) {
-    await validatePathbuilderDerived(character, content, derived);
+    await validatePathbuilderDerived(character, content, derived, resolved, warnings);
   }
 
-  const mechanicalWarnings = warnings.filter((warning) => !warning.startsWith('provenance:'));
+  const mechanicalWarnings = warnings.filter(
+    (warning) =>
+      !warning.startsWith('provenance:') &&
+      !warning.startsWith('AC mismatch:') &&
+      !warning.startsWith('armor warning:')
+  );
   if (mechanicalWarnings.length > 0) {
     throw new Error(
       `Pathbuilder 1:1 import blocked by unresolved mechanics: ${mechanicalWarnings.join('; ')}`
@@ -1516,22 +1543,24 @@ async function calculatePathbuilderCurrentSummary(
 }
 
 /**
- * Strictly compare the fields that Pathbuilder derives from the imported build
- * and that WG must reproduce through its native operation engine. A mismatch is
- * an import failure, never a warning: creating a character that silently differs
- * defeats 1:1 import.
+ * Compare Pathbuilder's calculated values with WG's native operation engine.
+ * Ability-score mismatches remain fatal because they indicate the character's
+ * core build was not reproduced. AC is a diagnostic instead: Pathbuilder share
+ * links can lose armor state, so a mismatch must not prevent character creation.
  */
 async function validatePathbuilderDerived(
   character: Character,
   content: Awaited<ReturnType<typeof fetchContentPackage>>,
-  derived: import('@schemas/pathbuilder').PathbuilderDerivedBuild
+  derived: import('@schemas/pathbuilder').PathbuilderDerivedBuild,
+  resolved: ResolvedBuild,
+  warnings: string[]
 ): Promise<void> {
   await executeOperations<OperationCharacterResultPackage>({
     type: 'CHARACTER',
     data: { character: cloneDeep(character), content, context: 'CHARACTER-SHEET' },
   });
 
-  const mismatches: string[] = [];
+  const fatalMismatches: string[] = [];
   const abilities = derived.abilities;
   if (abilities) {
     for (const [ability, score] of Object.entries(abilities)) {
@@ -1539,7 +1568,7 @@ async function validatePathbuilderDerived(
       const variable = getFinalVariableValue('CHARACTER', `ATTRIBUTE_${ability.toUpperCase()}`);
       const expectedModifier = Math.floor((score - 10) / 2);
       if (variable.total !== expectedModifier) {
-        mismatches.push(
+        fatalMismatches.push(
           `ability ${ability}: Pathbuilder score ${score} (modifier ${expectedModifier}), WG modifier ${variable.total}`
         );
       }
@@ -1549,13 +1578,31 @@ async function validatePathbuilderDerived(
   const armor = getBestArmor('CHARACTER', character.inventory)?.item;
   if (derived.acTotal?.acTotal !== undefined) {
     const actualAc = getFinalAcValue('CHARACTER', armor);
-    if (actualAc !== derived.acTotal.acTotal) {
-      mismatches.push(`AC: Pathbuilder ${derived.acTotal.acTotal}, WG ${actualAc}`);
+    const sourceAc = derived.acTotal.acTotal;
+    if (actualAc !== sourceAc) {
+      const difference = actualAc - sourceAc;
+      const signedDifference = difference > 0 ? `+${difference}` : String(difference);
+      const reconstructedChassis = resolved.hints.some((hint) =>
+        /reconstructed the automaton reinforced chassis/i.test(hint)
+      );
+      const hasUnnamedArmorRuneState =
+        !resolved.armor && (resolved.armorPotency > 0 || resolved.armorRunes.length > 0);
+      const explanation = reconstructedChassis
+        ? 'The share payload omitted the chassis armor name. WG reconstructed the Reinforced Chassis from the recorded Automaton ancestry, feat, and character level; the exported JSON AC appears inconsistent with that armor state.'
+        : hasUnnamedArmorRuneState
+          ? 'The share payload contains armor potency or rune state but no reliable armor name, so that state could not safely identify the intended armor.'
+          : !resolved.armor
+            ? 'No reliable equipped armor reference was available to explain the difference.'
+            : 'The resolved armor exists, but its rules calculation differs. Review armor statistics, proficiency, Dexterity cap, runes, shield state, and temporary bonuses.';
+
+      warnings.push(
+        `AC mismatch: Pathbuilder JSON reports ${sourceAc}; Wanderer's Guide calculates ${actualAc} (difference ${signedDifference}). ${explanation}`
+      );
     }
   }
 
-  if (mismatches.length > 0) {
-    throw new Error(`Pathbuilder 1:1 validation failed: ${mismatches.join('; ')}`);
+  if (fatalMismatches.length > 0) {
+    throw new Error(`Pathbuilder 1:1 validation failed: ${fatalMismatches.join('; ')}`);
   }
 }
 
@@ -2121,7 +2168,8 @@ function withPathbuilderRunes(
   striking: number,
   propertyNames: string[],
   content: Awaited<ReturnType<typeof fetchContentPackage>>,
-  warnings: string[]
+  warnings: string[],
+  warningPrefix = 'rune'
 ): Item {
   if (potency <= 0 && striking <= 0 && propertyNames.length === 0) return item;
 
@@ -2138,7 +2186,7 @@ function withPathbuilderRunes(
     if (rune) {
       properties.push({ name: rune.name, id: rune.id, rune });
     } else {
-      warnings.push(`rune: WG has no property rune "${name}"`);
+      warnings.push(`${warningPrefix}: WG has no property rune "${name}"`);
     }
   }
   if (properties.length > 0) runes.property = properties;
@@ -2277,13 +2325,16 @@ function buildInventory(
           0,
           resolved.armorRunes,
           content,
-          warnings
+          warnings,
+          'armor warning'
         ),
         resolved
       );
       items.push(...toInventoryItems(resolved.armor, item, true));
     } else {
-      warnings.push(`item: could not resolve armor "${resolved.armor.name}"`);
+      warnings.push(
+        `armor warning: could not resolve armor "${resolved.armor.name}"; the character will be created, but armor effects and AC may be incomplete`
+      );
     }
   }
   // The resolver classifies rune/potency editor state without a selected armor as a
