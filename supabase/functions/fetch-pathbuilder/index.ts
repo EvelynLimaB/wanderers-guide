@@ -15,7 +15,7 @@ const BUILD_ID_RE = /^\d{1,12}$/;
 const SHARE_ENDPOINT = 'https://pathbuilder2e.com/app/fetch_emailed.php';
 const JSON_ENDPOINT = 'https://pathbuilder2e.com/json.php';
 
-function failure(status: number, error: string, retryAfterSeconds?: number) {
+function failure(status: number, error: string, retryAfterSeconds?: number): { status: 'success'; data: FetchPathbuilderResult } {
   return {
     status: 'success',
     data: { ok: false, status, error, ...(retryAfterSeconds ? { retryAfterSeconds } : {}) } satisfies FetchPathbuilderResult,
