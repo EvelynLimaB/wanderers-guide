@@ -438,6 +438,8 @@ export function resolveBuild(
   const weapons = resolveWeapons(cd.listPlayerWeapons ?? undefined, customFiles, unresolved);
   const buffs = resolveActiveCustomBuffs(cd.hashMapActiveCustomBuffs ?? undefined, customFiles, unresolved);
   const spells = resolveSpells(cd.hashMapPlayerSpells ?? undefined, options.derived);
+  const feats = resolveFeats(cd.hashMapFeatSelections ?? undefined);
+  const heritageFeat = feats.find((feat) => labelToVariable(feat.slot) === 'HERITAGE_FEAT')?.name;
   const keyAbilityFromShare = cd.keyability;
   const keyAbilityFromDerived = options.derived?.keyability;
   if (keyAbilityFromShare !== undefined && keyAbilityFromShare !== null && !parsePathbuilderAbility(keyAbilityFromShare)) {
@@ -535,7 +537,10 @@ export function resolveBuild(
       name: cd.characterName ?? 'Unknown Wanderer',
       level: cd.characterLevel ?? 1,
       ancestry: cd.ancestry ?? undefined,
-      heritage: cd.heritage ?? undefined,
+      // Some v121 share payloads omit characterData.heritage but preserve the
+      // selected heritage in hashMapFeatSelections["Heritage Feat"]. Prefer that
+      // explicit editor choice, then the calculated JSON value, over asking again.
+      heritage: stripCategoryPrefix(cd.heritage ?? heritageFeat ?? options.derived?.heritage ?? undefined),
       className: cd.className ?? undefined,
       keyAbility: parsePathbuilderAbility(cd.keyability ?? options.derived?.keyability),
       background: stripCategoryPrefix(cd.background ?? undefined),
@@ -565,7 +570,7 @@ export function resolveBuild(
         ...(cd.hashMapTrainedOnlySkillChoices?.standardSelection ?? []),
       ]),
     ],
-    feats: resolveFeats(cd.hashMapFeatSelections ?? undefined),
+    feats,
     specialSelections: resolveSpecialSelections(cd.hashMapSpecialSelections ?? undefined),
     weapons,
     armor,
