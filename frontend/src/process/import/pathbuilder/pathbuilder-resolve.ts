@@ -160,6 +160,15 @@ const STRIKING_LABELS: Record<number, string> = {
   3: 'Major Striking',
 };
 
+/** Convert json.php's armor resilience label to WG's numeric rune rank. */
+function parsePathbuilderArmorResilience(value: string | null | undefined): number {
+  const normalized = labelToVariable(value ?? '');
+  if (!normalized || !normalized.includes('RESILIENT')) return 0;
+  if (normalized.includes('MAJOR') || /RESILIENT.*(?:_3|_III)$/.test(normalized)) return 3;
+  if (normalized.includes('GREATER') || /RESILIENT.*(?:_2|_II)$/.test(normalized)) return 2;
+  return 1;
+}
+
 function resolveRef(
   raw: string,
   customFiles: Map<string, PathbuilderCustomFile>,
@@ -613,8 +622,11 @@ export function resolveBuild(
     specialSelections: resolveSpecialSelections(cd.hashMapSpecialSelections ?? undefined),
     weapons,
     armor,
-    armorRunes: armorRaw?.listPropertyRunes ?? [],
-    armorPotency: armorRaw?.potency ?? 0,
+    // Share editor state remains primary when present; json.php supplements fields
+    // omitted by the share payload only when it identifies one unambiguous worn item.
+    armorRunes: armorRaw?.listPropertyRunes ?? derivedArmor?.runes ?? [],
+    armorPotency: armorRaw?.potency ?? derivedArmor?.pot ?? 0,
+    armorResilience: parsePathbuilderArmorResilience(derivedArmor?.res),
     shield,
     looseEquipment: loose,
     containers,
