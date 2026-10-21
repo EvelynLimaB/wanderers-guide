@@ -2211,7 +2211,14 @@ function withPathbuilderReinforcedChassis(item: Item, resolved: ResolvedBuild): 
   const hasReinforcedChassis = resolved.feats.some(
     (feat) => labelToVariable(feat.name) === 'REINFORCED_CHASSIS'
   );
-  if (!hasReinforcedChassis) return item;
+  const armorName = labelToVariable(resolved.armor?.name ?? item.name);
+  const isAutomatonChassis =
+    armorName.startsWith('AUTOMATON_CHASSI') ||
+    armorName.startsWith('AUTOMATON_CHASSIS') ||
+    (resolved.armor?.raw ?? '').startsWith('inferred: Reinforced Chassis');
+  // A chassis-specific feat must never overwrite an explicitly selected different
+  // armor's statistics merely because the character also owns that feat.
+  if (!hasReinforcedChassis || !isAutomatonChassis) return item;
 
   const baseAcBonus = resolved.identity.level >= 10 ? 5 : resolved.identity.level >= 5 ? 4 : 3;
   const copy = cloneDeep(item);
