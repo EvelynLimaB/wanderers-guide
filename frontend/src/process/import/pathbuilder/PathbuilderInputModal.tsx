@@ -1,9 +1,29 @@
 import { Anchor, Button, Group, Modal, Select, Stack, Text, TextInput, Title } from '@mantine/core';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { extractBuildId } from './fetch-pathbuilder-share';
 import type { PathbuilderInteractiveImportResult } from './import-from-pathbuilder';
-import type { PathbuilderSelectionPrompt } from './pathbuilder-share-importer';
+import type {
+  PathbuilderPreflightSnapshot,
+  PathbuilderSelectionPreflightOutcome,
+  PathbuilderSelectionPrompt,
+} from './pathbuilder-share-importer';
+
+function formatSigned(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
+}
+
+function formatAttributeName(name: string): string {
+  const names: Record<string, string> = {
+    speed: 'Speed',
+    speedBonus: 'Speed bonus',
+    ancestryhp: 'Ancestry HP',
+    classhp: 'Class HP',
+    bonushp: 'Bonus HP',
+    bonushpPerLevel: 'Bonus HP/level',
+  };
+  return names[name] ?? name;
+}
 
 export default function PathbuilderInputModal(props: {
   open: boolean;
@@ -13,6 +33,11 @@ export default function PathbuilderInputModal(props: {
     jsonExportId: string,
     selectionOverrides: Record<string, string>
   ) => Promise<PathbuilderInteractiveImportResult>;
+  onPreview: (
+    pathbuilderInput: string,
+    jsonExportId: string,
+    selectionOverrides: Record<string, string>
+  ) => Promise<PathbuilderSelectionPreflightOutcome>;
   onClose: () => void;
 }) {
   const [input, setInput] = useState('');
@@ -20,9 +45,15 @@ export default function PathbuilderInputModal(props: {
   const [manualSelections, setManualSelections] = useState<Record<string, string>>({});
   const [selectionPrompt, setSelectionPrompt] = useState<PathbuilderSelectionPrompt | null>(null);
   const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
+  const [selectionSnapshot, setSelectionSnapshot] = useState<PathbuilderPreflightSnapshot | null>(null);
+  const [previewSnapshot, setPreviewSnapshot] = useState<PathbuilderPreflightSnapshot | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const previewRequestId = useRef(0);
   const buildId = extractBuildId(input);
   const validExportId = /^\d{1,12}$/.test(jsonExportId.trim());
   const selectedOption = selectionPrompt?.options.find((option) => option.value === selectedChoice);
+  const displayedSnapshot = previewSnapshot ?? selectionSnapshot;
 
   useEffect(() => {
     if (!props.open) {
@@ -31,6 +62,11 @@ export default function PathbuilderInputModal(props: {
       setManualSelections({});
       setSelectionPrompt(null);
       setSelectedChoice(null);
+      setSelectionSnapshot(null);
+      setPreviewSnapshot(null);
+      setPreviewLoading(false);
+      setPreviewError(null);
+      previewRequestId.current++;
     }
   }, [props.open]);
 
@@ -41,6 +77,11 @@ export default function PathbuilderInputModal(props: {
     setManualSelections({});
     setSelectionPrompt(null);
     setSelectedChoice(null);
+    setSelectionSnapshot(null);
+    setPreviewSnapshot(null);
+    setPreviewLoading(false);
+    setPreviewError(null);
+    previewRequestId.current++;
     props.onClose();
   };
 
@@ -58,6 +99,9 @@ export default function PathbuilderInputModal(props: {
 
     if (result.status === 'selection-required') {
       setSelectionPrompt(result.selection);
+      setSelectionSnapshot(result.snapshot);
+      setPreviewSnapshot(null);
+      setPreviewError(null);
       const previousChoice = answers[result.selection.key];
       setSelectedChoice(
         previousChoice && result.selection.options.some((option) => option.value === previousChoice)
@@ -70,7 +114,41 @@ export default function PathbuilderInputModal(props: {
     if (result.status === 'failed') {
       setSelectionPrompt(null);
       setSelectedChoice(null);
+      setSelectionSnapshot(null);
+      setPreviewSnapshot(null);
     }
+  };
+
+  const changeChoice = (value: string | null) => {
+    setSelectedChoice(value);
+    setPreviewSnapshot(null);
+    setPreviewError(null);
+    const requestId = ++previewRequestId.current;
+
+    if (!value || !selectionPrompt || !buildId || !validExportId) {
+      setPreviewLoading(false);
+      return;
+    }
+
+    const answers = { ...manualSelections, [selectionPrompt.key]: value };
+    setPreviewLoading(true);
+    void props
+      .onPreview(input.trim(), jsonExportId.trim(), answers)
+      .then((result) => {
+        if (requestId !== previewRequestId.current) return;
+        if (result.status === 'error') {
+          setPreviewError(result.error);
+          return;
+        }
+        setPreviewSnapshot(result.snapshot);
+      })
+      .catch((error) => {
+        if (requestId !== previewRequestId.current) return;
+        setPreviewError(error instanceof Error ? error.message : 'Could not calculate this choice preview.');
+      })
+      .finally(() => {
+        if (requestId === previewRequestId.current) setPreviewLoading(false);
+      });
   };
 
   return (
@@ -142,12 +220,124 @@ export default function PathbuilderInputModal(props: {
                     label: option.label,
                   }))}
                   value={selectedChoice}
-                  onChange={setSelectedChoice}
-                  disabled={props.loading}
+                  onChange={changeChoice}
+                  disabled={props.loading || previewLoading}
                   // The parent Modal uses z-index 1000; keep the portaled dropdown above it.
                   comboboxProps={{ zIndex: 1001 }}
                 />
                 {selectedOption?.description && <Text size='sm'>{selectedOption.description}</Text>}
+                {displayedSnapshot && (
+                  <Box
+                    p='sm'
+                    style={{
+                      border: '1px solid var(--mantine-color-dark-4)',
+                      borderRadius: 'var(--mantine-radius-md)',
+                      background: 'rgba(0, 0, 0, 0.14)',
+                    }}
+                  >
+                    <Stack gap={7}>
+                      <Text fw={700}>Live stat preview</Text>
+                      <Text size='xs' c='dimmed'>
+                        Official Pathbuilder JSON targets compared with the Wanderer’s Guide calculation for the
+                        currently selected option. This preview does not save a character.
+                      </Text>
+                      {previewLoading && <Text size='xs'>Recalculating preview…</Text>}
+                      {previewError && <Text size='xs' c='red'>Preview unavailable: {previewError}</Text>}
+                      <Group grow align='flex-start' gap='md'>
+                        <Stack gap={2}>
+                          <Text size='xs' c='dimmed'>Target AC · Pathbuilder</Text>
+                          <Title order={3}>{displayedSnapshot.target?.ac?.total ?? '—'}</Title>
+                          {displayedSnapshot.target?.ac && (
+                            <Text size='xs' c='dimmed'>
+                              {[
+                                displayedSnapshot.target.ac.proficiency !== undefined
+                                  ? `Prof ${formatSigned(displayedSnapshot.target.ac.proficiency)}`
+                                  : null,
+                                displayedSnapshot.target.ac.ability !== undefined
+                                  ? `Ability ${formatSigned(displayedSnapshot.target.ac.ability)}`
+                                  : null,
+                                displayedSnapshot.target.ac.item !== undefined
+                                  ? `Item ${formatSigned(displayedSnapshot.target.ac.item)}`
+                                  : null,
+                                displayedSnapshot.target.ac.shield !== undefined &&
+                                displayedSnapshot.target.ac.shield !== null
+                                  ? `Shield ${formatSigned(Number(displayedSnapshot.target.ac.shield))}`
+                                  : null,
+                              ].filter(Boolean).join(' · ')}
+                            </Text>
+                          )}
+                        </Stack>
+                        <Stack gap={2}>
+                          <Text size='xs' c='dimmed'>Projected AC · Wanderer’s Guide</Text>
+                          <Title order={3}>{displayedSnapshot.current.acTotal ?? '—'}</Title>
+                          {displayedSnapshot.target?.ac?.total !== undefined &&
+                            displayedSnapshot.current.acTotal !== null && (
+                              <Text
+                                size='xs'
+                                c={displayedSnapshot.current.acTotal === displayedSnapshot.target.ac.total ? 'green' : 'orange'}
+                              >
+                                {displayedSnapshot.current.acTotal === displayedSnapshot.target.ac.total
+                                  ? 'Matches target'
+                                  : `${formatSigned(displayedSnapshot.current.acTotal - displayedSnapshot.target.ac.total)} vs target`}
+                              </Text>
+                            )}
+                        </Stack>
+                      </Group>
+                      {displayedSnapshot.target?.abilities.length ? (
+                        <Stack gap={4}>
+                          <Text size='xs' fw={600} c='dimmed'>Ability targets vs current modifiers</Text>
+                          <Group gap={6} wrap='wrap'>
+                            {displayedSnapshot.target.abilities.map((ability) => {
+                              const current = displayedSnapshot.current.abilities.find((item) => item.key === ability.key);
+                              const matches = current?.modifier === ability.modifier;
+                              return (
+                                <Box
+                                  key={ability.key}
+                                  px={8}
+                                  py={5}
+                                  style={{
+                                    border: '1px solid var(--mantine-color-dark-4)',
+                                    borderRadius: 'var(--mantine-radius-sm)',
+                                    minWidth: 88,
+                                  }}
+                                >
+                                  <Text size='xs' fw={700}>{ability.label}</Text>
+                                  <Text size='xs'>Target {ability.score} ({formatSigned(ability.modifier)})</Text>
+                                  <Text size='xs' c={current ? (matches ? 'green' : 'orange') : 'dimmed'}>
+                                    WG {current ? formatSigned(current.modifier) : '—'}
+                                  </Text>
+                                </Box>
+                              );
+                            })}
+                          </Group>
+                        </Stack>
+                      ) : null}
+                      {displayedSnapshot.target?.armor.length ? (
+                        <Stack gap={2}>
+                          <Text size='xs' fw={600} c='dimmed'>Armor and rune targets</Text>
+                          {displayedSnapshot.target.armor.map((armor, index) => (
+                            <Text size='xs' key={`${armor.name}-${index}`}>
+                              {armor.display || armor.name}
+                              {armor.worn === true ? ' · worn' : ''}
+                              {armor.proficiency ? ` · ${armor.proficiency}` : ''}
+                              {armor.potency ? ` · potency +${armor.potency}` : ''}
+                              {armor.resilience ? ` · ${armor.resilience}` : ''}
+                              {armor.runes.length ? ` · ${armor.runes.join(', ')}` : ''}
+                            </Text>
+                          ))}
+                        </Stack>
+                      ) : null}
+                      {displayedSnapshot.target?.attributes.length ? (
+                        <Text size='xs' c='dimmed'>
+                          Pathbuilder raw attributes: {displayedSnapshot.target.attributes
+                            .filter((entry) => ['speed', 'speedBonus', 'ancestryhp', 'classhp', 'bonushp', 'bonushpPerLevel'].includes(entry.name))
+                            .map((entry) => `${formatAttributeName(entry.name)} ${entry.value}`)
+                            .join(' · ')}
+                        </Text>
+                      ) : null}
+                    </Stack>
+                  </Box>
+                )}
               </>
             ) : (
               <Text c='red' size='sm'>
@@ -167,7 +357,8 @@ export default function PathbuilderInputModal(props: {
             disabled={
               !buildId ||
               !validExportId ||
-              Boolean(selectionPrompt && (!selectionPrompt.options.length || !selectedChoice))
+              Boolean(selectionPrompt && (!selectionPrompt.options.length || !selectedChoice)) ||
+              previewLoading
             }
             onClick={() => void confirm()}
           >
