@@ -300,6 +300,17 @@ export default function PathbuilderInputModal(props: {
                             )}
                         </Stack>
                       </Group>
+                      {displayedSnapshot.target?.ac?.total !== undefined &&
+                        displayedSnapshot.current.acTotal !== null &&
+                        displayedSnapshot.current.acTotal !== displayedSnapshot.target.ac.total && (
+                          <Text size='xs' c='orange'>
+                            AC mismatch: Pathbuilder JSON reports {displayedSnapshot.target.ac.total}; Wanderer’s Guide
+                            calculates {displayedSnapshot.current.acTotal} (difference{' '}
+                            {formatSigned(displayedSnapshot.current.acTotal - displayedSnapshot.target.ac.total)}).
+                            An AC difference alone will not block character creation. The completion warning will explain
+                            any armor state that could be recovered from the share and JSON data.
+                          </Text>
+                        )}
                       {displayedSnapshot.target?.abilities.length ? (
                         <Stack gap={4}>
                           <Text size='xs' fw={600} c='dimmed'>Ability targets vs current modifiers</Text>
