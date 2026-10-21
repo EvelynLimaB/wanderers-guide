@@ -494,6 +494,11 @@ export function resolveBuild(
       'Armor: Pathbuilder JSON includes armor rows but does not identify a unique worn item; none was selected automatically.'
     );
   }
+  if (derivedArmor?.res && parsePathbuilderArmorResilience(derivedArmor.res) === 0) {
+    hints.push(
+      `Armor: Pathbuilder JSON resilience rune "${derivedArmor.res}" could not be mapped to a known rank; its saving-throw bonus was not applied.`
+    );
+  }
   const hasReinforcedChassis = feats.some(
     (feat) => labelToVariable(feat.name) === 'REINFORCED_CHASSIS'
   );
