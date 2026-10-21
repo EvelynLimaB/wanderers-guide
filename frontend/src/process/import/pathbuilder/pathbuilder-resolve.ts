@@ -41,6 +41,23 @@ export function isPathbuilderUuid(value: string | undefined | null): value is st
 }
 
 /**
+ * Normalize labels to the uppercase underscore tokens used by the importer.
+ * Kept local so this pure payload resolver does not depend on browser/application
+ * modules (and remains runnable directly from the Node fixture tests).
+ */
+function normalizePathbuilderToken(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+
+/**
  * Parse a Custom File's `json` field.
  *
  * Pathbuilder is inconsistent about escape depth: in build 1596127 the type-1
@@ -162,7 +179,7 @@ const STRIKING_LABELS: Record<number, string> = {
 
 /** Convert json.php's armor resilience label to WG's numeric rune rank. */
 function parsePathbuilderArmorResilience(value: string | null | undefined): number {
-  const normalized = labelToVariable(value ?? '');
+  const normalized = normalizePathbuilderToken(value ?? '');
   if (
     !normalized ||
     ['0', 'NONE', 'NO_RUNE', 'NORUNE', 'UNARMED', 'N_A', 'NOT_APPLICABLE'].includes(normalized) ||
@@ -455,7 +472,7 @@ export function resolveBuild(
   const buffs = resolveActiveCustomBuffs(cd.hashMapActiveCustomBuffs ?? undefined, customFiles, unresolved);
   const spells = resolveSpells(cd.hashMapPlayerSpells ?? undefined, options.derived);
   const feats = resolveFeats(cd.hashMapFeatSelections ?? undefined);
-  const heritageFeat = feats.find((feat) => labelToVariable(feat.slot) === 'HERITAGE_FEAT')?.name;
+  const heritageFeat = feats.find((feat) => normalizePathbuilderToken(feat.slot) === 'HERITAGE_FEAT')?.name;
   const keyAbilityFromShare = cd.keyability;
   const keyAbilityFromDerived = options.derived?.keyability;
   if (keyAbilityFromShare !== undefined && keyAbilityFromShare !== null && !parsePathbuilderAbility(keyAbilityFromShare)) {
@@ -507,10 +524,10 @@ export function resolveBuild(
     );
   }
   const hasReinforcedChassis = feats.some(
-    (feat) => labelToVariable(feat.name) === 'REINFORCED_CHASSIS'
+    (feat) => normalizePathbuilderToken(feat.name) === 'REINFORCED_CHASSIS'
   );
   const isAutomaton =
-    labelToVariable(cd.ancestry ?? options.derived?.ancestry ?? '') === 'AUTOMATON';
+    normalizePathbuilderToken(cd.ancestry ?? options.derived?.ancestry ?? '') === 'AUTOMATON';
 
   let armor: ResolvedItemRef | undefined;
   const rawArmorName = armorRaw?.armorName;
@@ -557,7 +574,7 @@ export function resolveBuild(
   // enough to reconstruct the known baseline without guessing arbitrary armor.
   // Do not override a different explicitly named armor or an unresolved Custom File.
   const isUnarmoredReference =
-    armor?.kind === 'standard' && labelToVariable(armor.name) === 'UNARMORED';
+    armor?.kind === 'standard' && normalizePathbuilderToken(armor.name) === 'UNARMORED';
   if (hasReinforcedChassis && isAutomaton && (!armor || isUnarmoredReference)) {
     const characterLevel = cd.characterLevel ?? options.derived?.level ?? 1;
     const chassisTier = characterLevel >= 10 ? '10th' : characterLevel >= 5 ? '5th' : '1st';
