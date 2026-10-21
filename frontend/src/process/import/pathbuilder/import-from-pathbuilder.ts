@@ -14,11 +14,12 @@ import { extractBuildId } from './fetch-pathbuilder-share';
 import {
   importFromPathbuilderShare,
   preflightPathbuilderImport,
+  PathbuilderPreflightSnapshot,
   PathbuilderSelectionPrompt,
 } from './pathbuilder-share-importer';
 
 export type PathbuilderInteractiveImportResult =
-  | { status: 'selection-required'; selection: PathbuilderSelectionPrompt }
+  | { status: 'selection-required'; selection: PathbuilderSelectionPrompt; snapshot: PathbuilderPreflightSnapshot }
   | { status: 'imported'; character: Character }
   | { status: 'failed' };
 
@@ -103,5 +104,5 @@ export async function importFromPathbuilderWithExportId(
   return { status: 'imported', character: result.character };
 }
 
-export { importFromPathbuilderShare };
+export { importFromPathbuilderShare, preflightPathbuilderImport };
 export type { PathbuilderImportOutcome } from './pathbuilder-share-importer';
