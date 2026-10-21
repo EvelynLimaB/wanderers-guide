@@ -13,7 +13,6 @@
  * omit CORS headers, which makes its response unreadable to the browser.
  */
 
-import { makeRequest } from '@requests/request-manager';
 import {
   PathbuilderDerivedBuild,
   PathbuilderDerivedResponseSchema,
@@ -131,6 +130,10 @@ async function requestPayload(
 ): Promise<PayloadResult> {
   if (!options.fetchImpl) {
     try {
+      // Load the authenticated relay only for production calls. Keeping this
+      // import lazy lets deterministic payload tests inject fetchImpl without
+      // evaluating the browser-only Supabase client (import.meta.env) in Node.
+      const { makeRequest } = await import('@requests/request-manager');
       const response = await makeRequest<ProxyPayloadResult>(
         'fetch-pathbuilder',
         { mode, id },
