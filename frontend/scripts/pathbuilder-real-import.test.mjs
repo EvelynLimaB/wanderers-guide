@@ -542,7 +542,24 @@ try {
     (block) => block.id === selectedBlessingOption.operation?.data?.abilityBlockId
   );
   assert.equal(selectedBlessing?.name, 'Blessed Swiftness', 'Pathbuilder Blessed Swiftness choice must survive 1:1 import');
+  const reconstructedChassis = outcome.character.inventory.items.find(
+    (entry) =>
+      entry.is_equipped &&
+      entry.item?.group === 'ARMOR' &&
+      entry.item?.name === 'Automaton Chassi (5th level)'
+  )?.item;
   assert.ok(
+    reconstructedChassis,
+    '1597410 omitted armor name must be reconstructed as equipped Reinforced Chassis'
+  );
+  assert.equal(reconstructedChassis.meta_data?.category, 'unarmored_defense');
+  assert.equal(reconstructedChassis.meta_data?.ac_bonus, 4, 'level-5 chassis gives +4 base AC at level 7');
+  assert.equal(
+    reconstructedChassis.meta_data?.runes?.potency,
+    1,
+    'the share potency rune must apply to the reconstructed chassis'
+  );
+  assert.equal(
     outcome.character?.custom_operations?.some(
       (operation) =>
         operation.type === 'addBonusToValue' &&
@@ -550,7 +567,8 @@ try {
         operation.data.type === 'item' &&
         operation.data.value === '+1'
     ),
-    '1597410 potency on Pathbuilder default Unarmored state must be represented as an AC item bonus'
+    false,
+    'armor potency must not be duplicated as a free AC bonus when a chassis item exists'
   );
 
   const engine = await createOperationEngine();
@@ -575,8 +593,8 @@ try {
     )?.item;
     assert.equal(
       engine.getFinalAcValue('CHARACTER', armor),
-      24,
-      '1597410 AC must match the PDF oracle'
+      27,
+      '1597410 AC must match the later Pathbuilder Defense-tab screenshot; the older AC 24 fixture is stale'
     );
     assert.equal(engine.getFinalHealthValue('CHARACTER'), 99, '1597410 HP must match the PDF oracle');
     const speedValue = engine.getFinalVariableValue('CHARACTER', 'SPEED');
