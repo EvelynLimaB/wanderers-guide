@@ -240,6 +240,10 @@ verify_jwt = false
 verify_jwt = false
 
 
+[functions.fetch-pathbuilder]
+verify_jwt = false
+
+
 [functions.find-character]
 verify_jwt = false
 
