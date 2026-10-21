@@ -94,14 +94,26 @@ test('official JSON export is fetched only by the separately supplied export ID'
   assert.deepEqual(fetched, calculated);
 });
 
-test('identity is read from characterData, not from a derived sheet', () => {
+test('share payload restores the selected heritage and devotion spell without manual choices', () => {
+  // Pathbuilder v121 omits characterData.heritage in this captured share, but
+  // records "Heritage Feat" and the Champion devotion-spell special selection.
   assert.equal(resolved.identity.name, 'Kasane');
   assert.equal(resolved.identity.level, 20);
   assert.equal(resolved.identity.ancestry, 'Automaton');
+  assert.equal(resolved.identity.heritage, 'Hunter Automaton');
   assert.equal(resolved.identity.className, 'Champion');
   assert.equal(resolved.identity.gender, 'Female?');
   assert.equal(resolved.buildId, '1596127');
   assert.equal(resolved.formatVersion, '121');
+  assert.ok(
+    resolved.specialSelections.some(
+      (choice) =>
+        choice.slot === 'Devotion Spells' &&
+        choice.prompt === 'Select Initial Devotion Spell' &&
+        choice.value === 'Lay on Hands'
+    ),
+    'Lay on Hands must be retained from hashMapSpecialSelections'
+  );
 });
 
 /** Verify compact Pathbuilder ability tokens match the labels emitted by WG attribute selectors. */
