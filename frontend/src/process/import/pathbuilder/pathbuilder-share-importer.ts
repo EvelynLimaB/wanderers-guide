@@ -1590,15 +1590,20 @@ async function validatePathbuilderDerived(
       const reconstructedChassis = resolved.hints.some((hint) =>
         /reconstructed the automaton reinforced chassis/i.test(hint)
       );
+      const chassisIsResolved = resolved.feats.some(
+        (feat) => labelToVariable(feat.name) === 'REINFORCED_CHASSIS'
+      ) && /automaton\s+chassi/i.test(resolved.armor?.name ?? '');
       const hasUnnamedArmorRuneState =
         !resolved.armor && (resolved.armorPotency > 0 || resolved.armorRunes.length > 0);
       const explanation = reconstructedChassis
         ? 'The share payload omitted the chassis armor name. WG reconstructed the Reinforced Chassis from the recorded Automaton ancestry, feat, and character level; the exported JSON AC appears inconsistent with that armor state.'
-        : hasUnnamedArmorRuneState
-          ? 'The share payload contains armor potency or rune state but no reliable armor name, so that state could not safely identify the intended armor.'
-          : !resolved.armor
-            ? 'No reliable equipped armor reference was available to explain the difference.'
-            : 'The resolved armor exists, but its rules calculation differs. Review armor statistics, proficiency, Dexterity cap, runes, shield state, and temporary bonuses.';
+        : chassisIsResolved
+          ? 'The resolved armor data identifies the Automaton Reinforced Chassis, but the JSON AC total contradicts the chassis rule calculation. The export contains inconsistent armor and AC data.'
+          : hasUnnamedArmorRuneState
+            ? 'The share payload contains armor potency or rune state but no reliable armor name, so that state could not safely identify the intended armor.'
+            : !resolved.armor
+              ? 'No reliable equipped armor reference was available to explain the difference.'
+              : 'The resolved armor exists, but its rules calculation differs. Review armor statistics, proficiency, Dexterity cap, runes, shield state, and temporary bonuses.';
 
       warnings.push(
         `AC mismatch: Pathbuilder JSON reports ${sourceAc}; Wanderer's Guide calculates ${actualAc} (difference ${signedDifference}). ${explanation}`
@@ -1666,22 +1671,15 @@ function buildPathbuilderCustomOperations(
     });
   }
 
-  // Pathbuilder omits PlayerArmor.armorName when its model value is the default
-  // "Unarmored". The v121 golden sheet still counts a retained potency value toward
-  // AC (build 1597410: unarmored baseline 23, sheet oracle 24 at potency +1). Preserve
-  // that calculated item bonus without fabricating a physical armor item. Property
-  // runes with no base armor stay in the raw import snapshot and grant no armor effect.
-  if (!resolved.armor && resolved.armorPotency > 0) {
-    operations.push({
-      id: crypto.randomUUID(),
-      type: 'addBonusToValue',
-      data: {
-        variable: 'AC_BONUS',
-        value: `+${resolved.armorPotency}`,
-        type: 'item',
-        text: '',
-      },
-    });
+  // A retained armor potency/property-rune editor state is not proof that the
+  // character is unarmored or that a rune can apply without a base item. Never turn
+  // this ambiguous state into a free AC bonus. Known Automaton chassis cases are
+  // reconstructed by resolveBuild; all other missing armor cases remain explicit
+  // warnings and preserve their raw source payload for later correction.
+  if (!resolved.armor && (resolved.armorPotency > 0 || resolved.armorRunes.length > 0)) {
+    warnings.push(
+      'armor warning: Pathbuilder contains armor potency/property-rune state but no reliable armor reference; the retained rune state was not applied to AC without a base armor item'
+    );
   }
 
   return operations;
