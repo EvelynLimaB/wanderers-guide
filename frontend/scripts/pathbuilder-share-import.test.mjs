@@ -398,13 +398,41 @@ test('json.php-derived armor data recovers an armor name missing from playerArmo
     buildId: fixture.build_id,
     formatVersion: fixture.format_version,
     derived: {
-      armor: [{ name: 'Full Plate', pot: 1 }],
+      armor: [{ name: 'Full Plate', pot: 1, worn: true }],
     },
   });
 
   assert.equal(derivedResolved.armor?.name, 'Full Plate');
   assert.equal(derivedResolved.armor?.raw, 'be5e11f6-4459-4080-9107-8145dd57014b');
   assert.equal(derivedResolved.unresolved.some((entry) => entry.kind === 'armor'), false);
+});
+
+test('ambiguous derived armor rows are not guessed as equipped armor', () => {
+  const build = structuredClone(fixture.build);
+  build.characterData.ancestry = 'Human';
+  for (const [slot, value] of Object.entries(build.characterData.hashMapFeatSelections ?? {})) {
+    if (String(value).toLowerCase().includes('reinforced chassis')) {
+      delete build.characterData.hashMapFeatSelections[slot];
+    }
+  }
+
+  const ambiguous = resolveBuild(build, {
+    buildId: fixture.build_id,
+    formatVersion: fixture.format_version,
+    derived: {
+      ancestry: 'Human',
+      armor: [
+        { name: 'Full Plate', worn: false },
+        { name: 'Leather Armor' },
+      ],
+    },
+  });
+
+  assert.equal(ambiguous.armor, undefined);
+  assert.ok(
+    ambiguous.hints.some((hint) => /does not identify a unique worn item/i.test(hint)),
+    'multiple armor candidates without a worn marker must be reported instead of guessed'
+  );
 });
 
 test('rule variants map onto WG CharacterVariants keys', () => {
