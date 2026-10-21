@@ -299,12 +299,11 @@ try {
   const certifiedBuild = structuredClone(fixture.build);
   certifiedBuild.characterData.keyability = 'str';
 
-  // Layer 5 (online certification) stands-in fixture: json.php returned HTTP 404
-  // during capture (docs/pathbuilder-1to1-import-contract.md), so the tested
-  // supported condition is "derived data absent". The values below reproduce
-  // Pathbuilder's independently derived sheet state for build 1597410 as shown
-  // by the PDF oracle, letting the certification path run hermetically without
-  // live network access.
+  // Layer 5 (online certification) stand-in fixture: json.php returned HTTP 404
+  // during capture, so these values are a hermetic test oracle, not a live export.
+  // AC 24 is intentionally retained from the older PDF/derived fixture to model the
+  // now-confirmed stale armor export; the later Defense-tab screenshot shows AC 27.
+  // This lets the test prove that source inconsistency warns without blocking import.
   const derivedFixture = {
     name: 'Kasane',
     class: 'Champion',
