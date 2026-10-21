@@ -562,7 +562,7 @@ export function resolveBuild(
       quantity: 1,
     };
     hints.push(
-      `Armor: Reconstructed the Automaton Reinforced Chassis (${chassisTier} level) because the share payload omitted its armor name; recorded potency and property runes were retained.`
+      `Armor: Reconstructed the Automaton Reinforced Chassis (${chassisTier} level) because the share payload omitted its armor name. Recorded potency and property runes were retained; armor rune fields absent from both payloads cannot be inferred safely.`
     );
   }
 
