@@ -248,8 +248,10 @@ export default function PathbuilderInputModal(props: {
                       <Text fw={700}>Live stat preview</Text>
                       {displayedSnapshot.target?.name || displayedSnapshot.target?.level !== undefined ? (
                         <Text size='sm' fw={600}>
-                          Official JSON: {displayedSnapshot.target.name ?? 'Unnamed character'}
-                          {displayedSnapshot.target.level !== undefined ? ` · Level ${displayedSnapshot.target.level}` : ''}
+                          Official JSON: {displayedSnapshot.target?.name ?? 'Unnamed character'}
+                          {displayedSnapshot.target?.level !== undefined
+                            ? ` · Level ${displayedSnapshot.target?.level}`
+                            : ''}
                         </Text>
                       ) : null}
                       <Text size='xs' c='dimmed'>
