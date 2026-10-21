@@ -40,6 +40,24 @@ const FAILURE_CACHE_MS = 10_000;
 const RATE_LIMIT_CACHE_MS = 60_000;
 const responseCache = new Map<string, { expiresAt: number; value: unknown }>();
 const inFlightRequests = new Map<string, Promise<unknown>>();
+const derivedFetchErrors = new Map<string, { expiresAt: number; error: string }>();
+
+export function getPathbuilderDerivedFetchError(buildId: string): string | null {
+  const stored = derivedFetchErrors.get(buildId);
+  if (!stored) return null;
+  if (stored.expiresAt <= Date.now()) {
+    derivedFetchErrors.delete(buildId);
+    return null;
+  }
+  return stored.error;
+}
+
+function recordDerivedFetchError(buildId: string, error: string) {
+  derivedFetchErrors.set(buildId, {
+    error,
+    expiresAt: Date.now() + RATE_LIMIT_CACHE_MS,
+  });
+}
 
 async function withRequestCache<T>(
   key: string,
@@ -244,15 +262,21 @@ async function fetchPathbuilderDerivedUncached(
 ): Promise<PathbuilderDerivedBuild | null> {
   const payload = await requestPayload('derived', buildId, options);
   if (!payload.ok) {
+    recordDerivedFetchError(buildId, payload.error);
     console.info(`Pathbuilder json.php unavailable for build ${buildId}: ${payload.error}`);
     return null;
   }
 
   const parsed = PathbuilderDerivedResponseSchema.safeParse(payload.payload);
   if (!parsed.success || !parsed.data.success || !parsed.data.build) {
+    const error = !parsed.success
+      ? 'Pathbuilder returned an unexpected JSON export format.'
+      : 'Pathbuilder did not return a usable calculated build for this export ID.';
+    recordDerivedFetchError(buildId, error);
     console.info(`Pathbuilder json.php returned no usable derived build for id ${buildId}`);
     return null;
   }
+  derivedFetchErrors.delete(buildId);
   return parsed.data.build;
 }
 
