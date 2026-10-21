@@ -387,10 +387,9 @@ try {
   assert.equal(shareRequests, 1);
   assert.equal(derivedRequests, 0);
 
-  // Full certification path: the same import with an available official export
-  // ID must succeed and produce identical mechanical results. The derived
-  // payload's independent values (key ability STR, AC 24) match the WG engine
-  // recomputation asserted against the PDF oracle below.
+  // Full certification path: the JSON export reports AC 24 while the share
+  // payload loses its Automaton chassis armor reference. WG reconstructs the chassis
+  // to AC 27 and must report that source mismatch without blocking character creation.
   shareRequests = 0;
   derivedRequests = 0;
   const certifiedOutcome = await importer.importFromPathbuilderShare('1597410', {
@@ -402,8 +401,15 @@ try {
   assert.equal(shareRequests, 1);
   assert.equal(derivedRequests, 0);
   assert.equal(certifiedOutcome.ok, true, certifiedOutcome.ok ? '' : certifiedOutcome.error);
-  assert.deepEqual(certifiedOutcome.warnings, []);
   assert.equal(certifiedOutcome.character?.name, 'Kasane');
+  const acWarning = certifiedOutcome.warnings.find((warning) => warning.startsWith('AC mismatch:'));
+  assert.ok(acWarning, 'an AC discrepancy should warn rather than block character creation');
+  assert.match(acWarning, /Pathbuilder JSON reports 24; Wanderer's Guide calculates 27/);
+  assert.match(acWarning, /share payload omitted the chassis armor name/i);
+  assert.ok(
+    certifiedOutcome.warnings.some((warning) => /reconstructed the automaton reinforced chassis/i.test(warning)),
+    'the warning details should explain the reconstructed armor state'
+  );
 
   // Regression: Pathbuilder represents the Remastered Automaton's Reinforced
   // Chassis as a synthetic worn-armor row. At level 7 it grants +4 AC, and the
@@ -442,6 +448,11 @@ try {
     true,
     chassisOutcome.ok ? '' : `Reinforced Chassis level-scaling regression: ${chassisOutcome.error}`
   );
+  assert.equal(
+    chassisOutcome.warnings.some((warning) => warning.startsWith('AC mismatch:')),
+    false,
+    'a matching derived AC value should not create an AC discrepancy warning'
+  );
 
   // Fail-closed identity check: a mismatched export ID blocks the import before
   // any character is created (contract layer 5 / export-identity policy).
@@ -461,10 +472,14 @@ try {
   assert.match(blocked.error, /mismatch for name/i);
 
   assert.equal(outcome.ok, true, outcome.ok ? '' : outcome.error);
-  assert.deepEqual(
-    outcome.warnings,
-    [],
-    `1597410 must import without unresolved mechanics; got: ${outcome.warnings.join('; ')}`
+  assert.ok(
+    outcome.warnings.some((warning) => /reconstructed the automaton reinforced chassis/i.test(warning)),
+    `1597410 should explain that its omitted chassis armor was reconstructed; got: ${outcome.warnings.join('; ')}`
+  );
+  assert.equal(
+    outcome.warnings.some((warning) => warning.startsWith('AC mismatch:')),
+    false,
+    'without an available JSON AC target, no AC comparison should be invented'
   );
   assert.equal(outcome.character?.id, 9001);
   assert.equal(outcome.character?.name, 'Kasane');
