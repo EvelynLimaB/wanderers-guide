@@ -408,6 +408,20 @@ test('json.php-derived armor data recovers an armor name missing from playerArmo
   assert.equal(derivedResolved.armorResilience, 2);
   assert.equal(derivedResolved.armorRunes.includes('Raiment'), true);
   assert.equal(derivedResolved.unresolved.some((entry) => entry.kind === 'armor'), false);
+
+  const noResilienceRune = resolveBuild(build, {
+    buildId: fixture.build_id,
+    formatVersion: fixture.format_version,
+    derived: {
+      armor: [{ name: 'Full Plate', res: 'None', worn: true }],
+    },
+  });
+  assert.equal(noResilienceRune.armorResilience, 0);
+  assert.equal(
+    noResilienceRune.hints.some((hint) => /resilience rune .* could not be mapped/i.test(hint)),
+    false,
+    'a known empty resilience state must not produce a false warning'
+  );
 });
 
 test('ambiguous derived armor rows are not guessed as equipped armor', () => {
