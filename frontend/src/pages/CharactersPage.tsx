@@ -13,7 +13,7 @@ import { importFromFTC } from '@import/ftc/import-from-ftc';
 import importFromGUIDECHAR from '@import/guidechar/import-from-guidechar';
 import importFromJSON from '@import/json/import-from-json';
 import PathbuilderInputModal from '@import/pathbuilder/PathbuilderInputModal';
-import { importFromPathbuilderWithExportId } from '@import/pathbuilder/import-from-pathbuilder';
+import { importFromPathbuilderWithExportId, preflightPathbuilderImport } from '@import/pathbuilder/import-from-pathbuilder';
 import {
   ActionIcon,
   Box,
@@ -389,6 +389,12 @@ export function Component() {
                   setLoadingImportCharacter(false);
                 }
               }}
+              onPreview={(pathbuilderId, jsonExportId, selectionOverrides) =>
+                preflightPathbuilderImport(pathbuilderId, {
+                  derivedBuildId: jsonExportId,
+                  selectionOverrides,
+                })
+              }
               onClose={() => setOpenedPathbuilderModal(false)}
             />
           </Group>
