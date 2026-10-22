@@ -743,20 +743,51 @@ try {
     }
 
     const chosenDomainName = certifiedBuild.characterData.hashMapSpecialSelections?.['Champion Feat 1']?.['Select Domain'];
-    // Multiple legacy/Remaster versions of this selector can be present. Use the
-    // selected domain's own content description as the authoritative spell oracle.
-    const domainPicker = content.abilityBlocks
-      .flatMap((block) => block.operations ?? [])
-      .find(
-        (operation) =>
-          operation.type === 'select' &&
-          String(operation.data?.title ?? '').trim().toLowerCase() === 'select a domain' &&
-          (operation.data.optionsPredefined ?? []).some(
-            (option) =>
-              option.type === 'CUSTOM' &&
-              String(option.title ?? '').trim().toLowerCase() === String(chosenDomainName ?? '').trim().toLowerCase()
+    // Resolve the domain descriptor through the exact Deity's Domain feature and
+    // selector path recorded by the operation engine. A global name-only search can
+    // select a different legacy/Remaster Domains record when both offer "Metal".
+    const domainSpellSelectionEntry = Object.entries(savedSelections).find(([path]) => {
+      const selectorId = path.slice(path.lastIndexOf('_') + 1);
+      return content.abilityBlocks.some(
+        (block) =>
+          block.name === "Deity's Domain" &&
+          path.includes('_' + block.id + '_') &&
+          (block.operations ?? []).some(
+            (operation) =>
+              operation.type === 'select' &&
+              operation.id === selectorId &&
+              /initial domain spell/i.test(operation.data?.title ?? '')
           )
       );
+    });
+    assert.ok(
+      domainSpellSelectionEntry,
+      'the import must save a selection for the initial domain spell under the chosen Deity\'s Domain feature'
+    );
+    const domainSelectorId = domainSpellSelectionEntry[0].slice(domainSpellSelectionEntry[0].lastIndexOf('_') + 1);
+    const sourceDomainFeat = content.abilityBlocks.find(
+      (block) =>
+        block.name === "Deity's Domain" &&
+        domainSpellSelectionEntry[0].includes('_' + block.id + '_') &&
+        (block.operations ?? []).some(
+          (operation) =>
+            operation.type === 'select' &&
+            operation.id === domainSelectorId &&
+            /initial domain spell/i.test(operation.data?.title ?? '')
+        )
+    );
+    assert.ok(sourceDomainFeat, 'the saved selector must identify its exact source feat record');
+    const domainsBlockId = sourceDomainFeat.operations?.find(
+      (operation) => operation.type === 'giveAbilityBlock'
+    )?.data.abilityBlockId;
+    const domainsBlock = content.abilityBlocks.find(
+      (block) => String(block.id) === String(domainsBlockId)
+    );
+    const domainPicker = domainsBlock?.operations?.find(
+      (operation) =>
+        operation.type === 'select' &&
+        String(operation.data?.title ?? '').trim().toLowerCase() === 'select a domain'
+    );
     const chosenDomain = domainPicker?.type === 'select'
       ? domainPicker.data.optionsPredefined?.find(
           (option) =>
@@ -764,19 +795,22 @@ try {
             String(option.title ?? '').trim().toLowerCase() === String(chosenDomainName ?? '').trim().toLowerCase()
         )
       : undefined;
-    assert.ok(chosenDomain && chosenDomain.type === 'CUSTOM', 'the captured domain must be found in WG content');
+    assert.ok(chosenDomain && chosenDomain.type === 'CUSTOM', 'the linked Domains block must contain the recorded domain');
 
     const initialSpellReference = /\*\*Initial Spell\*\*\s*\[([^\]]+)\]\(link_spell_(\d+)\)/i.exec(chosenDomain.description);
-    assert.ok(initialSpellReference, 'WG domain content must identify the granted initial spell');
+    assert.ok(initialSpellReference, 'the selected Domains record must identify its granted initial spell');
 
     // Pathbuilder records Metal, not a second spell choice. Confirm the operation
-    // tree contains the actual WG-local spell record named in that domain content.
-    // Do not compare it to link_spell_* because that token is a source-link ID.
-
-    const domainSpellSelectionEntry = Object.entries(savedSelections).find(([, value]) => {
-      const selectedSpell = content.spells.find((spell) => String(spell.id) === String(value));
-      return selectedSpell?.name === initialSpellReference[1];
-    });
+    // tree selected the WG-local spell linked from that exact content record.
+    // Do not compare link_spell_* source IDs to WG's local Spell.id.
+    const selectedInitialDomainSpell = content.spells.find(
+      (spell) => String(spell.id) === String(domainSpellSelectionEntry[1])
+    );
+    assert.equal(
+      selectedInitialDomainSpell?.name,
+      initialSpellReference[1],
+      'the actual operation-tree source record must select its own domain spell, not a same-named domain from another content version'
+    );
     assert.ok(
       domainSpellSelectionEntry,
       'the import must save the inferred initial domain spell "' + initialSpellReference[1] +
@@ -785,11 +819,6 @@ try {
           content.spells.some((spell) => String(spell.id) === String(value))
         ))
     );
-    const selectedInitialDomainSpell = content.spells.find(
-      (spell) => String(spell.id) === String(domainSpellSelectionEntry[1])
-    );
-    assert.equal(selectedInitialDomainSpell?.name, initialSpellReference[1]);
-
     assert.ok(
       !promptTitles.some((title) => /initial.*domain.*spell/i.test(title)),
       'the import must infer the granted initial domain spell instead of prompting for it again'
