@@ -573,7 +573,7 @@ export function resolveBuild(
           ? derivedArmorName ?? rawArmorName
           : rawArmorName ?? derivedArmorName;
 
-  if (rawIsUnarmoredPlaceholder && derivedArmorName && !isChassisArmorRow(derivedArmor)) {
+  if (rawIsUnarmoredPlaceholder && derivedArmor && derivedArmorName) {
     hints.push(
       `Armor: the share payload says Unarmored, but json.php identifies "${derivedArmorName}" as the uniquely selected worn armor; the JSON armor row was used.`
     );
