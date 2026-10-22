@@ -1807,12 +1807,14 @@ function getFeatSelectionsForOperation(
       .map((feat) => ({ name: feat.name, level }));
   }
 
-  // Generic "Select a Feat" nodes occur in several branches, including builds
-  // where WG does not title the Free Archetype descendant with "Archetype" or
-  // "Dedication". Keep Free Archetype choices in the candidate set and let the
-  // legal option list decide whether the selected feat belongs to this selector.
+  // Generic feat selectors are used by ancestry, ancestry-paragon, and nested
+  // feat choices as well as Free Archetype descendants. Pathbuilder's slot names
+  // are not consistent: "Ancestry Paragon" is a feat slot without the word "Feat",
+  // while nested slots such as "Reincarnation FeatAncestry Paragon" omit the word
+  // boundary after "Feat". Keep those recorded choices available and let WG's
+  // legal option list decide which selector can accept each choice.
   return atLevel
-    .filter((feat) => /\bfeat\b/i.test(feat.slot) || /^free archetype/i.test(feat.slot))
+    .filter((feat) => /feat/i.test(feat.slot) || /^(?:free archetype|ancestry paragon)/i.test(feat.slot))
     .map((feat) => ({ name: feat.name, level }));
 }
 
