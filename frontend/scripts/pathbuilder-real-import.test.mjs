@@ -772,7 +772,7 @@ try {
     // Pathbuilder records Metal, not a second spell choice. Confirm the operation
     // tree contains the actual WG-local spell record named in that domain content.
     // Do not compare it to link_spell_* because that token is a source-link ID.
-    const savedSelections = outcome.character.operation_data?.selections ?? {};
+
     const domainSpellSelectionEntry = Object.entries(savedSelections).find(([, value]) => {
       const selectedSpell = content.spells.find((spell) => String(spell.id) === String(value));
       return selectedSpell?.name === initialSpellReference[1];
