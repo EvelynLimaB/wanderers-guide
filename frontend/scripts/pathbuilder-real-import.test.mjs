@@ -299,12 +299,11 @@ try {
   const certifiedBuild = structuredClone(fixture.build);
   certifiedBuild.characterData.keyability = 'str';
 
-  // Layer 5 (online certification) stand-in fixture: json.php returned HTTP 404
-  // during capture, so these values are a hermetic test oracle, not a live export.
-  // AC 24 is intentionally retained from the older PDF/derived fixture to model the
-  // now-confirmed stale armor export; the later Defense-tab screenshot shows AC 27.
+  // Deliberately stale synthetic target for the warning-path regression only.
+  // The captured official json.php response is loaded separately below and is used
+  // for positive identity, ability, armor, rune, and AC parity assertions.
   // This lets the test prove that source inconsistency warns without blocking import.
-  const derivedFixture = {
+  const staleDerivedFixture = {
     name: 'Kasane',
     class: 'Champion',
     level: 7,
@@ -323,12 +322,12 @@ try {
   const selectionOverrides = {};
   let preflight = await importer.preflightPathbuilderImport('1597410', {
     fetchImpl: createFetch(certifiedBuild),
-    derivedOverride: derivedFixture,
+    derivedOverride: staleDerivedFixture,
     selectionOverrides,
   });
   assert.equal(preflight.status, 'selection-required', 'fixture should expose its omitted required choice');
   assert.match(preflight.selection.title, /deific weapon/i);
-  assert.equal(preflight.snapshot.target?.ac?.total, 24, 'preflight exposes the official AC target');
+  assert.equal(preflight.snapshot.target?.ac?.total, 24, 'the mismatch-path fixture intentionally exposes stale AC 24');
   assert.equal(
     preflight.snapshot.target?.abilities.find((ability) => ability.key === 'str')?.score,
     18,
@@ -375,7 +374,7 @@ try {
     selectionOverrides[preflight.selection.key] = preflight.selection.options[0].value;
     preflight = await importer.preflightPathbuilderImport('1597410', {
       fetchImpl: createFetch(certifiedBuild),
-      derivedOverride: derivedFixture,
+      derivedOverride: staleDerivedFixture,
       selectionOverrides,
     });
     if (preflight.status === 'ready') {
@@ -392,16 +391,17 @@ try {
     'the recorded Free Archetype choices must reconstruct their operation branches without manual prompts'
   );
 
-  // Certification preflight: the same flow with an available official export ID
-  // must reach 'ready' through the json.php comparison path (identity checks).
-  const certifiedPreflight = await importer.preflightPathbuilderImport('1597410', {
+  // Positive certification uses the actual captured json.php response (export ID
+  // 474853), not the synthetic AC-24 fixture used to exercise stale-source warnings.
+  const officialPreflight = await importer.preflightPathbuilderImport('1597410', {
     fetchImpl: createFetch(certifiedBuild),
-    derivedOverride: derivedFixture,
+    derivedOverride: capturedDerivedBuild,
     selectionOverrides,
   });
-  assert.equal(certifiedPreflight.status, 'ready', certifiedPreflight.error ?? 'certified preflight failed');
-  assert.equal(certifiedPreflight.snapshot.target?.ac?.total, 24);
-  assert.equal(certifiedPreflight.snapshot.current.abilities.length, 6);
+  assert.equal(officialPreflight.status, 'ready', officialPreflight.error ?? 'official preflight failed');
+  assert.equal(officialPreflight.snapshot.target?.ac?.total, 27);
+  assert.equal(officialPreflight.snapshot.target?.abilities.find((ability) => ability.key === 'str')?.score, 19);
+  assert.equal(officialPreflight.snapshot.current.abilities.length, 6);
 
   // Exclude preflight reads from the assertions for the actual import call.
   shareRequests = 0;
@@ -420,7 +420,7 @@ try {
     silent: true,
     selectionOverrides,
     fetchImpl: createFetch(certifiedBuild),
-    derivedOverride: derivedFixture,
+    derivedOverride: staleDerivedFixture,
   });
   assert.equal(shareRequests, 1);
   assert.equal(derivedRequests, 0);
@@ -441,7 +441,7 @@ try {
   // capped Dexterity 1 + item bonus 5 = AC 27). A generic reference item must
   // not erase the chassis's level-scaled armor bonus.
   const chassisDerivedFixture = {
-    ...derivedFixture,
+    ...staleDerivedFixture,
     armor: [
       {
         name: 'Automaton Chassi (5th level)',
@@ -518,7 +518,7 @@ try {
     selectionOverrides,
     fetchImpl: createFetch(ambiguousArmorShare),
     derivedOverride: {
-      ...derivedFixture,
+      ...staleDerivedFixture,
       armor: [
         { name: 'Automaton Chassi (5th level)', pot: 1, res: 'resilient', runes: ['Raiment'], worn: true },
         { name: 'Clothing', worn: true },
@@ -553,7 +553,7 @@ try {
     selectionOverrides,
     fetchImpl: createFetch(certifiedBuild),
     derivedOverride: {
-      ...derivedFixture,
+      ...staleDerivedFixture,
       armor: [{ name: 'Full Plate', pot: 1, res: 'resilient', worn: true }],
       acTotal: { acTotal: 24 },
     },
@@ -571,7 +571,7 @@ try {
 
   // Fail-closed identity check: a mismatched export ID blocks the import before
   // any character is created (contract layer 5 / export-identity policy).
-  const mismatchedDerived = { ...derivedFixture, name: 'Someone Else' };
+  const mismatchedDerived = { ...staleDerivedFixture, name: 'Someone Else' };
   let blocked = null;
   try {
     blocked = await importer.importFromPathbuilderShare('1597410', {
@@ -691,11 +691,18 @@ try {
     });
     engine.importVariableStore('CHARACTER', packet.store);
 
-    const score = (name) => 10 + engine.getFinalVariableValue('CHARACTER', `ATTRIBUTE_${name}`).total * 2;
+    const score = (name) => {
+      const attribute = engine.getVariable('CHARACTER', `ATTRIBUTE_${name}`);
+      const modifier = engine.getFinalVariableValue('CHARACTER', `ATTRIBUTE_${name}`).total;
+      return 10 + modifier * 2 + (attribute?.value?.partial ? 1 : 0);
+    };
+    const expectedScores = Object.fromEntries(
+      ['str', 'dex', 'con', 'int', 'wis', 'cha'].map((key) => [key.toUpperCase(), capturedDerivedBuild.abilities[key]])
+    );
     assert.deepEqual(
       Object.fromEntries(['STR','DEX','CON','INT','WIS','CHA'].map((name) => [name, score(name)])),
-      { STR: 18, DEX: 14, CON: 16, INT: 10, WIS: 12, CHA: 16 },
-      '1597410 ability scores must match the PDF oracle'
+      expectedScores,
+      '1597410 ability scores must match the captured Pathbuilder JSON, including partial gradual boosts'
     );
 
     const armor = outcome.character.inventory.items.find(
