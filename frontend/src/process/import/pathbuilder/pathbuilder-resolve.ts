@@ -501,11 +501,21 @@ export function resolveBuild(
     }
   }
 
-  // Armor resolution uses explicit share state first, then only unambiguous JSON
-  // evidence. The real Pathbuilder JSON can mark multiple rows worn (including
-  // synthetic chassis entries), so a blanket "exactly one worn row" rule loses
-  // the one row that actually matches the selected rules feature.
+  // Armor resolution uses explicit share identity first, then reliable JSON evidence.
+  // Share links may carry an armor UUID whose Custom File is absent; json.php can then
+  // recover the display item. Some exports incorrectly mark multiple rows worn, so we
+  // never choose an arbitrary row merely because it appears first in the array.
   const armorRaw = cd.playerArmor;
+  const rawArmorName = armorRaw?.armorName;
+  const armorCustomFile =
+    rawArmorName && isPathbuilderUuid(rawArmorName)
+      ? customFiles.get(rawArmorName.toLowerCase())
+      : undefined;
+  const isMissingCustomArmorReference =
+    !!rawArmorName && isPathbuilderUuid(rawArmorName) && !armorCustomFile;
+  const rawIsUnarmoredPlaceholder =
+    normalizePathbuilderToken(rawArmorName ?? '') === 'UNARMORED';
+
   const derivedArmors = options.derived?.armor ?? [];
   const wornArmors = derivedArmors.filter((entry) => entry.worn === true);
   const hasReinforcedChassis = feats.some(
@@ -522,26 +532,45 @@ export function resolveBuild(
     );
   };
   const chassisArmorRows = derivedArmors.filter(isChassisArmorRow);
-  const chassisArmorCandidates = chassisArmorRows.filter(
-    (entry) => entry.worn === true
-  );
-  // A named chassis row is strong identity evidence when other JSON rows are
-  // incorrectly/loosely marked worn. Otherwise never choose arbitrarily between rows.
+  const chassisArmorCandidates = chassisArmorRows.filter((entry) => entry.worn === true);
+
+  // When the share gives an item name (or a known Custom File name), match that
+  // identity directly before considering worn flags. Otherwise use one unique worn
+  // row, or the uniquely labelled chassis when the recorded rules choices support it.
+  const namedArmorIdentity =
+    armorCustomFile?.name ??
+    (rawArmorName && !isPathbuilderUuid(rawArmorName) && !rawIsUnarmoredPlaceholder
+      ? rawArmorName
+      : undefined);
+  const matchingNamedArmor = namedArmorIdentity
+    ? derivedArmors.filter((entry) => {
+        const target = normalizePathbuilderToken(namedArmorIdentity);
+        const name = normalizePathbuilderToken(entry.name ?? '');
+        const display = normalizePathbuilderToken(entry.display ?? '');
+        return target !== '' && (name === target || display === target || display.includes(target));
+      })
+    : [];
   const derivedArmor =
-    wornArmors.length === 1
-      ? wornArmors[0]
-      : hasReinforcedChassis && isAutomaton && chassisArmorCandidates.length === 1
-        ? chassisArmorCandidates[0]
-        : undefined;
+    matchingNamedArmor.length === 1
+      ? matchingNamedArmor[0]
+      : namedArmorIdentity
+        ? undefined
+        : wornArmors.length === 1
+          ? wornArmors[0]
+          : hasReinforcedChassis && isAutomaton && chassisArmorCandidates.length === 1
+            ? chassisArmorCandidates[0]
+            : undefined;
   const derivedArmorName = derivedArmor?.name ?? undefined;
 
   if (wornArmors.length > 1) {
     hints.push(
-      derivedArmor && isChassisArmorRow(derivedArmor)
+      derivedArmor && isChassisArmorRow(derivedArmor) && hasReinforcedChassis && isAutomaton
         ? 'Armor: Pathbuilder JSON marks multiple armor rows as worn; the Reinforced Chassis row was selected because it matches the recorded Automaton ancestry and feat, but the other worn flags remain contradictory.'
-        : 'Armor: Pathbuilder JSON marks multiple armor rows as worn; none was selected automatically because the equipped item is ambiguous.'
+        : derivedArmor && namedArmorIdentity
+          ? `Armor: Pathbuilder JSON marks multiple rows as worn; the row matching the share armor identity "${namedArmorIdentity}" was used, but the other worn flags remain contradictory.`
+          : 'Armor: Pathbuilder JSON marks multiple armor rows as worn; none was selected automatically because the equipped item is ambiguous.'
     );
-  } else if (wornArmors.length === 0 && derivedArmors.length > 0) {
+  } else if (wornArmors.length === 0 && derivedArmors.length > 0 && !derivedArmor) {
     hints.push(
       'Armor: Pathbuilder JSON includes armor rows but does not identify a unique worn item; none was selected automatically.'
     );
@@ -552,16 +581,6 @@ export function resolveBuild(
       `Armor: Pathbuilder JSON resilience rune "${derivedArmor.res}" could not be mapped to a known rank; its saving-throw bonus was not applied.`
     );
   }
-
-  const rawArmorName = armorRaw?.armorName;
-  const armorCustomFile =
-    rawArmorName && isPathbuilderUuid(rawArmorName)
-      ? customFiles.get(rawArmorName.toLowerCase())
-      : undefined;
-  const isMissingCustomArmorReference =
-    !!rawArmorName && isPathbuilderUuid(rawArmorName) && !armorCustomFile;
-  const rawIsUnarmoredPlaceholder =
-    normalizePathbuilderToken(rawArmorName ?? '') === 'UNARMORED';
 
   let armor: ResolvedItemRef | undefined;
   const armorLookupName =
@@ -598,7 +617,7 @@ export function resolveBuild(
     ((armorRaw.potency ?? 0) > 0 || (armorRaw.listPropertyRunes?.length ?? 0) > 0) &&
     !(hasReinforcedChassis && isAutomaton)
   ) {
-    // Pathbuilder's PlayerArmor model defaults an omitted armorName to "Unarmored".
+    // Pathbuilder's PlayerArmor model can omit armorName or default it to Unarmored.
     // Preserve that ambiguity for ordinary characters instead of inventing armor.
     hints.push(
       'Pathbuilder has armor rune/potency state without a named armor; preserving the default Unarmored state and its raw rune data'
