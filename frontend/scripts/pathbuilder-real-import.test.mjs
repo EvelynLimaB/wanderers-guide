@@ -368,6 +368,7 @@ try {
         path: preflight.selection.path,
         key: preflight.selection.key,
         description: preflight.selection.description,
+        selectionTrace: preflight.selection.diagnostics,
         promptDetails,
       })}`
     );
