@@ -47,15 +47,21 @@ export function inferPathbuilderOperationLevel(path: string, fallback: number): 
  *
  * Returns undefined for other operation IDs so callers can use normal level inference.
  */
-export function inferPathbuilderAncestryFeatLevel(
-  selectorId: string,
-  ancestryParagon: boolean
-): number | undefined {
+export function getPathbuilderAncestryFeatSelectorIndex(selectorId: string): number | undefined {
   if (!selectorId.startsWith(ANCESTRY_FEAT_SELECTOR_PREFIX)) return undefined;
 
   const indexText = selectorId.slice(ANCESTRY_FEAT_SELECTOR_PREFIX.length);
   if (!/^\d+$/.test(indexText)) return undefined;
-  const index = Number(indexText);
+  return Number(indexText);
+}
+
+/** Map the generated ancestry-feat selector position to its actual character level. */
+export function inferPathbuilderAncestryFeatLevel(
+  selectorId: string,
+  ancestryParagon: boolean
+): number | undefined {
+  const index = getPathbuilderAncestryFeatSelectorIndex(selectorId);
+  if (index === undefined) return undefined;
 
   const levels = ancestryParagon
     ? [1, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
