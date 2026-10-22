@@ -1937,19 +1937,22 @@ function findDomainSpellOption(
     : content.abilityBlocks;
 
   const domainOptions = domainBlocksToInspect.flatMap((block) =>
-    (block.operations ?? [])
-      .filter(
-        (operation) =>
-          operation.type === 'select' &&
-          labelToVariable(operation.data.title ?? '') === 'SELECT_A_DOMAIN'
-      )
-      .flatMap((operation) =>
-        (operation.data.optionsPredefined ?? []).filter(
-          (option) =>
-            option.type === 'CUSTOM' &&
-            labelToVariable(option.title) === normalizedDomainName
-        )
-      )
+    (block.operations ?? []).flatMap((operation) => {
+      // Keep the discriminated-union check in the same callback that reads
+      // optionsPredefined; a preceding Array.filter does not narrow this
+      // operation type for TypeScript in the following flatMap.
+      if (
+        operation.type !== 'select' ||
+        labelToVariable(operation.data.title ?? '') !== 'SELECT_A_DOMAIN'
+      ) {
+        return [];
+      }
+      return (operation.data.optionsPredefined ?? []).filter(
+        (option) =>
+          option.type === 'CUSTOM' &&
+          labelToVariable(option.title) === normalizedDomainName
+      );
+    })
   );
 
   const legalSpellOptions = new Map<string, ObjectWithUUID>();
