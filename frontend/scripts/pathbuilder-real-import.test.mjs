@@ -743,8 +743,19 @@ try {
     // Never certify an import when a feat chosen in Pathbuilder at or below the
     // character's current level vanished from WG's saved operation tree. Future
     // planned feats are retained in provenance but are outside the current sheet.
+    const isReincarnationCategorySelector = (feat) =>
+      feat.category === 'ANCESTRY' &&
+      feat.qualifier === 'GENERAL' &&
+      normalizeFeatureName(feat.name) === 'reincarnation feat' &&
+      outcome.resolved.feats.some((candidate) =>
+        candidate.level === feat.level &&
+        candidate.category === 'REINCARNATION' &&
+        candidate.slot.replace(/[^a-z0-9]/gi, '').toLowerCase() ===
+          `${feat.name}${feat.slot}`.replace(/[^a-z0-9]/gi, '').toLowerCase()
+      );
     const unrepresentedCurrentFeats = outcome.resolved.feats
       .filter((feat) => feat.level === undefined || feat.level <= outcome.resolved.identity.level)
+      .filter((feat) => !isReincarnationCategorySelector(feat))
       .filter((feat) => !selectedFeatureNameKeys.has(normalizeFeatureName(feat.name)))
       .map((feat) => ({
         slot: feat.slot,

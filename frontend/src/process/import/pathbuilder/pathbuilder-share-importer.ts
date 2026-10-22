@@ -1807,7 +1807,26 @@ function getAncestryFeatSelectionsForOperation(
         return slot === ancestrySlot || slot === 'ANCESTRY_FEAT';
       });
 
-  return target.map((feat) => ({ name: feat.name, level }));
+  // Pathbuilder uses "Reincarnation Feat" as a category selector rather than
+  // as an actual feat. The actual feat is stored in a nested slot whose name
+  // starts with that selector. Route the real feat to WG's ancestry slot.
+  const resolvedTargets = target.flatMap((feat) => {
+    const isReincarnationCategory =
+      feat.category === 'ANCESTRY' &&
+      feat.qualifier === 'GENERAL' &&
+      labelToVariable(feat.name) === 'REINCARNATION_FEAT';
+    if (!isReincarnationCategory) return [feat];
+
+    const nestedSlot = labelToVariable(`${feat.name}${feat.slot}`);
+    const nestedFeats = atLevel.filter(
+      (candidate) =>
+        candidate.category === 'REINCARNATION' &&
+        labelToVariable(candidate.slot) === nestedSlot
+    );
+    return nestedFeats.length === 1 ? nestedFeats : [feat];
+  });
+
+  return resolvedTargets.map((feat) => ({ name: feat.name, level }));
 }
 
 function getFeatSelectionsForOperation(
