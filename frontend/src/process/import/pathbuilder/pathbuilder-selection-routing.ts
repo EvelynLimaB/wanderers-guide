@@ -30,6 +30,36 @@ export function inferPathbuilderOperationLevel(path: string, fallback: number): 
   return Number.isInteger(level) && level >= 1 && level <= 20 ? level : fallback;
 }
 
+/**
+ * Recover the character level for the generated ancestry-feat selectors.
+ *
+ * Their operation IDs end in a slot index, not a character level. With Ancestry
+ * Paragon enabled, slot indices 0 and 1 are both level 1, then the slots map to
+ * levels 3, 5, 7, ...; without it, they map to 1, 5, 9, 13, and 17.
+ */
+export function inferPathbuilderAncestryFeatLevel(
+  path: string,
+  fallback: number,
+  ancestryParagon: boolean
+): number {
+  if (!path.startsWith('ancestry-section-')) return fallback;
+
+  const ancestryFeatSelectorPrefix = '9f26290c-a2db-4c45-9b34-5053e60c106d-';
+  const selector = path
+    .split('_')
+    .find((segment) => segment.startsWith(ancestryFeatSelectorPrefix));
+  if (!selector) return fallback;
+
+  const index = Number(selector.slice(ancestryFeatSelectorPrefix.length));
+  if (!Number.isInteger(index) || index < 0) return fallback;
+
+  const levels = ancestryParagon
+    ? [1, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
+    : [1, 5, 9, 13, 17];
+
+  return levels[index] ?? fallback;
+}
+
 export function getAbilityBoostOriginForPath(
   path: string
 ): 'levelled' | 'ancestry' | 'background' | null {
