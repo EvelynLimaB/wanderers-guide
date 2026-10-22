@@ -569,13 +569,14 @@ export function resolveBuild(
             ? chassisArmorCandidates[0]
             : undefined;
   const derivedArmorName = derivedArmor?.name ?? undefined;
-  const shareArmorResilience = armorRaw?.res;
-  const armorResilienceRaw =
-    shareArmorResilience !== undefined &&
-    shareArmorResilience !== null &&
-    String(shareArmorResilience).trim() !== ''
-      ? shareArmorResilience
-      : derivedArmor?.res;
+  // The share payload's itemResilient is a numeric rune rank; json.php instead
+  // emits a label in armor[].res. Use either explicit share field before falling
+  // back to the calculated export, and preserve an explicit zero (no rune).
+  const shareArmorResilience = [armorRaw?.res, armorRaw?.itemResilient].find(
+    (value) => value !== undefined && value !== null && String(value).trim() !== ''
+  );
+  const hasShareArmorResilience = shareArmorResilience !== undefined;
+  const armorResilienceRaw = hasShareArmorResilience ? shareArmorResilience : derivedArmor?.res;
   const parsedArmorResilience = parsePathbuilderArmorResilience(armorResilienceRaw);
   const hasArmorResilienceSource =
     armorResilienceRaw !== undefined &&
@@ -597,9 +598,7 @@ export function resolveBuild(
   }
 
   if (hasArmorResilienceSource && parsedArmorResilience === -1) {
-    const resilienceSource = shareArmorResilience !== undefined && shareArmorResilience !== null
-      ? 'Pathbuilder share'
-      : 'Pathbuilder JSON';
+    const resilienceSource = hasShareArmorResilience ? 'Pathbuilder share' : 'Pathbuilder JSON';
     hints.push(
       'Armor: ' + resilienceSource + ' resilience rune "' + String(armorResilienceRaw) + '" could not be mapped to a known rank; its saving-throw bonus was not applied.'
     );

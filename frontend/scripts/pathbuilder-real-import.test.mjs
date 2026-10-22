@@ -670,6 +670,11 @@ try {
     'the share potency rune must apply to the reconstructed chassis'
   );
   assert.equal(
+    reconstructedChassis.meta_data?.runes?.resilient,
+    1,
+    'the raw share itemResilient rank must survive import without a json.php enrichment request'
+  );
+  assert.equal(
     outcome.character?.custom_operations?.some(
       (operation) =>
         operation.type === 'addBonusToValue' &&

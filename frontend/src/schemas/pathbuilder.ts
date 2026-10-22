@@ -136,6 +136,9 @@ export const PathbuilderArmorSchema = z
     potency: z.number().nullish(),
     listPropertyRunes: z.array(z.string()).nullish(),
     res: z.union([z.string(), z.number()]).nullish(),
+    // The share payload records the resilient rune rank here (e.g. 1),
+    // while json.php expresses the same state as armor[].res = "resilient".
+    itemResilient: z.union([z.number(), z.string()]).nullish(),
   })
   .passthrough();
 export type PathbuilderArmor = z.infer<typeof PathbuilderArmorSchema>;
