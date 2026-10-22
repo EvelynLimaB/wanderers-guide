@@ -1868,6 +1868,7 @@ function getSpecialSelectionsForOperation(
 function findDomainSpellOption(
   title: string,
   level: number,
+  currentPath: string,
   options: ObjectWithUUID[],
   resolved: ResolvedBuild,
   content: Awaited<ReturnType<typeof fetchContentPackage>>
@@ -1906,50 +1907,76 @@ function findDomainSpellOption(
   const chosenDomainName = candidates[0].value;
   const normalizedDomainName = labelToVariable(chosenDomainName);
 
-  // Legacy and Remastered content may contain multiple domains records; use the
-  // record whose domain picker actually offers this character's recorded choice.
-  const domainSelector = content.abilityBlocks
-    .flatMap((block) => block.operations ?? [])
-    .find((operation) => {
-      if (
-        operation.type !== 'select' ||
-        labelToVariable(operation.data.title ?? '') !== 'SELECT_A_DOMAIN'
-      ) {
-        return false;
-      }
-      return (operation.data.optionsPredefined ?? []).some(
-        (option) =>
-          option.type === 'CUSTOM' &&
-          labelToVariable(option.title) === normalizedDomainName
-      );
-    });
-  const domainOption = domainSelector?.type === 'select'
-    ? (domainSelector.data.optionsPredefined ?? []).find(
-        (option) =>
-          option.type === 'CUSTOM' &&
-          labelToVariable(option.title) === normalizedDomainName
+  // Prefer the Domains ability block actually referenced by the feature whose
+  // operation produced this selector. A content package may include both legacy
+  // and Remastered records with the same domain name but different spell grants.
+  // Selecting the first global "Select a Domain" record would silently bind to
+  // whichever version happened to occur first in the content array.
+  const selectionId = currentPath.slice(currentPath.lastIndexOf('_') + 1);
+  const sourceFeature = content.abilityBlocks.find(
+    (block) =>
+      currentPath.includes(`_${block.id}_`) &&
+      (block.operations ?? []).some(
+        (operation) => operation.type === 'select' && operation.id === selectionId
       )
-    : undefined;
+  );
+  const referencedDomainBlockIds = (sourceFeature?.operations ?? [])
+    .filter((operation) => operation.type === 'giveAbilityBlock')
+    .map((operation) => operation.data.abilityBlockId);
+  const linkedDomainBlocks = content.abilityBlocks.filter(
+    (block) =>
+      referencedDomainBlockIds.some((id) => String(id) === String(block.id)) &&
+      (block.operations ?? []).some(
+        (operation) =>
+          operation.type === 'select' &&
+          labelToVariable(operation.data.title ?? '') === 'SELECT_A_DOMAIN'
+      )
+  );
+  const domainBlocksToInspect = linkedDomainBlocks.length > 0
+    ? linkedDomainBlocks
+    : content.abilityBlocks;
 
-  if (domainOption?.type === 'CUSTOM') {
+  const domainOptions = domainBlocksToInspect.flatMap((block) =>
+    (block.operations ?? [])
+      .filter(
+        (operation) =>
+          operation.type === 'select' &&
+          labelToVariable(operation.data.title ?? '') === 'SELECT_A_DOMAIN'
+      )
+      .flatMap((operation) =>
+        (operation.data.optionsPredefined ?? []).filter(
+          (option) =>
+            option.type === 'CUSTOM' &&
+            labelToVariable(option.title) === normalizedDomainName
+        )
+      )
+  );
+
+  const legalSpellOptions = new Map<string, ObjectWithUUID>();
+  for (const domainOption of domainOptions) {
+    if (domainOption.type !== 'CUSTOM') continue;
     const spellMatch = new RegExp(
       '\\*\\*' + spellKind + ' Spell\\*\\*\\s*\\[([^\\]]+)\\]\\(link_spell_(\\d+)\\)',
       'i'
     ).exec(domainOption.description);
-    if (spellMatch) {
-      // The link_spell_* token is a source-link identifier, not necessarily WG's
-      // local Spell.id. Match the authored spell name against legal WG options.
-      const spellName = spellMatch[1];
-      const byName = options.find(
-        (option) => labelToVariable(option.name ?? option.title ?? '') === labelToVariable(spellName)
-      );
-      if (byName) return byName;
+    if (!spellMatch) continue;
+
+    // link_spell_* is a source-link ID, not WG's local Spell.id. Match the
+    // authored name only against the legal options for this exact selector.
+    const spellName = labelToVariable(spellMatch[1]);
+    for (const option of options) {
+      if (labelToVariable(option.name ?? option.title ?? '') === spellName) {
+        legalSpellOptions.set(option._select_uuid, option);
+      }
     }
   }
+  if (legalSpellOptions.size === 1) return [...legalSpellOptions.values()][0];
+  // If multiple rule records resolve to different legal spells, fail closed:
+  // preserve the prompt rather than guessing a spell from the wrong rules version.
+  if (legalSpellOptions.size > 1 || linkedDomainBlocks.length > 0) return null;
 
-  // Some descriptions use source IDs while the selection tree stores WG-local
-  // IDs. A unique legal option carrying the selected domain trait is a second
-  // rules-backed way to identify the granted spell.
+  // Fallback only when the source feature does not identify a particular Domains
+  // record. A unique domain-trait option is safe; multiple matches are ambiguous.
   const domainTraitId = content.traits.find(
     (trait) => labelToVariable(trait.name) === normalizedDomainName
   )?.id;
@@ -2213,6 +2240,7 @@ async function resolveSelections(
         result = findDomainSpellOption(
           current.selection?.selection?.title ?? '',
           selectionLevel,
+          current.path,
           options,
           resolved,
           content
