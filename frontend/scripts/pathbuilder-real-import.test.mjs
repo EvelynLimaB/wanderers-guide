@@ -762,7 +762,17 @@ try {
       items.flatMap((entry) => [entry, ...flattenInventory(entry.container_contents ?? [])]);
     const inventoryItems = flattenInventory(outcome.character.inventory.items);
     const inventoryNames = inventoryItems.map((entry) => entry.item?.name);
-    assert.equal(inventoryNames.filter((name) => name === 'Chalk').length, 10);
+    const chalkEntries = inventoryItems.filter((entry) => entry.item?.name === 'Chalk');
+    assert.equal(chalkEntries.length, 10);
+    assert.equal(
+      chalkEntries.reduce((sum, entry) => sum + (entry.item?.meta_data?.quantity ?? 1), 0),
+      10,
+      'Pathbuilder quantity 10 must remain 10 total units; expanded inventory rows must each represent one unit'
+    );
+    assert.ok(
+      chalkEntries.every((entry) => (entry.item?.meta_data?.quantity ?? 1) === 1),
+      'expanding Pathbuilder quantities must not leave the original stack quantity on every row'
+    );
     // Pathbuilder labels the supply "Rations"; the intentional WG alias resolves
     // it to the canonical "Rations (1 week)" content item.
     assert.equal(inventoryNames.filter((name) => name === 'Rations (1 week)').length, 2);
