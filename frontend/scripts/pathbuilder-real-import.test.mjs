@@ -755,7 +755,9 @@ try {
       unrepresentedCurrentFeats,
       [],
       'every current-level Pathbuilder feat must be represented by a saved WG ability-block selection; missing=' +
-        JSON.stringify(unrepresentedCurrentFeats)
+        JSON.stringify(unrepresentedCurrentFeats) +
+        '; selected feature names=' + JSON.stringify(selectedFeatureNames) +
+        '; preflight prompts=' + JSON.stringify(promptDetails)
     );
     const freeArchetypeSelectionDiagnostics = Object.entries(savedSelections)
       .filter(([path]) =>
