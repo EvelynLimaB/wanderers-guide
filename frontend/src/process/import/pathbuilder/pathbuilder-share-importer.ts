@@ -2134,10 +2134,6 @@ async function resolveSelections(
         ) ?? null;
       }
 
-      const manualSelectionUuid = selectionOverrides[trackingKey] ?? selectionOverrides[current.path];
-      if (!result && manualSelectionUuid) {
-        result = manualOptions.find((option) => option._select_uuid === manualSelectionUuid) ?? null;
-      }
       if (!result && (isFreeArchetypeDescendant || /archetype|dedication/i.test(selectionTitle))) {
         // Do not rely only on WG's title text: the content graph has used both
         // "Select a Dedication" and generic feat selectors for the same branch.
@@ -2153,8 +2149,16 @@ async function resolveSelections(
           content
         );
       }
+      // Prefer choices explicitly recoverable from the Pathbuilder payload over
+      // a preflight selection override. Overrides are for genuinely unmapped
+      // choices; an older/broader preflight may have supplied a placeholder
+      // first-option choice for a selector that this importer can now resolve.
       if (!result) {
         result = findPathbuilderOption(requestedSelections, options, selectionLevel);
+      }
+      const manualSelectionUuid = selectionOverrides[trackingKey] ?? selectionOverrides[current.path];
+      if (!result && manualSelectionUuid) {
+        result = manualOptions.find((option) => option._select_uuid === manualSelectionUuid) ?? null;
       }
       if (!result) {
         pendingSelection = {
