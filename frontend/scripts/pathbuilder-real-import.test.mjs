@@ -763,6 +763,7 @@ try {
     }
 
     const chosenDomainName = certifiedBuild.characterData.hashMapSpecialSelections?.['Champion Feat 1']?.['Select Domain'];
+    assert.equal(chosenDomainName, 'Metal', 'the golden Kasane build must retain Pathbuilder\'s explicit Metal domain choice');
     // Resolve the domain descriptor through the exact Deity's Domain feature and
     // selector path recorded by the operation engine. A global name-only search can
     // select a different legacy/Remaster Domains record when both offer "Metal".
@@ -819,6 +820,7 @@ try {
 
     const initialSpellReference = /\*\*Initial Spell\*\*\s*\[([^\]]+)\]\(link_spell_(\d+)\)/i.exec(chosenDomain.description);
     assert.ok(initialSpellReference, 'the selected Domains record must identify its granted initial spell');
+    assert.equal(initialSpellReference[1], 'Serrate', 'Metal must grant Serrate for the captured Kasane build');
 
     // Pathbuilder records Metal, not a second spell choice. Confirm the operation
     // tree selected the WG-local spell linked from that exact content record.
