@@ -2134,10 +2134,17 @@ async function resolveSelections(
         ) ?? null;
       }
 
-      if (!result && (isFreeArchetypeDescendant || /archetype|dedication/i.test(selectionTitle))) {
-        // Do not rely only on WG's title text: the content graph has used both
-        // "Select a Dedication" and generic feat selectors for the same branch.
-        // Match the recorded choice only if it appears as a legal option here.
+      const isClassFeatSelector =
+        /\\bclass\\b/i.test(selectionTitle) &&
+        !/\\b(?:archetype|dedication)\\b/i.test(selectionTitle);
+      if (
+        !result &&
+        !isClassFeatSelector &&
+        (isFreeArchetypeDescendant || /archetype|dedication|\\bfeat\\b/i.test(selectionTitle))
+      ) {
+        // The operation engine can render a Free Archetype child as a generic
+        // feat selector with no descriptive title. Prefer the selected
+        // Free Archetype feat only when it is a legal option at this node.
         result = findPathbuilderOption(freeArchetypeChoicesAtLevel, options, selectionLevel);
       }
       if (!result) {

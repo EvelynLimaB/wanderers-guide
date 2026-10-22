@@ -341,9 +341,20 @@ try {
   // appear only after earlier options have been applied to the selection tree.
   let preflightReady = false;
   const promptTitles = [];
+  const promptDetails = [];
   for (let attempt = 0; attempt < 64; attempt++) {
     assert.equal(preflight.status, 'selection-required', preflight.error ?? 'Preflight failed unexpectedly.');
     promptTitles.push(preflight.selection.title);
+    promptDetails.push({
+      level: preflight.selection.level,
+      title: preflight.selection.title,
+      path: preflight.selection.path,
+      optionCount: preflight.selection.options.length,
+      firstOption: preflight.selection.options[0]?.label,
+      matchingFreeArchetypeOptions: preflight.selection.options
+        .filter((option) => /thlipit contestant dedication|lassoing lash|powerful lash/i.test(option.label))
+        .map((option) => ({ value: option.value, label: option.label })),
+    });
     assert.doesNotMatch(
       preflight.selection.title,
       /heritage|devotion spell|focus spell|domain spell/i,
@@ -679,7 +690,8 @@ try {
       assert.ok(
         selectedFeatureNames.includes(requiredFreeArchetypeFeat),
         'Free Archetype choice "' + requiredFreeArchetypeFeat + '" must be present in the imported operation tree; found ' +
-          JSON.stringify(selectedFeatureNames.filter((name) => /thlipit|lassoing|powerful lash/i.test(name)))
+          JSON.stringify(selectedFeatureNames.filter((name) => /thlipit|lassoing|powerful lash/i.test(name))) +
+          '; preflight selectors=' + JSON.stringify(promptDetails)
       );
     }
 
