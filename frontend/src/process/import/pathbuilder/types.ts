@@ -134,8 +134,8 @@ export type ResolvedBuild = {
   armor?: ResolvedItemRef;
   armorRunes: string[];
   armorPotency: number;
-  /** Resilient-rune rank from the unambiguous worn JSON armor row (1–3). */
-  armorResilience: number;
+  /** Resilient-rune rank from trusted Pathbuilder armor state; null means unknown. */
+  armorResilience: number | null;
   shield?: ResolvedItemRef;
   looseEquipment: ResolvedItemRef[];
   containers: ResolvedContainer[];

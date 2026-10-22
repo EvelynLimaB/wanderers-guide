@@ -346,8 +346,8 @@ try {
     promptTitles.push(preflight.selection.title);
     assert.doesNotMatch(
       preflight.selection.title,
-      /heritage|devotion spell|focus spell/i,
-      'heritage and Lay on Hands are already recorded in the share payload and must resolve automatically'
+      /heritage|devotion spell|focus spell|domain spell/i,
+      'heritage, Lay on Hands, and the domain-granted spell are determined by choices already recorded in the share payload'
     );
     assert.ok(
       preflight.selection.options.length > 0,
@@ -366,6 +366,12 @@ try {
   }
   assert.equal(preflightReady, true, 'preflight should finish after explicit choices');
   assert.ok(promptTitles.some((title) => /deific weapon/i.test(title)), 'the genuinely omitted deific weapon choice remains manual');
+  assert.equal(promptTitles.some((title) => /domain spell/i.test(title)), false, 'the chosen domain determines its spell without another player choice');
+  assert.equal(
+    promptTitles.some((title) => /free archetype|archetype feat|add dedication/i.test(title)),
+    false,
+    'the recorded Free Archetype choices must reconstruct their operation branches without manual prompts'
+  );
 
   // Certification preflight: the same flow with an available official export ID
   // must reach 'ready' through the json.php comparison path (identity checks).
@@ -452,6 +458,21 @@ try {
     false,
     'a matching derived AC value should not create an AC discrepancy warning'
   );
+  const backpack = outcome.character.inventory.items.find((entry) => entry.item?.name === 'Backpack');
+  assert.ok(backpack, 'the Pathbuilder container must remain in the imported inventory');
+  const chalkStacks = backpack.container_contents.filter((entry) => entry.item?.name === 'Chalk');
+  assert.equal(chalkStacks.length, 10, 'Pathbuilder quantity 10 should become ten one-unit inventory rows');
+  assert.ok(chalkStacks.every((entry) => entry.item.meta_data?.quantity === 1), 'each expanded Chalk row must represent one unit, not ten');
+  const rationsStacks = backpack.container_contents.filter((entry) => entry.item?.name === 'Rations (1 week)');
+  assert.equal(rationsStacks.length, 2, 'the two weekly rations entries must remain two rows');
+  assert.ok(rationsStacks.every((entry) => entry.item.meta_data?.quantity === 1), 'each rations row must represent one unit');
+
+  const claw = outcome.character.inventory.items.find((entry) => entry.item?.name === 'Claw')?.item;
+  assert.ok(claw, 'Automaton Armament Claw must remain present');
+  assert.equal(claw.meta_data?.damage?.damageType, 'S', 'Automaton Armament Claw deals slashing damage');
+  assert.deepEqual(claw.meta_data?.display_traits, ['Agile', 'Finesse', 'Magical', 'Unarmed']);
+  assert.equal(claw.meta_data?.display_traits?.includes('Nonlethal'), false, 'Claw must not gain the generic Nonlethal trait');
+
   const chassisInventoryEntry = chassisOutcome.character.inventory.items.find(
     (entry) => entry.item.name === 'Automaton Chassi (5th level)'
   );
@@ -650,6 +671,45 @@ try {
         .map((selection) => content.abilityBlocks.find((block) => String(block.id) === String(selection))?.name)
         .filter((name) => typeof name === 'string')
     )];
+    for (const requiredFreeArchetypeFeat of [
+      'Thlipit Contestant Dedication',
+      'Lassoing Lash',
+      'Powerful Lash',
+    ]) {
+      assert.ok(
+        selectedFeatureNames.includes(requiredFreeArchetypeFeat),
+        'Free Archetype choice "' + requiredFreeArchetypeFeat + '" must be present in the imported operation tree; found ' +
+          JSON.stringify(selectedFeatureNames.filter((name) => /thlipit|lassoing|powerful lash/i.test(name)))
+      );
+    }
+
+    const domainFeat = content.abilityBlocks.find((block) => block.name === "Deity's Domain");
+    assert.ok(domainFeat, 'the content package must include Deity\'s Domain');
+    const initialDomainSpellSelector = domainFeat.operations?.find(
+      (operation) => operation.type === 'select' && /initial domain spell/i.test(operation.data?.title ?? '')
+    );
+    assert.ok(initialDomainSpellSelector, 'Deity\'s Domain must expose its initial-domain-spell selector');
+    const domainSelectionEntry = Object.entries(outcome.character.operation_data?.selections ?? {}).find(
+      ([path]) => path.includes('_' + domainFeat.id + '_' + initialDomainSpellSelector.id)
+    );
+    assert.ok(domainSelectionEntry, 'the imported tree must resolve the domain-spell selector');
+    const domainsFeature = content.abilityBlocks.find((block) => block.name === 'Domains');
+    const domainPicker = domainsFeature?.operations?.find(
+      (operation) => operation.type === 'select' && operation.data?.title === 'Select a Domain'
+    );
+    const chosenDomainName = certifiedBuild.characterData.hashMapSpecialSelections?.['Champion Feat 1']?.['Select Domain'];
+    const chosenDomain = domainPicker?.type === 'select'
+      ? domainPicker.data.optionsPredefined?.find((option) => option.type === 'CUSTOM' && option.title === chosenDomainName)
+      : undefined;
+    assert.ok(chosenDomain && chosenDomain.type === 'CUSTOM', 'the captured domain must be found in WG content');
+    const initialSpellReference = /\*\*Initial Spell\*\*\s*\[([^\]]+)\]\(link_spell_(\d+)\)/i.exec(chosenDomain.description);
+    assert.ok(initialSpellReference, 'WG domain content must identify the granted initial spell');
+    assert.equal(
+      String(domainSelectionEntry[1]),
+      initialSpellReference[2],
+      'the selected domain spell must match the spell in WG content for "' + chosenDomainName + '"'
+    );
+
     const movementFeatureSelections = [
       ...new Set([...selectedFeatureNames, selectedBlessing?.name].filter((name) => typeof name === 'string')),
     ].filter((name) => /blessed|swiftness|hunter automaton|fleet/i.test(name));

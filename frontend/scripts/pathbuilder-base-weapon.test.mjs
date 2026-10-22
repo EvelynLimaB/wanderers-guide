@@ -92,7 +92,7 @@ globalThis.fetch = async (url, init) => {
     headers: { 'Content-Type': 'application/json' },
   });
 };
-const traitsMap = new Map([['agile', 11], ['finesse', 12], ['magical', 13], ['nonlethal', 14], ['unarmed', 15]]);
+const traitsMap = new Map([['agile', 11], ['finesse', 12], ['magical', 13], ['nonlethal', 14], ['unarmed', 15], ['grapple', 16]]);
 
 // ─── fixture input: the real Custom File from golden build 1597410 ────────────
 
@@ -250,6 +250,23 @@ const ref = (name, raw) => ({ kind: 'unresolved', name, raw, quantity: 1 });
   assert.equal(lastUpsertedItem.meta_data.group, 'brawling');
   assert.deepEqual(lastUpsertedItem.meta_data.display_traits, ['Agile', 'Finesse', 'Magical', 'Nonlethal', 'Unarmed']);
   assert.equal(lastUpsertedItem.hands, '1');
+}
+
+{
+  const warnings = [];
+  lastUpsertedItem = null;
+  await createReferenceItem(ref('Claw', 'SPECIAL UNARMED (1d4)'), 77, warnings, 'weapon', traitsMap, catalog);
+  assert.equal(lastUpsertedItem.meta_data.damage.damageType, 'S', 'Automaton Armament Claw is slashing');
+  assert.deepEqual(lastUpsertedItem.meta_data.display_traits, ['Agile', 'Finesse', 'Magical', 'Unarmed']);
+  assert.equal(lastUpsertedItem.meta_data.display_traits.includes('Nonlethal'), false);
+}
+
+{
+  const warnings = [];
+  lastUpsertedItem = null;
+  await createReferenceItem(ref('Pincer', 'SPECIAL UNARMED (1d6)'), 77, warnings, 'weapon', traitsMap, catalog);
+  assert.equal(lastUpsertedItem.meta_data.damage.damageType, 'P', 'Automaton Armament Pincer is piercing');
+  assert.deepEqual(lastUpsertedItem.meta_data.display_traits, ['Grapple', 'Magical', 'Unarmed']);
 }
 
 console.log('pathbuilder-base-weapon: all assertions passed');

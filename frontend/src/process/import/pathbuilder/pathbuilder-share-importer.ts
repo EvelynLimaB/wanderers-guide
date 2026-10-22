@@ -44,7 +44,7 @@ import { cloneDeep } from 'lodash-es';
 
 import { extractBuildId, fetchPathbuilderDerived, fetchPathbuilderShare, getPathbuilderDerivedFetchError } from './fetch-pathbuilder-share';
 import { assertPathbuilderDerivedMatchesShare } from './pathbuilder-export-identity';
-import { pathbuilderAbilityLabel, resolveBuild } from './pathbuilder-resolve';
+import { parseFeatSlotKey, pathbuilderAbilityLabel, resolveBuild } from './pathbuilder-resolve';
 import { PathbuilderCustomFile, ResolvedBuild, ResolvedItemRef } from './types';
 import { findFreeArchetypeBranch, getAbilityBoostOriginForPath } from './pathbuilder-selection-routing';
 
@@ -233,7 +233,7 @@ export async function importFromPathbuilderShare(
       console.info('Pathbuilder import notes:', resolved.hints);
       for (const hint of resolved.hints) {
         if (
-          /^Armor: (?:Reconstructed the Automaton Reinforced Chassis|Pathbuilder JSON marks multiple armor rows|Pathbuilder JSON includes armor rows|Pathbuilder JSON resilience rune)/i.test(
+          /^Armor: (?:Reconstructed the Automaton Reinforced Chassis|Pathbuilder JSON marks multiple armor rows|Pathbuilder JSON includes armor rows|Pathbuilder (?:JSON|share) resilience rune|Pathbuilder JSON did not provide a resilience rune rank)/i.test(
             hint
           )
         ) {
@@ -664,8 +664,21 @@ export async function createReferenceItem(
       `Pathbuilder reference weapon "${ref.name}" has no unique WG base-weapon match; importing with unset proficiency category`
     );
   }
+  const specialUnarmedProfiles: Record<string, { damageType: string; displayTraits: string[] }> = {
+    CLAW: {
+      damageType: 'S',
+      displayTraits: ['Agile', 'Finesse', 'Magical', 'Unarmed'],
+    },
+    PINCER: {
+      damageType: 'P',
+      displayTraits: ['Grapple', 'Magical', 'Unarmed'],
+    },
+  };
+  const specialUnarmedProfile = specialUnarmed
+    ? specialUnarmedProfiles[labelToVariable(ref.name)]
+    : undefined;
   const displayTraits = semanticKind === 'weapon' && specialUnarmed
-    ? ['Agile', 'Finesse', 'Magical', 'Nonlethal', 'Unarmed']
+    ? specialUnarmedProfile?.displayTraits ?? ['Agile', 'Finesse', 'Magical', 'Nonlethal', 'Unarmed']
     : [];
 
   const traitIds = displayTraits
@@ -710,7 +723,7 @@ export async function createReferenceItem(
             damage: {
               dice: damageMatch ? Number(damageMatch[1]) : 1,
               die: damageMatch ? `d${damageMatch[2]}` : 'd4',
-              damageType: 'B',
+              damageType: specialUnarmedProfile?.damageType ?? 'B',
               extra: '',
             },
             display_traits: displayTraits,
@@ -1833,6 +1846,65 @@ function getSpecialSelectionsForOperation(
   return matches;
 }
 
+
+/**
+ * Pathbuilder records the selected domain, not a second choice for its granted
+ * initial/advanced domain spell. Resolve that spell from WG's own Domains
+ * option description so remaster/legacy content stays data-driven; never select
+ * the first spell just to satisfy the required selector.
+ */
+function findDomainSpellOption(
+  title: string,
+  level: number,
+  options: ObjectWithUUID[],
+  resolved: ResolvedBuild,
+  content: Awaited<ReturnType<typeof fetchContentPackage>>
+): ObjectWithUUID | null {
+  const spellKind = /\badvanced\b/i.test(title)
+    ? 'Advanced'
+    : /\binitial\b/i.test(title)
+      ? 'Initial'
+      : null;
+  if (!spellKind || !/\bdomain\s+spell\b/i.test(title)) return null;
+
+  const domainChoices = resolved.specialSelections.filter((special) => {
+    const prompt = labelToVariable(special.prompt.replace(/^select\s+(?:an?\s+)?/i, ''));
+    return prompt === 'DOMAIN' && parseFeatSlotKey(special.slot).level === level;
+  });
+  if (domainChoices.length !== 1) return null;
+
+  const domainsFeature = content.abilityBlocks.find(
+    (block) => labelToVariable(block.name) === 'DOMAINS'
+  );
+  const domainSelector = domainsFeature?.operations?.find(
+    (operation) =>
+      operation.type === 'select' &&
+      labelToVariable(operation.data.title ?? '') === 'SELECT_A_DOMAIN'
+  );
+  if (!domainSelector || domainSelector.type !== 'select') return null;
+
+  const domainOption = domainSelector.data.optionsPredefined?.find(
+    (option) =>
+      option.type === 'CUSTOM' &&
+      labelToVariable(option.title) === labelToVariable(domainChoices[0].value)
+  );
+  if (!domainOption || domainOption.type !== 'CUSTOM') return null;
+
+  const spellMatch = new RegExp(
+    '\\*\\*' + spellKind + ' Spell\\*\\*\\s*\\[([^\\]]+)\\]\\(link_spell_(\\d+)\\)',
+    'i'
+  ).exec(domainOption.description);
+  if (!spellMatch) return null;
+
+  const spellName = spellMatch[1];
+  const spellId = spellMatch[2];
+  return options.find(
+    (option) => String(option._select_uuid) === spellId || String(option.id) === spellId
+  ) ?? options.find(
+    (option) => labelToVariable(option.name ?? option.title ?? '') === labelToVariable(spellName)
+  ) ?? null;
+}
+
 /**
  * Identify WG's dedicated class key-ability selector without letting the key
  * ability satisfy an unrelated attribute-boost selector with the same label.
@@ -1897,10 +1969,13 @@ async function resolveSelections(
     // Class/background/ancestry operations often ask for additional trained skills at level 1.
     // The share payload records these independently from hashMapSkillIncreases.
     ...resolved.trainedSkills.map((skill) => ({ name: skill, level: 1 })),
-    ...resolved.specialSelections.map((special) => ({
-      name: special.value,
-      level: slotLevel.get(special.slot) ?? 1,
-    })),
+    ...resolved.specialSelections.map((special) => {
+      const parsedSlot = parseFeatSlotKey(special.slot);
+      return {
+        name: special.value,
+        level: parsedSlot.level ?? slotLevel.get(parsedSlot.slot) ?? slotLevel.get(special.slot) ?? 1,
+      };
+    }),
   ];
 
   const chosen: Record<string, string> = {};
@@ -2051,6 +2126,15 @@ async function resolveSelections(
         result = manualOptions.find((option) => option._select_uuid === manualSelectionUuid) ?? null;
       }
       if (!result) {
+        result = findDomainSpellOption(
+          current.selection?.selection?.title ?? '',
+          current.level,
+          options,
+          resolved,
+          content
+        );
+      }
+      if (!result) {
         result = findPathbuilderOption(requestedSelections, options, current.level);
       }
       if (!result) {
@@ -2178,9 +2262,14 @@ function withPathbuilderRunes(
   content: Awaited<ReturnType<typeof fetchContentPackage>>,
   warnings: string[],
   warningPrefix = 'rune',
-  resilient = 0
+  resilient: number | null = 0
 ): Item {
-  if (potency <= 0 && striking <= 0 && propertyNames.length === 0 && resilient <= 0) return item;
+  if (
+    potency <= 0 &&
+    striking <= 0 &&
+    propertyNames.length === 0 &&
+    (resilient === null || resilient <= 0)
+  ) return item;
 
   const copy = cloneDeep(item);
   const existing = copy.meta_data ?? ({ bulk: {} } as NonNullable<Item['meta_data']>);
@@ -2188,7 +2277,7 @@ function withPathbuilderRunes(
 
   if (potency > 0) runes.potency = potency;
   if (striking > 0) runes.striking = striking;
-  if (resilient > 0) runes.resilient = Math.min(resilient, 3);
+  if (resilient !== null && resilient > 0) runes.resilient = Math.min(resilient, 3);
 
   const properties = [];
   for (const name of propertyNames) {
@@ -2261,11 +2350,18 @@ function buildInventory(
     itemOverride?: Item,
     forceEquipped = false
   ): InventoryItem[] => {
-    const item = itemOverride ?? findInventoryItem(ref, content, customItems);
-    if (!item) {
+    const sourceItem = itemOverride ?? findInventoryItem(ref, content, customItems);
+    if (!sourceItem) {
       warnings.push(`item: could not resolve "${ref.name}"`);
       return [];
     }
+
+    // WG stores item quantity on the Item metadata. Since Pathbuilder quantities
+    // are expanded to one InventoryItem row per unit below, every row must be a
+    // single unit or getItemQuantity() multiplies the quantity a second time.
+    const item = cloneDeep(sourceItem);
+    const itemMetadata = item.meta_data ?? ({ bulk: {} } as NonNullable<Item['meta_data']>);
+    item.meta_data = { ...itemMetadata, quantity: 1 };
 
     const entry: InventoryItem = {
       id: crypto.randomUUID(),

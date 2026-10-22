@@ -178,10 +178,14 @@ const STRIKING_LABELS: Record<number, string> = {
 };
 
 /** Convert json.php's armor resilience label to WG's numeric rune rank. */
-function parsePathbuilderArmorResilience(value: string | null | undefined): number {
-  const normalized = normalizePathbuilderToken(value ?? '');
+function parsePathbuilderArmorResilience(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return null;
+  if (typeof value === 'number') {
+    return Number.isInteger(value) && value >= 0 && value <= 3 ? value : -1;
+  }
+
+  const normalized = normalizePathbuilderToken(value);
   if (
-    !normalized ||
     ['0', 'NONE', 'NO_RUNE', 'NORUNE', 'UNARMED', 'N_A', 'NOT_APPLICABLE'].includes(normalized) ||
     /^(?:NO|NOT)_/.test(normalized)
   ) {
@@ -561,6 +565,18 @@ export function resolveBuild(
             ? chassisArmorCandidates[0]
             : undefined;
   const derivedArmorName = derivedArmor?.name ?? undefined;
+  const shareArmorResilience = armorRaw?.res;
+  const armorResilienceRaw =
+    shareArmorResilience !== undefined &&
+    shareArmorResilience !== null &&
+    String(shareArmorResilience).trim() !== ''
+      ? shareArmorResilience
+      : derivedArmor?.res;
+  const parsedArmorResilience = parsePathbuilderArmorResilience(armorResilienceRaw);
+  const hasArmorResilienceSource =
+    armorResilienceRaw !== undefined &&
+    armorResilienceRaw !== null &&
+    String(armorResilienceRaw).trim() !== '';
 
   if (wornArmors.length > 1) {
     hints.push(
@@ -576,9 +592,12 @@ export function resolveBuild(
     );
   }
 
-  if (derivedArmor?.res && parsePathbuilderArmorResilience(derivedArmor.res) === -1) {
+  if (hasArmorResilienceSource && parsedArmorResilience === -1) {
+    const resilienceSource = shareArmorResilience !== undefined && shareArmorResilience !== null
+      ? 'Pathbuilder share'
+      : 'Pathbuilder JSON';
     hints.push(
-      `Armor: Pathbuilder JSON resilience rune "${derivedArmor.res}" could not be mapped to a known rank; its saving-throw bonus was not applied.`
+      'Armor: ' + resilienceSource + ' resilience rune "' + String(armorResilienceRaw) + '" could not be mapped to a known rank; its saving-throw bonus was not applied.'
     );
   }
 
@@ -661,6 +680,16 @@ export function resolveBuild(
       `Armor: Reconstructed the Automaton Reinforced Chassis (${chassisTier} level) because the share armor reference was missing or unresolved. Available potency, property-rune, and JSON resilience data were retained; absent or contradictory armor rows are reported separately.`
     );
   }
+
+  const hasArmorRuneState =
+    (armorRaw?.potency ?? derivedArmor?.pot ?? 0) > 0 ||
+    (armorRaw?.listPropertyRunes?.length ?? derivedArmor?.runes?.length ?? 0) > 0;
+  if (armor && hasArmorRuneState && !hasArmorResilienceSource) {
+    hints.push(
+      'Armor: Pathbuilder JSON did not provide a resilience rune rank and the share payload does not contain it; no Resilient bonus was applied.'
+    );
+  }
+
   const shieldRaw = cd.playerShieldNew;
   const shield = shieldRaw?.shieldName
     ? resolveRef(shieldRaw.shieldName, customFiles, 1, undefined, unresolved, 'shield')
@@ -726,7 +755,7 @@ export function resolveBuild(
     // omitted by the share payload only when it identifies one unambiguous worn item.
     armorRunes: armorRaw?.listPropertyRunes ?? derivedArmor?.runes ?? [],
     armorPotency: armorRaw?.potency ?? derivedArmor?.pot ?? 0,
-    armorResilience: Math.max(0, parsePathbuilderArmorResilience(derivedArmor?.res)),
+    armorResilience: parsedArmorResilience === -1 ? null : parsedArmorResilience,
     shield,
     looseEquipment: loose,
     containers,

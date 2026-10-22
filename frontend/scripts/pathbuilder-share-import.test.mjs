@@ -612,7 +612,12 @@ test('missing shared armor name is reconstructed from an Automaton Reinforced Ch
   assert.equal(resolved.armor?.kind, 'standard');
   assert.equal(resolved.armorRunes.includes('Raiment'), true);
   assert.equal(resolved.armorPotency, 1);
+  assert.equal(resolved.armorResilience, null, 'missing json.php data must not be converted to an assumed zero-rank rune');
   assert.equal(resolved.unresolved.some((entry) => entry.kind === 'armor'), false);
+  assert.ok(
+    resolved.hints.some((hint) => /did not provide a resilience rune rank/i.test(hint)),
+    'missing resilience evidence must be reported explicitly'
+  );
   assert.ok(
     resolved.hints.some((hint) => /reconstructed the automaton reinforced chassis/i.test(hint)),
     'the inferred armor must be recorded in import diagnostics'

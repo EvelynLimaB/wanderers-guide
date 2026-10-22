@@ -135,6 +135,7 @@ export const PathbuilderArmorSchema = z
     armorName: z.string().nullish(),
     potency: z.number().nullish(),
     listPropertyRunes: z.array(z.string()).nullish(),
+    res: z.union([z.string(), z.number()]).nullish(),
   })
   .passthrough();
 export type PathbuilderArmor = z.infer<typeof PathbuilderArmorSchema>;
