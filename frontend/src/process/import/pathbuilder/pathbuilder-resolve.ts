@@ -513,10 +513,14 @@ export function resolveBuild(
   );
   const isAutomaton =
     normalizePathbuilderToken(cd.ancestry ?? options.derived?.ancestry ?? '') === 'AUTOMATON';
-  const isChassisArmorRow = (entry: (typeof derivedArmors)[number]) =>
-    /(?:AUTOMATON\\s+CHASSI|AUTOMATON\\s+CHASSIS|REINFORCED\\s+CHASSIS)/i.test(
-      `${entry.name ?? ''} ${entry.display ?? ''}`
+  const isChassisArmorRow = (entry: (typeof derivedArmors)[number]) => {
+    const token = normalizePathbuilderToken(`${entry.name ?? ''} ${entry.display ?? ''}`);
+    return (
+      token.includes('AUTOMATON_CHASSI') ||
+      token.includes('AUTOMATON_CHASSIS') ||
+      token.includes('REINFORCED_CHASSIS')
     );
+  };
   const chassisArmorRows = derivedArmors.filter(isChassisArmorRow);
   const chassisArmorCandidates = chassisArmorRows.filter(
     (entry) => entry.worn === true
@@ -528,9 +532,7 @@ export function resolveBuild(
       ? wornArmors[0]
       : hasReinforcedChassis && isAutomaton && chassisArmorCandidates.length === 1
         ? chassisArmorCandidates[0]
-        : hasReinforcedChassis && isAutomaton && wornArmors.length !== 1 && chassisArmorRows.length === 1
-          ? chassisArmorRows[0]
-          : undefined;
+        : undefined;
   const derivedArmorName = derivedArmor?.name ?? undefined;
 
   if (wornArmors.length > 1) {
@@ -622,7 +624,7 @@ export function resolveBuild(
     }
     armor = {
       kind: 'standard',
-      name: derivedArmorName && isChassisArmorRow(derivedArmor) ? derivedArmorName : inferredChassisName,
+      name: derivedArmor && isChassisArmorRow(derivedArmor) ? (derivedArmor.name ?? inferredChassisName) : inferredChassisName,
       raw: `inferred: Reinforced Chassis at level ${characterLevel}${rawArmorName ? `; original Pathbuilder reference ${rawArmorName}` : ''}`,
       quantity: 1,
     };
