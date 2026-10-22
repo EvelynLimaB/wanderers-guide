@@ -2209,6 +2209,38 @@ async function resolveSelections(
           result._select_uuid === freeArchetypeBranch._select_uuid
         ) {
           freeArchetypeBranchUuids.add(result._select_uuid);
+
+          // Resolve the payload-backed child feat at the same time as the outer
+          // Free Archetype branch. The WG archetype-feat filter can initially
+          // return no options until the dedication has been granted, which would
+          // otherwise force a manual selection (or an empty picker) despite the
+          // share already naming the exact feat. runSelect supports restoring a
+          // selected AbilityBlock by ID when it is absent from the filtered list.
+          const sourceFeatsAtLevel = resolved.feats.filter(
+            (feat) => feat.level === selectionLevel && /^free archetype/i.test(feat.slot)
+          );
+          if (sourceFeatsAtLevel.length === 1) {
+            const sourceFeat = sourceFeatsAtLevel[0];
+            const matchingBlocks = content.abilityBlocks.filter(
+              (block) =>
+                block.type === 'feat' &&
+                labelToVariable(block.name) === labelToVariable(sourceFeat.name)
+            );
+            if (matchingBlocks.length === 1) {
+              const childSelectorPrefix = /\bdedication\b/i.test(sourceFeat.name)
+                ? '1c575456-4cb7-44eb-a153-9d6884b272a8'
+                : 'f8cbab2a-f19f-4209-9207-5eb30b43d4eb';
+              const childSelectorId = `${childSelectorPrefix}-${selectionLevel}`;
+              const childPath = `${current.path}_${result._select_uuid}_${childSelectorId}`;
+              const childTrackingKey = `${childSelectorId}:${selectionLevel}`;
+              const childValue = String(matchingBlocks[0].id);
+
+              chosen[childPath] = childValue;
+              selectedByOperationAndLevel.set(childTrackingKey, childValue);
+              resolvedSelectionKeys.add(childTrackingKey);
+              checked.add(childPath);
+            }
+          }
         }
         selectedByOperationAndLevel.set(trackingKey, result._select_uuid);
         resolvedSelectionKeys.add(trackingKey);
