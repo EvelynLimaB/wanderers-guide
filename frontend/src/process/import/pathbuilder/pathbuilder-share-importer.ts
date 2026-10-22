@@ -49,6 +49,7 @@ import { PathbuilderCustomFile, ResolvedBuild, ResolvedItemRef } from './types';
 import {
   findFreeArchetypeBranch,
   getAbilityBoostOriginForPath,
+  getPathbuilderAncestryFeatSelectorIndex,
   inferPathbuilderAncestryFeatLevel,
   inferPathbuilderOperationLevel,
 } from './pathbuilder-selection-routing';
@@ -1779,6 +1780,36 @@ function findPathbuilderOption(
   return null;
 }
 
+/**
+ * Read the source choice belonging to a generated ancestry-feat slot.
+ *
+ * Wanderer's Guide creates a normal ancestry-feat slot every 4 levels and,
+ * with Ancestry Paragon, adds slots at levels 1, 3, 7, 11, 15, and 19. The
+ * generated operation's numeric suffix is a slot index; use that index and
+ * Pathbuilder's own slot labels to avoid matching a skill/class/archetype feat
+ * simply because it shares a level with the ancestry selector.
+ */
+function getAncestryFeatSelectionsForOperation(
+  slotIndex: number,
+  level: number,
+  resolved: ResolvedBuild
+): { name: string; level: number }[] {
+  const atLevel = resolved.feats.filter((feat) => feat.level === level);
+  const isParagonSlot =
+    resolved.variants.ancestry_paragon &&
+    (slotIndex === 1 || (slotIndex >= 2 && slotIndex % 2 === 0));
+
+  const target = isParagonSlot
+    ? atLevel.filter((feat) => labelToVariable(feat.slot) === 'ANCESTRY_PARAGON')
+    : atLevel.filter((feat) => {
+        const slot = labelToVariable(feat.slot);
+        const ancestrySlot = labelToVariable(resolved.identity.ancestry ?? '') + '_FEAT';
+        return slot === ancestrySlot || slot === 'ANCESTRY_FEAT';
+      });
+
+  return target.map((feat) => ({ name: feat.name, level }));
+}
+
 function getFeatSelectionsForOperation(
   title: string,
   level: number,
@@ -2194,10 +2225,21 @@ async function resolveSelections(
       } else if (languageSelection) {
         requestedSelections = resolved.languages.map((name) => ({ name, level: selectionLevel }));
       } else if (/\bfeat\b/i.test(current.selection?.selection?.title ?? '')) {
-        const key = current.path;
-        const cursor = featCursors.get(key) ?? 0;
-        const candidates = getFeatSelectionsForOperation(current.selection?.selection?.title ?? '', selectionLevel, resolved);
-        requestedSelections = candidates.slice(cursor);
+        const ancestryFeatSlotIndex = current.path.startsWith('ancestry-section-')
+          ? getPathbuilderAncestryFeatSelectorIndex(selectionId)
+          : undefined;
+        if (ancestryFeatSlotIndex !== undefined) {
+          requestedSelections = getAncestryFeatSelectionsForOperation(
+            ancestryFeatSlotIndex,
+            selectionLevel,
+            resolved
+          );
+        } else {
+          const key = current.path;
+          const cursor = featCursors.get(key) ?? 0;
+          const candidates = getFeatSelectionsForOperation(current.selection?.selection?.title ?? '', selectionLevel, resolved);
+          requestedSelections = candidates.slice(cursor);
+        }
       } else {
         requestedSelections = getSpecialSelectionsForOperation(current.selection?.selection, selectionLevel, resolved);
       }
