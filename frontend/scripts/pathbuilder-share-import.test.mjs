@@ -460,6 +460,7 @@ test('unresolved share armor UUID uses a uniquely identified worn Automaton chas
 
 test('unresolved share armor UUID falls back to the chassis rule when JSON worn rows are ambiguous', () => {
   const build = structuredClone(fixture.build);
+  build.characterData.characterLevel = 7;
   build.characterData.playerArmor = {
     ...(build.characterData.playerArmor ?? {}),
     armorName: 'be5e11f6-4459-4080-9107-8145dd57014b',
