@@ -643,6 +643,17 @@ test('missing shared armor name is reconstructed from an Automaton Reinforced Ch
 });
 
 test('armor resilience is preserved from the share when the source actually provides it', () => {
+  const basicResilientBuild = structuredClone(fixture.build);
+  basicResilientBuild.characterData.playerArmor = {
+    ...(basicResilientBuild.characterData.playerArmor ?? {}),
+    res: 'resilient',
+  };
+  const basicResilient = resolveBuild(basicResilientBuild, {
+    buildId: fixture.build_id,
+    formatVersion: fixture.format_version,
+  });
+  assert.equal(basicResilient.armorResilience, 1, 'Resilient must map to rank 1');
+
   const majorResilientBuild = structuredClone(fixture.build);
   majorResilientBuild.characterData.playerArmor = {
     ...(majorResilientBuild.characterData.playerArmor ?? {}),

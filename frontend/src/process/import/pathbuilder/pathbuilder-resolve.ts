@@ -191,10 +191,14 @@ function parsePathbuilderArmorResilience(value: string | number | null | undefin
   ) {
     return 0;
   }
-  if (!normalized.includes('RESILIENT')) return -1;
-  if (normalized.includes('MAJOR') || /RESILIENT.*(?:_3|_III)$/.test(normalized)) return 3;
-  if (normalized.includes('GREATER') || /RESILIENT.*(?:_2|_II)$/.test(normalized)) return 2;
-  return 1;
+
+  // Be strict: a custom label that merely contains "resilient" is not proof of
+  // a standard rune rank. Pathbuilder may provide the simple names or the
+  // explicit Greater/Major rank names; unrecognized variants remain unknown.
+  if (/^(?:RESILIENT|RESILIENT_RUNE|RESILIENT_1|RESILIENT_I)$/.test(normalized)) return 1;
+  if (/^(?:GREATER_RESILIENT|RESILIENT_GREATER|GREATER_RESILIENT_RUNE|RESILIENT_2|RESILIENT_II)$/.test(normalized)) return 2;
+  if (/^(?:MAJOR_RESILIENT|RESILIENT_MAJOR|MAJOR_RESILIENT_RUNE|RESILIENT_3|RESILIENT_III)$/.test(normalized)) return 3;
+  return -1;
 }
 
 function resolveRef(

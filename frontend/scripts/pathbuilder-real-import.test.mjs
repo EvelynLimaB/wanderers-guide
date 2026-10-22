@@ -28,6 +28,10 @@ if (typeof globalThis.WebSocket === 'undefined') {
 import { build, stop } from 'esbuild';
 import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
 
+function labelizeDomainTitle(value) {
+  return String(value ?? '').normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
 const here = dirname(fileURLToPath(import.meta.url));
 const root = fileURLToPath(new URL('../', import.meta.url));
 const fixture = JSON.parse(readFileSync(join(here, 'fixtures', 'pathbuilder-kasane-1597410.json'), 'utf8'));
@@ -736,64 +740,61 @@ try {
       assert.ok(
         selectedFeatureNames.includes(requiredFreeArchetypeFeat),
         'Free Archetype choice "' + requiredFreeArchetypeFeat + '" must be present in the imported operation tree; found ' +
-          JSON.stringify(selectedFeatureNames.filter((name) => /thlipit|lassoing|powerful lash/i.test(name))) +
-          '; Free Archetype selections=' + JSON.stringify(freeArchetypeSelectionDiagnostics) +
-          '; preflight selectors=' + JSON.stringify(promptDetails)
+          JSON.stringify(selectedFeatureNames.filter((name) => /thlipit|lassoing|powerful lash    const chosenDomainName = certifiedBuild.characterData.hashMapSpecialSelections?.['Champion Feat 1']?.['Select Domain'];
+    // This content package can include multiple versions of Deity's Domain. Collect
+    // every matching selector identity and inspect the actual saved tree path, rather
+    // than assuming the first duplicate is the operation version the engine used.
+    const initialDomainSpellSelectors = content.abilityBlocks
+      .filter((block) => block.name === "Deity's Domain")
+      .flatMap((block) =>
+        (block.operations ?? [])
+          .filter((operation) => operation.type === 'select' && /initial domain spell/i.test(operation.data?.title ?? ''))
+          .map((operation) => ({ featureId: block.id, selectorId: operation.id }))
       );
-    }
-
-    const chosenDomainName = certifiedBuild.characterData.hashMapSpecialSelections?.['Champion Feat 1']?.['Select Domain'];
-    const domainFeat = content.abilityBlocks.find(
-      (block) =>
-        block.name === "Deity's Domain" &&
-        (block.operations ?? []).some(
-          (operation) => operation.type === 'select' && /initial domain spell/i.test(operation.data?.title ?? '')
-        )
+    assert.ok(
+      initialDomainSpellSelectors.length > 0,
+      'the content package must include a Deity\'s Domain feat with an initial-domain-spell selector'
     );
-    assert.ok(domainFeat, 'the content package must include the Deity\'s Domain feat with its initial-domain-spell selector');
-    const initialDomainSpellSelector = domainFeat.operations?.find(
-      (operation) => operation.type === 'select' && /initial domain spell/i.test(operation.data?.title ?? '')
-    );
-    assert.ok(initialDomainSpellSelector, 'Deity\'s Domain must expose its initial-domain-spell selector');
 
-    // Content sources can contain several records with the same feature name.
-    // Find the Domains selector by the selected option rather than taking the first
-    // same-named feature, which may come from legacy content and have no matching option.
     const domainPicker = content.abilityBlocks
       .flatMap((block) => block.operations ?? [])
       .find(
         (operation) =>
           operation.type === 'select' &&
-          operation.data?.title === 'Select a Domain' &&
+          labelizeDomainTitle(operation.data?.title ?? '') === 'SELECT_A_DOMAIN' &&
           (operation.data.optionsPredefined ?? []).some(
-            (option) => option.type === 'CUSTOM' && option.title === chosenDomainName
+            (option) => option.type === 'CUSTOM' && labelizeDomainTitle(option.title) === labelizeDomainTitle(chosenDomainName)
           )
       );
     const chosenDomain = domainPicker?.type === 'select'
-      ? domainPicker.data.optionsPredefined?.find((option) => option.type === 'CUSTOM' && option.title === chosenDomainName)
+      ? domainPicker.data.optionsPredefined?.find(
+          (option) => option.type === 'CUSTOM' && labelizeDomainTitle(option.title) === labelizeDomainTitle(chosenDomainName)
+        )
       : undefined;
     assert.ok(chosenDomain && chosenDomain.type === 'CUSTOM', 'the captured domain must be found in WG content');
-    const initialSpellReference = /\*\*Initial Spell\*\*\s*\[([^\]]+)\]\(link_spell_(\d+)\)/i.exec(chosenDomain.description);
+    const initialSpellReference = /\\*\\*Initial Spell\\*\\*\\s*\\[([^\\]]+)\\]\\(link_spell_(\\d+)\\)/i.exec(chosenDomain.description);
     assert.ok(initialSpellReference, 'WG domain content must identify the granted initial spell');
 
-    // Operation paths begin with class-feature-<featureId>; the feature ID is
-    // preceded by a hyphen, not an underscore. Match both the correct feature
-    // source and the exact initial-spell selector, then assert the saved choice
-    // is the spell granted by this domain's own description.
-    const domainSelectionEntry = Object.entries(outcome.character.operation_data?.selections ?? {}).find(
-      ([path]) => path.includes('_' + domainFeat.id + '_' + initialDomainSpellSelector.id)
+    const savedSelections = outcome.character.operation_data?.selections ?? {};
+    const candidateDomainSelectionEntries = Object.entries(savedSelections).filter(([path]) =>
+      initialDomainSpellSelectors.some(
+        ({ featureId, selectorId }) => path.includes('_' + featureId + '_' + selectorId)
+      )
+    );
+    const domainSelectionEntry = candidateDomainSelectionEntries.find(([, value]) =>
+      content.spells.some(
+        (spell) => String(spell.id) === String(value) && spell.name === initialSpellReference[1]
+      )
     );
     assert.ok(
       domainSelectionEntry,
-      'the imported tree must save a choice for the initial-domain-spell selector'
+      'the imported tree must select "' + initialSpellReference[1] + '" for domain "' + chosenDomainName + '"; candidate domain selections=' +
+        JSON.stringify(candidateDomainSelectionEntries)
     );
-    // The link_spell_* token in authored content is a source-link identifier;
-    // operation_data stores WG's local Spell.id. Resolve the saved ID to a catalog
-    // spell and compare the actual rules choice instead of crossing ID namespaces.
     const selectedInitialDomainSpell = content.spells.find(
       (spell) => String(spell.id) === String(domainSelectionEntry[1])
     );
-    assert.equal(
+    assert.equal(selectedInitialDomainSpell?.name, initialSpellReference[1]);qual(
       selectedInitialDomainSpell?.name,
       initialSpellReference[1],
       'the imported tree must select "' + initialSpellReference[1] + '" for domain "' + chosenDomainName + '"'
