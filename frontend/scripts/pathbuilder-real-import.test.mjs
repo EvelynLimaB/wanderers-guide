@@ -737,6 +737,26 @@ try {
         .map((selection) => content.abilityBlocks.find((block) => String(block.id) === String(selection))?.name)
         .filter((name) => typeof name === 'string')
     )];
+    const selectedFeatureNameKeys = new Set(
+      selectedFeatureNames.map((name) =>
+        name.normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+      )
+    );
+    // Never certify an import when a feat chosen in Pathbuilder at or below the
+    // character's current level vanished from WG's saved operation tree. Future
+    // planned feats are retained in provenance but are outside the current sheet.
+    const unrepresentedCurrentFeats = outcome.resolved.feats
+      .filter((feat) => feat.level === undefined || feat.level <= outcome.resolved.identity.level)
+      .filter((feat) => !selectedFeatureNameKeys.has(
+        feat.name.normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+      ))
+      .map((feat) => ({ slot: feat.slot, level: feat.level, name: feat.name, raw: feat.raw }));
+    assert.deepEqual(
+      unrepresentedCurrentFeats,
+      [],
+      'every current-level Pathbuilder feat must be represented by a saved WG ability-block selection; missing=' +
+        JSON.stringify(unrepresentedCurrentFeats)
+    );
     const freeArchetypeSelectionDiagnostics = Object.entries(savedSelections)
       .filter(([path]) =>
         /9594307d-b111-437f-a55a-de101e8d46b1|354b57f0-ef29-4f53-819b-f1f211adfc7b|a525eb70-e18f-4a95-80d9-29f6aaee0d3e|f8cbab2a-f19f-4209-9207-5eb30b43d4eb|1c575456-4cb7-44eb-a153-9d6884b272a8/.test(path)
