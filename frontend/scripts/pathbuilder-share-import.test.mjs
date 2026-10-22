@@ -424,6 +424,77 @@ test('json.php-derived armor data recovers an armor name missing from playerArmo
   );
 });
 
+test('unresolved share armor UUID uses a uniquely identified worn Automaton chassis among multiple worn rows', () => {
+  const build = structuredClone(fixture.build);
+  build.characterData.playerArmor = {
+    ...(build.characterData.playerArmor ?? {}),
+    armorName: 'be5e11f6-4459-4080-9107-8145dd57014b',
+    potency: 1,
+    listPropertyRunes: ['Raiment'],
+  };
+
+  const recovered = resolveBuild(build, {
+    buildId: fixture.build_id,
+    formatVersion: fixture.format_version,
+    derived: {
+      ancestry: 'Automaton',
+      level: 20,
+      armor: [
+        { name: 'Automaton Chassi (10th level)', worn: true, pot: 1, res: 'major resilient', runes: ['Raiment'] },
+        { name: 'Clothing', worn: true },
+      ],
+    },
+  });
+
+  assert.equal(recovered.armor?.name, 'Automaton Chassi (10th level)');
+  assert.equal(recovered.armor?.kind, 'standard');
+  assert.equal(recovered.armor?.raw, 'be5e11f6-4459-4080-9107-8145dd57014b');
+  assert.equal(recovered.armorPotency, 1);
+  assert.equal(recovered.armorResilience, 3);
+  assert.equal(recovered.unresolved.some((entry) => entry.kind === 'armor'), false);
+  assert.ok(
+    recovered.hints.some((hint) => /multiple armor rows as worn/i.test(hint)),
+    'conflicting worn flags should remain visible even when the chassis row is identifiable'
+  );
+});
+
+test('unresolved share armor UUID falls back to the chassis rule when JSON worn rows are ambiguous', () => {
+  const build = structuredClone(fixture.build);
+  build.characterData.playerArmor = {
+    ...(build.characterData.playerArmor ?? {}),
+    armorName: 'be5e11f6-4459-4080-9107-8145dd57014b',
+    potency: 1,
+    listPropertyRunes: ['Raiment'],
+  };
+
+  const recovered = resolveBuild(build, {
+    buildId: fixture.build_id,
+    formatVersion: fixture.format_version,
+    derived: {
+      ancestry: 'Automaton',
+      level: 7,
+      armor: [
+        { name: 'Clothing', worn: true },
+        { name: 'Other unidentified armor', worn: true },
+      ],
+    },
+  });
+
+  assert.equal(recovered.armor?.name, 'Automaton Chassi (5th level)');
+  assert.equal(recovered.armor?.kind, 'standard');
+  assert.equal(recovered.armor?.raw.startsWith('inferred: Reinforced Chassis'), true);
+  assert.equal(recovered.armorPotency, 1);
+  assert.equal(recovered.unresolved.some((entry) => entry.kind === 'armor'), false);
+  assert.ok(
+    recovered.hints.some((hint) => /reconstructed the automaton reinforced chassis/i.test(hint)),
+    'the selected ancestry feat should explain why the chassis was reconstructed'
+  );
+  assert.ok(
+    recovered.hints.some((hint) => /multiple armor rows as worn/i.test(hint)),
+    'contradictory JSON worn flags should still be reported'
+  );
+});
+
 test('ambiguous derived armor rows are not guessed as equipped armor', () => {
   const build = structuredClone(fixture.build);
   build.characterData.ancestry = 'Human';
