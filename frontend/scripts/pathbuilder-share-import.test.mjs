@@ -19,6 +19,7 @@ import { PATHBUILDER_DERIVED_ENDPOINT, extractBuildId, fetchPathbuilderDerived, 
 import {
   findFreeArchetypeBranch,
   getAbilityBoostOriginForPath,
+  inferPathbuilderAncestryFeatLevel,
   inferPathbuilderOperationLevel,
 } from '../src/process/import/pathbuilder/pathbuilder-selection-routing.ts';
 import { PathbuilderShareBuildSchema } from '../src/schemas/pathbuilder.ts';
@@ -139,6 +140,40 @@ test('level-1 class boosts and free-archetype branches route to native WG operat
     inferPathbuilderOperationLevel('class_7ed73bc5-6a92-497c-8fc9-2a6dc408f40b', 1),
     1,
     'paths without an explicit level suffix must preserve the operation engine level'
+  );
+
+  assert.equal(
+    inferPathbuilderAncestryFeatLevel('9f26290c-a2db-4c45-9b34-5053e60c106d-0', true),
+    1
+  );
+  assert.equal(
+    inferPathbuilderAncestryFeatLevel('9f26290c-a2db-4c45-9b34-5053e60c106d-1', true),
+    1
+  );
+  assert.equal(
+    inferPathbuilderAncestryFeatLevel('9f26290c-a2db-4c45-9b34-5053e60c106d-2', true),
+    3
+  );
+  assert.equal(
+    inferPathbuilderAncestryFeatLevel('9f26290c-a2db-4c45-9b34-5053e60c106d-4', true),
+    7
+  );
+  assert.equal(
+    inferPathbuilderAncestryFeatLevel('9f26290c-a2db-4c45-9b34-5053e60c106d-4', false),
+    17
+  );
+  assert.equal(
+    inferPathbuilderAncestryFeatLevel('3fd6a268-771b-49fc-93ed-9b53695d1a29', true),
+    undefined,
+    'non-feat ancestry selectors do not encode a slot index'
+  );
+  assert.equal(
+    inferPathbuilderOperationLevel(
+      'ancestry-section-4419086668321027_9f26290c-a2db-4c45-9b34-5053e60c106d-4',
+      1
+    ),
+    1,
+    'the generic level resolver must not treat an ancestry slot index as a character level'
   );
 
   const dedication = findFreeArchetypeBranch(
