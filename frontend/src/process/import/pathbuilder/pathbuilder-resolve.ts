@@ -560,6 +560,8 @@ export function resolveBuild(
       : undefined;
   const isMissingCustomArmorReference =
     !!rawArmorName && isPathbuilderUuid(rawArmorName) && !armorCustomFile;
+  const rawIsUnarmoredPlaceholder =
+    normalizePathbuilderToken(rawArmorName ?? '') === 'UNARMORED';
 
   let armor: ResolvedItemRef | undefined;
   const armorLookupName =
@@ -567,7 +569,15 @@ export function resolveBuild(
       ? rawArmorName
       : rawArmorName && isPathbuilderUuid(rawArmorName)
         ? derivedArmorName ?? rawArmorName
-        : rawArmorName ?? derivedArmorName;
+        : rawIsUnarmoredPlaceholder
+          ? derivedArmorName ?? rawArmorName
+          : rawArmorName ?? derivedArmorName;
+
+  if (rawIsUnarmoredPlaceholder && derivedArmorName && !isChassisArmorRow(derivedArmor)) {
+    hints.push(
+      `Armor: the share payload says Unarmored, but json.php identifies "${derivedArmorName}" as the uniquely selected worn armor; the JSON armor row was used.`
+    );
+  }
 
   if (armorLookupName) {
     const originalUnresolvedLength = unresolved.length;
