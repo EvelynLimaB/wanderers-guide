@@ -42,6 +42,16 @@ const capturedDerivedBuild = capturedDerivedResponse.build;
 
 assert.equal(fixture.build_id, '1597410');
 assert.equal(fixture.format_version, '121');
+assert.equal(
+  fixture.build.characterData.playerArmor.armorName,
+  'be5e11f6-4459-4080-9107-8145dd57014b',
+  'the captured share preserves its armor Custom File UUID even when the file is absent'
+);
+assert.equal(
+  fixture.build.characterData.playerArmor.itemResilient,
+  1,
+  'the captured share provides Resilient rank 1 as itemResilient'
+);
 
 const sourceIds = [
   3, 32, 14, 34, 33, 18, 839, 611, 114, 239, 240, 241, 35, 51, 19, 20, 11, 43, 580, 12,
