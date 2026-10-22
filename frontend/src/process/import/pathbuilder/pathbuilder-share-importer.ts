@@ -2105,17 +2105,12 @@ async function resolveSelections(
     while (found) {
       const current = found;
       const selectionId = current.selection?.selection?.id ?? '';
-      const selectionLevel = inferPathbuilderAncestryFeatLevel(
-        current.path,
-        current.level,
+      const ancestryFeatLevel = inferPathbuilderAncestryFeatLevel(
+        selectionId,
         resolved.variants.ancestry_paragon
-      ) === current.level
-        ? inferPathbuilderOperationLevel(current.path, current.level)
-        : inferPathbuilderAncestryFeatLevel(
-            current.path,
-            current.level,
-            resolved.variants.ancestry_paragon
-          );
+      );
+      const selectionLevel =
+        ancestryFeatLevel ?? inferPathbuilderOperationLevel(current.path, current.level);
       const selectionKey = selectionId ? `${selectionId}:${selectionLevel}` : '';
       const trackingKey = selectionKey || current.path;
       const selectionKeyWasResolved = resolvedSelectionKeys.has(trackingKey);
