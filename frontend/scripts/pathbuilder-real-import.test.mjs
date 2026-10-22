@@ -740,6 +740,8 @@ try {
     const normalizeFeatureName = (name) =>
       name.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const selectedFeatureNameKeys = new Set(selectedFeatureNames.map(normalizeFeatureName));
+    // The remastered WG content uses "Smite" for Pathbuilder's legacy "Smite Evil".
+    const legacyFeatAliases = new Map([['smite evil', 'smite']]);
     // Never certify an import when a feat chosen in Pathbuilder at or below the
     // character's current level vanished from WG's saved operation tree. Future
     // planned feats are retained in provenance but are outside the current sheet.
@@ -756,7 +758,11 @@ try {
     const unrepresentedCurrentFeats = outcome.resolved.feats
       .filter((feat) => feat.level === undefined || feat.level <= outcome.resolved.identity.level)
       .filter((feat) => !isReincarnationCategorySelector(feat))
-      .filter((feat) => !selectedFeatureNameKeys.has(normalizeFeatureName(feat.name)))
+      .filter((feat) => {
+        const sourceName = normalizeFeatureName(feat.name);
+        const contentName = legacyFeatAliases.get(sourceName) ?? sourceName;
+        return !selectedFeatureNameKeys.has(contentName);
+      })
       .map((feat) => ({
         slot: feat.slot,
         level: feat.level,
