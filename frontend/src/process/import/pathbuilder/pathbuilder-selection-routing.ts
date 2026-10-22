@@ -52,16 +52,24 @@ export function findFreeArchetypeBranch(
   feats: PathbuilderSelectionChoice[],
   level: number
 ): PathbuilderSelectionOption | null {
-  const titles = new Set(
-    options
-      .map((option) => option.title ?? option.name ?? '')
-      .filter((title) => title === 'Add Dedication' || title === 'Add Archetype Feat')
+  // Prefer visible labels; stable custom-option IDs are the fallback when an
+  // operation result exposes only its internal identifier.
+  const dedicationOption = options.find(
+    (option) =>
+      (option.title ?? option.name) === 'Add Dedication' ||
+      option._select_uuid.startsWith('a525eb70-e18f-4a95-80d9-29f6aaee0d3e-')
   );
-  if (titles.size === 0) return null;
+  const archetypeFeatOption = options.find(
+    (option) =>
+      (option.title ?? option.name) === 'Add Archetype Feat' ||
+      option._select_uuid.startsWith('354b57f0-ef29-4f53-819b-f1f211adfc7b-')
+  );
+  if (!dedicationOption && !archetypeFeatOption) return null;
 
   const hasDedication = feats.some(
     (feat) => feat.level === level && /\bdedication\b/i.test(feat.name)
   );
-  const target = hasDedication ? 'Add Dedication' : 'Add Archetype Feat';
-  return options.find((option) => (option.title ?? option.name) === target) ?? null;
+  return hasDedication
+    ? dedicationOption ?? archetypeFeatOption ?? null
+    : archetypeFeatOption ?? dedicationOption ?? null;
 }

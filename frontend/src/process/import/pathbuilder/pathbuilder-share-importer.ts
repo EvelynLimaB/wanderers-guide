@@ -1764,7 +1764,9 @@ function findPathbuilderOption(
     const compatible = options.filter((option) => {
       const available = labelToVariable(option.name ?? option.title ?? '');
       if (!available || !requested) return false;
-      return requested.startsWith(available + '_') || available.startsWith(requested + '_');
+      return available === requested ||
+        requested.startsWith(available + '_') ||
+        available.startsWith(requested + '_');
     });
     if (compatible.length === 1) return compatible[0];
   }
@@ -2040,13 +2042,20 @@ async function resolveSelections(
       let requestedSelections: { name: string; level: number }[] = [];
       let result: Pick<ObjectWithUUID, '_select_uuid'> | null = previouslySelectedOption;
 
+      const isFreeArchetypeRootSelector =
+        selectionId.startsWith('9594307d-b111-437f-a55a-de101e8d46b1-');
+      const isFreeArchetypeDedicationSelector =
+        selectionId.startsWith('1c575456-4cb7-44eb-a153-9d6884b272a8-');
+      const isFreeArchetypeFeatSelector =
+        selectionId.startsWith('f8cbab2a-f19f-4209-9207-5eb30b43d4eb-');
       const freeArchetypeBranch = findFreeArchetypeBranch(options, selections, selectionLevel);
-      if (freeArchetypeBranch) {
+      if (isFreeArchetypeRootSelector && freeArchetypeBranch) {
         result = freeArchetypeBranch;
       }
-      const isFreeArchetypeDescendant = [...freeArchetypeBranchUuids].some((uuid) =>
-        current.path.split('_').includes(uuid)
-      );
+      const isFreeArchetypeDescendant =
+        isFreeArchetypeDedicationSelector ||
+        isFreeArchetypeFeatSelector ||
+        [...freeArchetypeBranchUuids].some((uuid) => current.path.split('_').includes(uuid));
       const freeArchetypeChoicesAtLevel = resolved.feats
         .filter((feat) => feat.level === selectionLevel && /^free archetype/i.test(feat.slot))
         .map((feat) => ({ name: feat.name, level: selectionLevel }));

@@ -677,11 +677,23 @@ try {
     const speedBonuses = engine.getVariableBonuses('CHARACTER', 'SPEED');
     assert.equal(speedValue.value, 30, '1597410 Hunter Automaton displayed quadruped Speed must adjust the baseline to 30 feet');
 
+    const savedSelections = outcome.character.operation_data?.selections ?? {};
     const selectedFeatureNames = [...new Set(
-      Object.values(outcome.character.operation_data?.selections ?? {})
+      Object.values(savedSelections)
         .map((selection) => content.abilityBlocks.find((block) => String(block.id) === String(selection))?.name)
         .filter((name) => typeof name === 'string')
     )];
+    const freeArchetypeSelectionDiagnostics = Object.entries(savedSelections)
+      .filter(([path]) =>
+        /9594307d-b111-437f-a55a-de101e8d46b1|354b57f0-ef29-4f53-819b-f1f211adfc7b|a525eb70-e18f-4a95-80d9-29f6aaee0d3e|f8cbab2a-f19f-4209-9207-5eb30b43d4eb|1c575456-4cb7-44eb-a153-9d6884b272a8/.test(path)
+      )
+      .map(([path, value]) => ({
+        path,
+        value,
+        selectedName: content.abilityBlocks.find((block) => String(block.id) === String(value))?.name ??
+          (String(value).startsWith('a525eb70') ? 'Add Dedication' :
+           String(value).startsWith('354b57f0') ? 'Add Archetype Feat' : undefined),
+      }));
     for (const requiredFreeArchetypeFeat of [
       'Thlipit Contestant Dedication',
       'Lassoing Lash',
@@ -691,6 +703,7 @@ try {
         selectedFeatureNames.includes(requiredFreeArchetypeFeat),
         'Free Archetype choice "' + requiredFreeArchetypeFeat + '" must be present in the imported operation tree; found ' +
           JSON.stringify(selectedFeatureNames.filter((name) => /thlipit|lassoing|powerful lash/i.test(name))) +
+          '; Free Archetype selections=' + JSON.stringify(freeArchetypeSelectionDiagnostics) +
           '; preflight selectors=' + JSON.stringify(promptDetails)
       );
     }
