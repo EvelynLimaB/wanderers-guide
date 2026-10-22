@@ -31,6 +31,14 @@ import { createOperationEngine, readContentRows } from './operation-test-harness
 const here = dirname(fileURLToPath(import.meta.url));
 const root = fileURLToPath(new URL('../', import.meta.url));
 const fixture = JSON.parse(readFileSync(join(here, 'fixtures', 'pathbuilder-kasane-1597410.json'), 'utf8'));
+const capturedDerivedResponse = JSON.parse(
+  readFileSync(join(here, 'fixtures', 'pathbuilder-kasane-474853-derived.json'), 'utf8')
+);
+assert.equal(capturedDerivedResponse.success, true);
+assert.equal(capturedDerivedResponse.build.name, 'Kasane');
+assert.equal(capturedDerivedResponse.build.level, 7);
+assert.equal(capturedDerivedResponse.build.acTotal.acTotal, 27);
+const capturedDerivedBuild = capturedDerivedResponse.build;
 
 assert.equal(fixture.build_id, '1597410');
 assert.equal(fixture.format_version, '121');
@@ -440,27 +448,17 @@ try {
   // +1 potency rune raises the total item bonus to +5 (10 + proficiency 11 +
   // capped Dexterity 1 + item bonus 5 = AC 27). A generic reference item must
   // not erase the chassis's level-scaled armor bonus.
-  const chassisDerivedFixture = {
-    ...staleDerivedFixture,
-    armor: [
-      {
-        name: 'Automaton Chassi (5th level)',
-        qty: 1,
-        prof: 'unarmored',
-        pot: 1,
-        res: 'resilient',
-        runes: ['Raiment'],
-        worn: true,
-      },
-    ],
-    acTotal: {
-      acProfBonus: 11,
-      acAbilityBonus: 1,
-      acItemBonus: 5,
-      acTotal: 27,
-      shieldBonus: '1',
-    },
-  };
+  // Use the exact official JSON export captured for Kasane (export ID 474853).
+  // It has the chassis as unarmored armor with Resilient 1 and Raiment, and it
+  // preserves the source's contradictory second worn flag on the buckler.
+  const chassisDerivedFixture = capturedDerivedBuild;
+  assert.equal(chassisDerivedFixture.armor.length, 2);
+  assert.equal(chassisDerivedFixture.armor[0].name, 'Automaton Chassi (5th level)');
+  assert.equal(chassisDerivedFixture.armor[0].prof, 'unarmored');
+  assert.equal(chassisDerivedFixture.armor[0].res, 'resilient');
+  assert.equal(chassisDerivedFixture.armor[0].pot, 1);
+  assert.deepEqual(chassisDerivedFixture.armor[0].runes, ['Raiment']);
+  assert.equal(chassisDerivedFixture.armor.filter((armor) => armor.worn).length, 2);
   const chassisOutcome = await importer.importFromPathbuilderShare('1597410', {
     silent: true,
     selectionOverrides,
