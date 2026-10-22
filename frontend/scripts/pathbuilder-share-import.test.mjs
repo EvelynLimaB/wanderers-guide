@@ -495,6 +495,39 @@ test('unresolved share armor UUID falls back to the chassis rule when JSON worn 
   );
 });
 
+test('a uniquely worn JSON armor row replaces Pathbuilder’s placeholder Unarmored value', () => {
+  const build = structuredClone(fixture.build);
+  build.characterData.ancestry = 'Human';
+  build.characterData.playerArmor = {
+    ...(build.characterData.playerArmor ?? {}),
+    armorName: 'Unarmored',
+    potency: 1,
+    listPropertyRunes: ['Raiment'],
+  };
+  for (const [slot, value] of Object.entries(build.characterData.hashMapFeatSelections ?? {})) {
+    if (String(value).toLowerCase().includes('reinforced chassis')) {
+      delete build.characterData.hashMapFeatSelections[slot];
+    }
+  }
+
+  const recovered = resolveBuild(build, {
+    buildId: fixture.build_id,
+    formatVersion: fixture.format_version,
+    derived: {
+      ancestry: 'Human',
+      armor: [{ name: 'Full Plate', worn: true, pot: 1 }],
+    },
+  });
+
+  assert.equal(recovered.armor?.name, 'Full Plate');
+  assert.equal(recovered.armor?.kind, 'standard');
+  assert.equal(recovered.armorPotency, 1);
+  assert.ok(
+    recovered.hints.some((hint) => /share payload says Unarmored.*Full Plate/i.test(hint)),
+    'the source disagreement should be recorded'
+  );
+});
+
 test('ambiguous derived armor rows are not guessed as equipped armor', () => {
   const build = structuredClone(fixture.build);
   build.characterData.ancestry = 'Human';
