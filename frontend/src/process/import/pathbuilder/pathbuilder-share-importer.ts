@@ -2135,12 +2135,12 @@ async function resolveSelections(
       }
 
       const isClassFeatSelector =
-        /\\bclass\\b/i.test(selectionTitle) &&
-        !/\\b(?:archetype|dedication)\\b/i.test(selectionTitle);
+        /\bclass\b/i.test(selectionTitle) &&
+        !/\b(?:archetype|dedication)\b/i.test(selectionTitle);
       if (
         !result &&
         !isClassFeatSelector &&
-        (isFreeArchetypeDescendant || /archetype|dedication|\\bfeat\\b/i.test(selectionTitle))
+        (isFreeArchetypeDescendant || /archetype|dedication|\bfeat\b/i.test(selectionTitle))
       ) {
         // The operation engine can render a Free Archetype child as a generic
         // feat selector with no descriptive title. Prefer the selected
