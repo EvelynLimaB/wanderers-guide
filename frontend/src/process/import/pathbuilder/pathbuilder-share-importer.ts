@@ -75,6 +75,11 @@ export type PathbuilderSelectionPrompt = {
   description?: string;
   level: number;
   options: Array<{ value: string; label: string; description?: string }>;
+  /** Diagnostic trace used to verify nested selection reconstruction when preflight stalls. */
+  diagnostics?: {
+    selections: Record<string, string>;
+    resolvedSelectionKeys: string[];
+  };
 };
 
 export type PathbuilderTargetSummary = {
@@ -2190,6 +2195,10 @@ async function resolveSelections(
               ? { description: option.description }
               : {}),
           })),
+          diagnostics: {
+            selections: cloneDeep(chosen),
+            resolvedSelectionKeys: [...resolvedSelectionKeys],
+          },
         };
         break;
       }
