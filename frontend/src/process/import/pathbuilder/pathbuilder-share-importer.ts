@@ -1775,7 +1775,7 @@ function getFeatSelectionsForOperation(
   const normalizedTitle = title.toLowerCase();
   const atLevel = resolved.feats.filter((feat) => feat.level === level);
 
-  if (normalizedTitle.includes('archetype')) {
+  if (normalizedTitle.includes('archetype') || normalizedTitle.includes('dedication')) {
     return atLevel
       .filter((feat) => /^free archetype/i.test(feat.slot))
       .map((feat) => ({ name: feat.name, level }));
@@ -1991,6 +1991,7 @@ async function resolveSelections(
   const skillCursors = new Map<number, number>();
   let classAttributeSelectionIndex = 0;
   const featCursors = new Map<string, number>();
+  const freeArchetypeBranchUuids = new Set<string>();
 
   let hasSelections = true;
   let iteration = 0;
@@ -2037,6 +2038,12 @@ async function resolveSelections(
       if (freeArchetypeBranch) {
         result = freeArchetypeBranch;
       }
+      const isFreeArchetypeDescendant = [...freeArchetypeBranchUuids].some((uuid) =>
+        current.path.split('_').includes(uuid)
+      );
+      const freeArchetypeChoicesAtLevel = resolved.feats
+        .filter((feat) => feat.level === current.level && /^free archetype/i.test(feat.slot))
+        .map((feat) => ({ name: feat.name, level: current.level }));
 
       if (attributeSelection) {
         const isClassAttributeSelection = current.path.startsWith('class_');
@@ -2125,6 +2132,12 @@ async function resolveSelections(
       if (!result && manualSelectionUuid) {
         result = manualOptions.find((option) => option._select_uuid === manualSelectionUuid) ?? null;
       }
+      if (!result && (isFreeArchetypeDescendant || /archetype|dedication/i.test(selectionTitle))) {
+        // Do not rely only on WG's title text: the content graph has used both
+        // "Select a Dedication" and generic feat selectors for the same branch.
+        // Match the recorded choice only if it appears as a legal option here.
+        result = findPathbuilderOption(freeArchetypeChoicesAtLevel, options, current.level);
+      }
       if (!result) {
         result = findDomainSpellOption(
           current.selection?.selection?.title ?? '',
@@ -2156,6 +2169,12 @@ async function resolveSelections(
       }
       if (result) {
         chosen[current.path] = result._select_uuid;
+        if (
+          freeArchetypeBranch &&
+          result._select_uuid === freeArchetypeBranch._select_uuid
+        ) {
+          freeArchetypeBranchUuids.add(result._select_uuid);
+        }
         selectedByOperationAndLevel.set(trackingKey, result._select_uuid);
         resolvedSelectionKeys.add(trackingKey);
         character.operation_data!.selections = cloneDeep(chosen);
