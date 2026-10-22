@@ -1796,11 +1796,12 @@ function getFeatSelectionsForOperation(
       .map((feat) => ({ name: feat.name, level }));
   }
 
-  // Generic "Select a Feat" nodes occur in several branches. Do not guess the
-  // provenance from the rendered path; let the legal WG option list decide which
-  // recorded Pathbuilder feat is applicable.
+  // Generic "Select a Feat" nodes occur in several branches, including builds
+  // where WG does not title the Free Archetype descendant with "Archetype" or
+  // "Dedication". Keep Free Archetype choices in the candidate set and let the
+  // legal option list decide whether the selected feat belongs to this selector.
   return atLevel
-    .filter((feat) => /\bfeat\b/i.test(feat.slot))
+    .filter((feat) => /\bfeat\b/i.test(feat.slot) || /^free archetype/i.test(feat.slot))
     .map((feat) => ({ name: feat.name, level }));
 }
 
