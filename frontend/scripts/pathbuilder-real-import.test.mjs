@@ -756,8 +756,7 @@ try {
     // is the spell granted by this domain's own description.
     const domainSelectionEntry = Object.entries(outcome.character.operation_data?.selections ?? {}).find(
       ([path, value]) =>
-        path.startsWith(`class-feature-${domainFeat.id}_`) &&
-        path.includes(initialDomainSpellSelector.id) &&
+        path.includes(`_${domainFeat.id}_${initialDomainSpellSelector.id}`) &&
         String(value) === initialSpellReference[2]
     );
     assert.ok(
