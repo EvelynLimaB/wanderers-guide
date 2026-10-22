@@ -739,7 +739,7 @@ try {
     )];
     const selectedFeatureNameKeys = new Set(
       selectedFeatureNames.map((name) =>
-        name.normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+        name.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
       )
     );
     // Never certify an import when a feat chosen in Pathbuilder at or below the
@@ -748,7 +748,7 @@ try {
     const unrepresentedCurrentFeats = outcome.resolved.feats
       .filter((feat) => feat.level === undefined || feat.level <= outcome.resolved.identity.level)
       .filter((feat) => !selectedFeatureNameKeys.has(
-        feat.name.normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+        feat.name.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
       ))
       .map((feat) => ({ slot: feat.slot, level: feat.level, name: feat.name, raw: feat.raw }));
     assert.deepEqual(
