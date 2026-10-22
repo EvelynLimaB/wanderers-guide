@@ -2317,11 +2317,7 @@ async function resolveSelections(
           const matchingFeat = matchingContentFeats[0];
           // The engine can restore an ability block by numeric ID even if a selector's
           // ancestry filter omits it. Pathbuilder's explicit choice is authoritative.
-          result = {
-            ...matchingFeat,
-            _select_uuid: String(matchingFeat.id),
-            _content_type: 'ability-block',
-          };
+          result = { _select_uuid: String(matchingFeat.id) };
         } else {
           const reason = matchingContentFeats.length === 0
             ? 'does not exist in the loaded Wanderer\'s Guide content package'
