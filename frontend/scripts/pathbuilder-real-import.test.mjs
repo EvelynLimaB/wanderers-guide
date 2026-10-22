@@ -857,9 +857,11 @@ try {
 
     const prof = (name) => engine.getFinalProfValue('CHARACTER', name);
     assert.equal(prof('PERCEPTION'), '+10');
-    assert.equal(prof('SAVE_FORT'), '+14');
-    assert.equal(prof('SAVE_REFLEX'), '+11');
-    assert.equal(prof('SAVE_WILL'), '+12');
+    // The captured PDF and calculated JSON disagree on saves. The JSON explicitly
+    // records Resilient 1 and a +1 item bonus to all saves; test the rune-backed state.
+    assert.equal(prof('SAVE_FORT'), '+15');
+    assert.equal(prof('SAVE_REFLEX'), '+12');
+    assert.equal(prof('SAVE_WILL'), '+13');
     assert.equal(prof('SKILL_ATHLETICS'), '+18');
     assert.equal(prof('SKILL_ACROBATICS'), '+11');
     assert.equal(prof('SKILL_RELIGION'), '+10');
