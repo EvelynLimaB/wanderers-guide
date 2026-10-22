@@ -10,7 +10,7 @@ import {
   logEvent,
   updateData,
 } from '../_shared/helpers.ts';
-import type { ContentUpdate, PublicUser } from '../_shared/content';
+import type { ContentUpdate, PublicUser } from '../_shared/content.d.ts';
 import { populateCollection } from '../_shared/vector-db.ts';
 import { createClient } from '@supabase/supabase-js';
 

@@ -1,0 +1,12 @@
+services:
+  frontend:
+    container_name: wanderers-guide-frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_SUPABASE_URL: ${PUBLIC_SUPABASE_URL}
+        VITE_SUPABASE_KEY: ${ANON_KEY}
+        VITE_ENV: production
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:80"

@@ -1,7 +1,7 @@
 // @ts-ignore
 import { serve } from 'std/server';
 import { connect, insertData, upsertData, upsertResponseWrapper } from '../_shared/helpers.ts';
-import type { Spell } from '../_shared/content';
+import type { Spell } from '../_shared/content.d.ts';
 
 serve(async (req: Request) => {
   return await connect(req, async (client, body) => {

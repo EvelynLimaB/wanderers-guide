@@ -1,7 +1,7 @@
 // @ts-ignore
 import { serve } from 'std/server';
 import { connect, upsertData, upsertResponseWrapper } from '../_shared/helpers.ts';
-import type { AbilityBlock } from '../_shared/content';
+import type { AbilityBlock } from '../_shared/content.d.ts';
 
 serve(async (req: Request) => {
   return await connect<AbilityBlock>(req, async (client, body) => {

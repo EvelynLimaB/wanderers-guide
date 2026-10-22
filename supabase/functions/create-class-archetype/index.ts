@@ -1,7 +1,7 @@
 // @ts-ignore
 import { serve } from 'std/server';
 import { connect, upsertData, upsertResponseWrapper } from '../_shared/helpers.ts';
-import type { ClassArchetype } from '../_shared/content';
+import type { ClassArchetype } from '../_shared/content.d.ts';
 
 serve(async (req: Request) => {
   return await connect(req, async (client, body) => {

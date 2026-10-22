@@ -10,7 +10,7 @@ import {
   fetchData,
   getPublicUser,
 } from '../_shared/helpers.ts';
-import type { ContentSource, ContentType } from '../_shared/content';
+import type { ContentSource, ContentType } from '../_shared/content.d.ts';
 
 interface DeleteContentBody {
   id: number;

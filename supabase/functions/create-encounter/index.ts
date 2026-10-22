@@ -1,6 +1,6 @@
 // @ts-ignore
 import { serve } from 'std/server';
-import type { Encounter } from '../_shared/content';
+import type { Encounter } from '../_shared/content.d.ts';
 import { connect, getPublicUser, upsertData, upsertResponseWrapper } from '../_shared/helpers.ts';
 
 serve(async (req: Request) => {

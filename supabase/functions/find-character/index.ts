@@ -1,6 +1,6 @@
 // @ts-ignore
 import { serve } from 'std/server';
-import type { Character } from '../_shared/content';
+import type { Character } from '../_shared/content.d.ts';
 import { connect, fetchData } from '../_shared/helpers.ts';
 
 serve(async (req: Request) => {

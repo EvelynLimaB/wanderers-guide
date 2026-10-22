@@ -8,7 +8,7 @@ import {
   updateData,
   upsertResponseWrapper,
 } from '../_shared/helpers.ts';
-import type { ContentSource, ContentUpdate, PublicUser } from '../_shared/content';
+import type { ContentSource, ContentUpdate, PublicUser } from '../_shared/content.d.ts';
 
 serve(async (req: Request) => {
   return await connect(req, async (client, body, token) => {

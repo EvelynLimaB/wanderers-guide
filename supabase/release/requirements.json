@@ -124,11 +124,6 @@
     "check": "war-of-immortals.sql",
     "order": "before-functions"
   },
-  "20260927245900_treasure_vault_terminal_status.sql": {
-    "check": "treasure-vault-terminal-status.sql",
-    "order": "before-functions",
-    "function_signature": "public.treasure_vault_terminal_status_v1()"
-  },
   "20260927250000_treasure_vault_dragonprism_links.sql": {
     "check": "war-of-immortals.sql",
     "order": "before-functions"
@@ -221,12 +216,12 @@
     "check": "heal-companion.sql",
     "order": "before-functions"
   },
-  "20261001000000_war_of_immortals_spell_emphasis.sql": {
-    "check": "war-of-immortals-spell-emphasis.sql",
-    "order": "before-functions"
-  },
   "20261001010000_repair_weapon_stat_fields.sql": {
     "check": "weapon-stat-fields.sql",
+    "order": "before-functions"
+  },
+  "20261001000000_war_of_immortals_spell_emphasis.sql": {
+    "check": "war-of-immortals-spell-emphasis.sql",
     "order": "before-functions"
   },
   "20261001010000_treasure_vault_reference_repairs.sql": {
@@ -325,6 +320,23 @@
     "check": "treasure-vault-equipment-prose.sql",
     "order": "before-functions"
   },
+  "20261005000000_repair_content_selection_rules.sql": {
+    "check": "content-selection-rules.sql",
+    "order": "before-functions"
+  },
+  "20261006000000_war_of_immortals_bespell_tradition.sql": {
+    "check": "war-of-immortals-bespell-tradition.sql",
+    "order": "before-functions"
+  },
+  "20261007000000_pathbuilder_import.sql": {
+    "check": "pathbuilder-import.sql",
+    "order": "before-functions"
+  },
+  "20260927245900_treasure_vault_terminal_status.sql": {
+    "check": "treasure-vault-terminal-status.sql",
+    "order": "before-functions",
+    "function_signature": "public.treasure_vault_terminal_status_v1()"
+  },
   "20261002010000_treasure_vault_relic_seeds.sql": {
     "check": "treasure-vault-relic-seeds.sql",
     "order": "before-functions"
@@ -387,14 +399,6 @@
   },
   "20261002101000_treasure_vault_complete_display.sql": {
     "check": "treasure-vault-complete-display.sql",
-    "order": "before-functions"
-  },
-  "20261005000000_repair_content_selection_rules.sql": {
-    "check": "content-selection-rules.sql",
-    "order": "before-functions"
-  },
-  "20261006000000_war_of_immortals_bespell_tradition.sql": {
-    "check": "war-of-immortals-bespell-tradition.sql",
     "order": "before-functions"
   },
   "20261008105800_treasure_vault_terminal_catalog_compatibility.sql": {

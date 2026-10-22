@@ -1,4 +1,4 @@
-import { Operation } from './operations';
+import { Operation } from './operations.d.ts';
 
 type Availability = 'STANDARD' | 'LIMITED' | 'RESTRICTED';
 type Rarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'UNIQUE';

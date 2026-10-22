@@ -12,3 +12,4 @@ node_modules/
 .agents/worktrees/
 .agents/legacy/
 .agents/**/__pycache__/
+.DS_Store

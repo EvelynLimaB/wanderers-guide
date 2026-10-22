@@ -189,6 +189,12 @@ verify_jwt = false
 [functions.create-item]
 verify_jwt = false
 
+[functions.create-pathbuilder-import]
+verify_jwt = false
+[functions.create-pathbuilder-content-source]
+verify_jwt = false
+
+
 
 [functions.create-language]
 verify_jwt = false
@@ -231,6 +237,10 @@ verify_jwt = false
 
 
 [functions.find-campaign]
+verify_jwt = false
+
+
+[functions.fetch-pathbuilder]
 verify_jwt = false
 
 
