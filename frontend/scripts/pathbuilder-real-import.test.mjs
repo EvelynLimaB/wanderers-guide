@@ -716,31 +716,57 @@ try {
       );
     }
 
-    const domainFeat = content.abilityBlocks.find((block) => block.name === "Deity's Domain");
-    assert.ok(domainFeat, 'the content package must include Deity\'s Domain');
+    const chosenDomainName = certifiedBuild.characterData.hashMapSpecialSelections?.['Champion Feat 1']?.['Select Domain'];
+    const domainFeat = content.abilityBlocks.find(
+      (block) =>
+        block.name === "Deity's Domain" &&
+        (block.operations ?? []).some(
+          (operation) => operation.type === 'select' && /initial domain spell/i.test(operation.data?.title ?? '')
+        )
+    );
+    assert.ok(domainFeat, 'the content package must include the Deity\'s Domain feat with its initial-domain-spell selector');
     const initialDomainSpellSelector = domainFeat.operations?.find(
       (operation) => operation.type === 'select' && /initial domain spell/i.test(operation.data?.title ?? '')
     );
     assert.ok(initialDomainSpellSelector, 'Deity\'s Domain must expose its initial-domain-spell selector');
-    const domainSelectionEntry = Object.entries(outcome.character.operation_data?.selections ?? {}).find(
-      ([path]) => path.includes('_' + domainFeat.id + '_' + initialDomainSpellSelector.id)
-    );
-    assert.ok(domainSelectionEntry, 'the imported tree must resolve the domain-spell selector');
-    const domainsFeature = content.abilityBlocks.find((block) => block.name === 'Domains');
-    const domainPicker = domainsFeature?.operations?.find(
-      (operation) => operation.type === 'select' && operation.data?.title === 'Select a Domain'
-    );
-    const chosenDomainName = certifiedBuild.characterData.hashMapSpecialSelections?.['Champion Feat 1']?.['Select Domain'];
+
+    // Content sources can contain several records with the same feature name.
+    // Find the Domains selector by the selected option rather than taking the first
+    // same-named feature, which may come from legacy content and have no matching option.
+    const domainPicker = content.abilityBlocks
+      .flatMap((block) => block.operations ?? [])
+      .find(
+        (operation) =>
+          operation.type === 'select' &&
+          operation.data?.title === 'Select a Domain' &&
+          (operation.data.optionsPredefined ?? []).some(
+            (option) => option.type === 'CUSTOM' && option.title === chosenDomainName
+          )
+      );
     const chosenDomain = domainPicker?.type === 'select'
       ? domainPicker.data.optionsPredefined?.find((option) => option.type === 'CUSTOM' && option.title === chosenDomainName)
       : undefined;
     assert.ok(chosenDomain && chosenDomain.type === 'CUSTOM', 'the captured domain must be found in WG content');
     const initialSpellReference = /\*\*Initial Spell\*\*\s*\[([^\]]+)\]\(link_spell_(\d+)\)/i.exec(chosenDomain.description);
     assert.ok(initialSpellReference, 'WG domain content must identify the granted initial spell');
-    assert.equal(
-      String(domainSelectionEntry[1]),
-      initialSpellReference[2],
-      'the selected domain spell must match the spell in WG content for "' + chosenDomainName + '"'
+
+    // Operation paths begin with class-feature-<featureId>; the feature ID is
+    // preceded by a hyphen, not an underscore. Match both the correct feature
+    // source and the exact initial-spell selector, then assert the saved choice
+    // is the spell granted by this domain's own description.
+    const domainSelectionEntry = Object.entries(outcome.character.operation_data?.selections ?? {}).find(
+      ([path, value]) =>
+        path.startsWith(`class-feature-${domainFeat.id}_`) &&
+        path.includes(initialDomainSpellSelector.id) &&
+        String(value) === initialSpellReference[2]
+    );
+    assert.ok(
+      domainSelectionEntry,
+      'the imported tree must select "' + initialSpellReference[1] + '" for domain "' + chosenDomainName + '"'
+    );
+    assert.ok(
+      !promptTitles.some((title) => /initial.*domain.*spell/i.test(title)),
+      'the import must infer the granted initial domain spell instead of prompting for it again'
     );
 
     const movementFeatureSelections = [
