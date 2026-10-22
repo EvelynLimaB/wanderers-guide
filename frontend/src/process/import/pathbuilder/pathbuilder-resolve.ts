@@ -501,40 +501,65 @@ export function resolveBuild(
     }
   }
 
-  // Armor: the share payload may contain only potency/runes or a Custom File UUID.
-  // json.php, when available, includes the resolved armor name, so prefer that as
-  // the lookup name while preserving the original Pathbuilder reference in raw.
+  // Armor resolution uses explicit share state first, then only unambiguous JSON
+  // evidence. The real Pathbuilder JSON can mark multiple rows worn (including
+  // synthetic chassis entries), so a blanket "exactly one worn row" rule loses
+  // the one row that actually matches the selected rules feature.
   const armorRaw = cd.playerArmor;
   const derivedArmors = options.derived?.armor ?? [];
   const wornArmors = derivedArmors.filter((entry) => entry.worn === true);
-  const derivedArmor = wornArmors.length === 1 ? wornArmors[0] : undefined;
+  const hasReinforcedChassis = feats.some(
+    (feat) => normalizePathbuilderToken(feat.name) === 'REINFORCED_CHASSIS'
+  );
+  const isAutomaton =
+    normalizePathbuilderToken(cd.ancestry ?? options.derived?.ancestry ?? '') === 'AUTOMATON';
+  const isChassisArmorRow = (entry: (typeof derivedArmors)[number]) =>
+    /(?:AUTOMATON\\s+CHASSI|AUTOMATON\\s+CHASSIS|REINFORCED\\s+CHASSIS)/i.test(
+      `${entry.name ?? ''} ${entry.display ?? ''}`
+    );
+  const chassisArmorRows = derivedArmors.filter(isChassisArmorRow);
+  const chassisArmorCandidates = chassisArmorRows.filter(
+    (entry) => entry.worn === true
+  );
+  // A named chassis row is strong identity evidence when other JSON rows are
+  // incorrectly/loosely marked worn. Otherwise never choose arbitrarily between rows.
+  const derivedArmor =
+    wornArmors.length === 1
+      ? wornArmors[0]
+      : hasReinforcedChassis && isAutomaton && chassisArmorCandidates.length === 1
+        ? chassisArmorCandidates[0]
+        : hasReinforcedChassis && isAutomaton && wornArmors.length !== 1 && chassisArmorRows.length === 1
+          ? chassisArmorRows[0]
+          : undefined;
   const derivedArmorName = derivedArmor?.name ?? undefined;
+
   if (wornArmors.length > 1) {
     hints.push(
-      'Armor: Pathbuilder JSON marks multiple armor rows as worn; none was selected automatically because the equipped item is ambiguous.'
+      derivedArmor && isChassisArmorRow(derivedArmor)
+        ? 'Armor: Pathbuilder JSON marks multiple armor rows as worn; the Reinforced Chassis row was selected because it matches the recorded Automaton ancestry and feat, but the other worn flags remain contradictory.'
+        : 'Armor: Pathbuilder JSON marks multiple armor rows as worn; none was selected automatically because the equipped item is ambiguous.'
     );
   } else if (wornArmors.length === 0 && derivedArmors.length > 0) {
     hints.push(
       'Armor: Pathbuilder JSON includes armor rows but does not identify a unique worn item; none was selected automatically.'
     );
   }
+
   if (derivedArmor?.res && parsePathbuilderArmorResilience(derivedArmor.res) === -1) {
     hints.push(
       `Armor: Pathbuilder JSON resilience rune "${derivedArmor.res}" could not be mapped to a known rank; its saving-throw bonus was not applied.`
     );
   }
-  const hasReinforcedChassis = feats.some(
-    (feat) => normalizePathbuilderToken(feat.name) === 'REINFORCED_CHASSIS'
-  );
-  const isAutomaton =
-    normalizePathbuilderToken(cd.ancestry ?? options.derived?.ancestry ?? '') === 'AUTOMATON';
 
-  let armor: ResolvedItemRef | undefined;
   const rawArmorName = armorRaw?.armorName;
   const armorCustomFile =
     rawArmorName && isPathbuilderUuid(rawArmorName)
       ? customFiles.get(rawArmorName.toLowerCase())
       : undefined;
+  const isMissingCustomArmorReference =
+    !!rawArmorName && isPathbuilderUuid(rawArmorName) && !armorCustomFile;
+
+  let armor: ResolvedItemRef | undefined;
   const armorLookupName =
     armorCustomFile
       ? rawArmorName
@@ -564,32 +589,47 @@ export function resolveBuild(
     // Pathbuilder's PlayerArmor model defaults an omitted armorName to "Unarmored".
     // Preserve that ambiguity for ordinary characters instead of inventing armor.
     hints.push(
-      `Pathbuilder has armor rune/potency state without a named armor; preserving the default Unarmored state and its raw rune data`
+      'Pathbuilder has armor rune/potency state without a named armor; preserving the default Unarmored state and its raw rune data'
     );
   }
 
-  // Some Pathbuilder share links omit the synthetic armor row for an Automaton's
-  // Reinforced Chassis even though the feat and ancestry are present. The chassis is
-  // granted by that rules choice, and its level tier plus recorded rune state are
-  // enough to reconstruct the known baseline without guessing arbitrary armor.
-  // Do not override a different explicitly named armor or an unresolved Custom File.
+  // Reconstruct only when the rules data supports the chassis and the payload did
+  // not provide a different uniquely identified worn armor. An unresolved share UUID
+  // plus the Automaton + Reinforced Chassis choices is positive evidence of the
+  // synthetic chassis even if json.php marks several rows worn or omits that row.
   const isUnarmoredReference =
     armor?.kind === 'standard' && normalizePathbuilderToken(armor.name) === 'UNARMORED';
-  if (hasReinforcedChassis && isAutomaton && (!armor || isUnarmoredReference)) {
-    const characterLevel = cd.characterLevel ?? options.derived?.level ?? 1;
-    const chassisTier = characterLevel >= 10 ? '10th' : characterLevel >= 5 ? '5th' : '1st';
-    const inferredName = `Automaton Chassi (${chassisTier} level)`;
+  const characterLevel = cd.characterLevel ?? options.derived?.level ?? 1;
+  const chassisTier = characterLevel >= 10 ? '10th' : characterLevel >= 5 ? '5th' : '1st';
+  const inferredChassisName = `Automaton Chassi (${chassisTier} level)`;
+  const shouldInferChassis =
+    hasReinforcedChassis &&
+    isAutomaton &&
+    (
+      (!armor && derivedArmors.length === 0) ||
+      (isUnarmoredReference &&
+        (derivedArmors.length === 0 || (derivedArmor !== undefined && isChassisArmorRow(derivedArmor)))) ||
+      (armor?.kind === 'unresolved' && isMissingCustomArmorReference && !derivedArmor)
+    );
+
+  if (shouldInferChassis) {
+    if (rawArmorName && isMissingCustomArmorReference) {
+      for (let index = unresolved.length - 1; index >= 0; index--) {
+        if (unresolved[index].kind === 'armor' && unresolved[index].ref === rawArmorName) {
+          unresolved.splice(index, 1);
+        }
+      }
+    }
     armor = {
       kind: 'standard',
-      name: inferredName,
-      raw: `inferred: Reinforced Chassis at level ${characterLevel}`,
+      name: derivedArmorName && isChassisArmorRow(derivedArmor) ? derivedArmorName : inferredChassisName,
+      raw: `inferred: Reinforced Chassis at level ${characterLevel}${rawArmorName ? `; original Pathbuilder reference ${rawArmorName}` : ''}`,
       quantity: 1,
     };
     hints.push(
-      `Armor: Reconstructed the Automaton Reinforced Chassis (${chassisTier} level) because the share payload omitted its armor name. Recorded potency and property runes were retained; armor rune fields absent from both payloads cannot be inferred safely.`
+      `Armor: Reconstructed the Automaton Reinforced Chassis (${chassisTier} level) because the share armor reference was missing or unresolved. Available potency, property-rune, and JSON resilience data were retained; absent or contradictory armor rows are reported separately.`
     );
   }
-
   const shieldRaw = cd.playerShieldNew;
   const shield = shieldRaw?.shieldName
     ? resolveRef(shieldRaw.shieldName, customFiles, 1, undefined, unresolved, 'shield')
