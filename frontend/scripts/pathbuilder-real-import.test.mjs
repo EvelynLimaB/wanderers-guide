@@ -362,7 +362,14 @@ try {
     );
     assert.ok(
       preflight.selection.options.length > 0,
-      `fixture has a required selection with no eligible options: ${preflight.selection.title}`
+      `fixture has a required selection with no eligible options: ${JSON.stringify({
+        level: preflight.selection.level,
+        title: preflight.selection.title,
+        path: preflight.selection.path,
+        key: preflight.selection.key,
+        description: preflight.selection.description,
+        promptDetails,
+      })}`
     );
     selectionOverrides[preflight.selection.key] = preflight.selection.options[0].value;
     preflight = await importer.preflightPathbuilderImport('1597410', {
