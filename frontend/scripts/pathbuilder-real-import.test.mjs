@@ -737,26 +737,33 @@ try {
         .map((selection) => content.abilityBlocks.find((block) => String(block.id) === String(selection))?.name)
         .filter((name) => typeof name === 'string')
     )];
-    const selectedFeatureNameKeys = new Set(
-      selectedFeatureNames.map((name) =>
-        name.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-      )
-    );
+    const normalizeFeatureName = (name) =>
+      name.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const selectedFeatureNameKeys = new Set(selectedFeatureNames.map(normalizeFeatureName));
     // Never certify an import when a feat chosen in Pathbuilder at or below the
     // character's current level vanished from WG's saved operation tree. Future
     // planned feats are retained in provenance but are outside the current sheet.
     const unrepresentedCurrentFeats = outcome.resolved.feats
       .filter((feat) => feat.level === undefined || feat.level <= outcome.resolved.identity.level)
-      .filter((feat) => !selectedFeatureNameKeys.has(
-        feat.name.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-      ))
-      .map((feat) => ({ slot: feat.slot, level: feat.level, name: feat.name, raw: feat.raw }));
+      .filter((feat) => !selectedFeatureNameKeys.has(normalizeFeatureName(feat.name)))
+      .map((feat) => ({
+        slot: feat.slot,
+        level: feat.level,
+        name: feat.name,
+        raw: feat.raw,
+        normalizedName: normalizeFeatureName(feat.name),
+        codePoints: [...feat.name].map((character) => character.codePointAt(0)?.toString(16)),
+      }));
     assert.deepEqual(
       unrepresentedCurrentFeats,
       [],
       'every current-level Pathbuilder feat must be represented by a saved WG ability-block selection; missing=' +
         JSON.stringify(unrepresentedCurrentFeats) +
-        '; selected feature names=' + JSON.stringify(selectedFeatureNames) +
+        '; selected feature names=' + JSON.stringify(selectedFeatureNames.map((name) => ({
+          name,
+          normalizedName: normalizeFeatureName(name),
+          codePoints: [...name].map((character) => character.codePointAt(0)?.toString(16)),
+        }))) +
         '; preflight prompts=' + JSON.stringify(promptDetails)
     );
     const freeArchetypeSelectionDiagnostics = Object.entries(savedSelections)
