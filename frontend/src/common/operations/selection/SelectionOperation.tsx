@@ -38,6 +38,7 @@ import {
   OperationGiveLanguage,
   OperationGiveSpell,
   OperationSelectFilters,
+  OperationSelect,
   OperationSelectFiltersAbilityBlock,
   OperationSelectFiltersAdjValue,
   OperationSelectFiltersLanguage,
@@ -61,23 +62,10 @@ import { labelToVariable } from '@variables/variable-utils';
 import { DISCORD_URL } from '@constants/urls';
 import { modals } from '@mantine/modals';
 
+/** Edit selection fields while preserving authored compatibility metadata without additional controls. */
 export function SelectionOperation(props: {
-  data: {
-    title?: string;
-    description?: string;
-    modeType: 'PREDEFINED' | 'FILTERED';
-    optionType: OperationSelectOptionType;
-    optionsPredefined?: OperationSelectOption[];
-    optionsFilters?: OperationSelectFilters;
-  };
-  onChange: (option: {
-    title?: string;
-    description?: string;
-    modeType: 'PREDEFINED' | 'FILTERED';
-    optionType: OperationSelectOptionType;
-    optionsPredefined?: OperationSelectOption[];
-    optionsFilters?: OperationSelectFilters;
-  }) => void;
+  data: OperationSelect['data'];
+  onChange: (option: OperationSelect['data']) => void;
   onRemove: () => void;
 }) {
   // const [optionType, setOptionType] = useState<OperationSelectOptionType | null>(props.data.optionType);
@@ -114,13 +102,29 @@ export function SelectionOperation(props: {
     optionsPredefined?: OperationSelectOption[];
     optionsFilters?: OperationSelectFilters;
   }) => {
-    props.onChange({
+    const next: OperationSelect['data'] = {
+      ...props.data,
       title: data.title ?? props.data.title,
       modeType: data.modeType ?? props.data.modeType,
       optionType: data.optionType ?? props.data.optionType,
       optionsPredefined: data.optionsPredefined ?? props.data.optionsPredefined,
       optionsFilters: data.optionsFilters ?? props.data.optionsFilters,
-    });
+    };
+    if (
+      next.modeType !== 'FILTERED' ||
+      next.optionType !== 'ADJ_VALUE' ||
+      next.optionsFilters?.type !== 'ADJ_VALUE' ||
+      next.optionsFilters.group !== 'ADD-LORE'
+    ) {
+      delete next.selectionAliases;
+    }
+    if ((next.modeType !== 'FILTERED' || next.optionType !== 'SPELL') && next.optionsFilters?.type === 'SPELL') {
+      next.optionsFilters = { ...next.optionsFilters };
+      delete next.optionsFilters.knownSpellSource;
+      delete next.optionsFilters.distinctRankFromSelections;
+      delete next.optionsFilters.dailyPreparation;
+    }
+    props.onChange(next);
   };
 
   return (
@@ -432,6 +436,11 @@ function SelectionFilteredSpell(props: {
   const [attribute, setAttribute] = useState(props.filters?.spellData?.attribute);
 
   useDidUpdate(() => {
+    const keepsDatabase =
+      props.filters?.knownSpellSource !== undefined &&
+      (type ?? 'NORMAL') === 'NORMAL' &&
+      castingSource === props.filters.knownSpellSource &&
+      rank === undefined;
     props.onChange({
       id: props.filters?.id ?? crypto.randomUUID(),
       type: 'SPELL',
@@ -441,9 +450,22 @@ function SelectionFilteredSpell(props: {
       },
       traits: traits,
       traditions: traditions,
+      ...(!keepsDatabase ? {} : { knownSpellSource: props.filters?.knownSpellSource }),
+      ...(!keepsDatabase || props.filters?.dailyPreparation === undefined
+        ? {}
+        : { dailyPreparation: props.filters.dailyPreparation }),
+      ...(!keepsDatabase || props.filters?.distinctRankFromSelections === undefined
+        ? {}
+        : { distinctRankFromSelections: props.filters.distinctRankFromSelections }),
+      // These authored constraints have no editor controls; retain them when other fields change.
+      rarity: props.filters?.rarity,
+      traditionFromSelection: props.filters?.traditionFromSelection,
       spellData: {
         type: type ?? 'NORMAL',
         castingSource: castingSource,
+        ...(props.filters?.spellData?.listSources === undefined
+          ? {}
+          : { listSources: props.filters.spellData.listSources }),
         rank: rank,
         tradition: tradition,
         casts: casts,
@@ -736,6 +758,7 @@ function SelectionFilteredAdjValue(props: {
       // No editor UI for these yet — pass stored values through so a resave doesn't wipe them
       rarities: isItemGroup ? props.filters?.rarities : undefined,
       addToFamiliarity: group === 'WEAPON' ? props.filters?.addToFamiliarity : undefined,
+      familiarityCategories: group === 'WEAPON' ? props.filters?.familiarityCategories : undefined,
     });
   }, [group, value, itemTraits, hasAncestryTrait]);
 

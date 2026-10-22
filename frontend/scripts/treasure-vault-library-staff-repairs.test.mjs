@@ -1,22 +1,23 @@
+import { readReviewedHistoricalSql } from './treasure-vault-historical-test-support.mjs';
 import assert from 'node:assert/strict';
+import { assertReviewedTransition } from './war-of-immortals-test-support.mjs';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { before, after, test } from 'node:test';
 import { ItemSchema, InventorySchema, SpellSchema, AbilityBlockSchema, TraitSchema } from '../src/schemas/content.ts';
-import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
+import { createOperationEngine, readHistoricalContentRows } from './operation-test-harness.mjs';
 import { content as emptyContent, inventoryItem, summoner } from './fixtures/eidolon.mjs';
 
-const migration = await readFile(
+const migration = await readReviewedHistoricalSql(
   new URL('../../supabase/migrations/20261001140000_treasure_vault_library_staff_repairs.sql', import.meta.url),
   'utf8'
 );
-const release = await readFile(
+const release = await readReviewedHistoricalSql(
   new URL('../../supabase/release/treasure-vault-library-staff-repairs.sql', import.meta.url),
   'utf8'
 );
 const spec = JSON.parse(migration.split('$library$')[1]);
 assert.deepEqual(JSON.parse(release.split('$library$')[1]), spec);
-const rows = await readContentRows([
+const rows = await readHistoricalContentRows([
   ...spec.items.map(({ id }) => ({ table: 'item', id })),
   ...spec.dependencies.map(({ table, id }) => ({ table: table.replace('-', '_'), id })),
   ...spec.sources.map(({ id }) => ({ table: 'content_source', id })),
@@ -37,13 +38,12 @@ function ownerState(row, patch) {
   assertFields(row, patch.expected);
   assert.ok(row.meta_data && typeof row.meta_data === 'object' && !Array.isArray(row.meta_data));
   for (const [key, value] of Object.entries(patch.metadata)) assert.deepEqual(row.meta_data[key], value);
-  for (const state of ['before', 'after'])
-    if (
-      row.description === patch.description[state] &&
-      JSON.stringify(row.operations) === JSON.stringify(patch.operations[state])
-    )
-      return state;
-  assert.fail(`Unreviewed ${row.id} description/operations pair`);
+  return assertReviewedTransition(
+    { description: row.description, operations: row.operations },
+    { description: patch.description.before, operations: patch.operations.before },
+    { description: patch.description.after, operations: patch.operations.after },
+    `Unreviewed ${row.id} description/operations pair`
+  );
 }
 function ownerAt(row, patch, state) {
   ownerState(row, patch);

@@ -4,8 +4,9 @@ import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
+import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wg-drawer-tests-'));
 after(() => fs.rmSync(directory, { recursive: true, force: true }));
@@ -47,7 +48,8 @@ const special = {
     'async (_type,id) => { const result = globalThis.__wgRuneLookups.get(id); if (result instanceof Error) throw result; return result ?? null; }',
   FUNDAMENTAL_RUNES: '{potency_weapon_2:7951,striking_1:7862}',
   isItemWithRunes: 'item => !!item.meta_data?.runes',
-  isItemWeapon: 'item => item.group === "WEAPON"',
+  isItemWeapon:
+    'item => globalThis.__wgDrawerWeaponEngine ? globalThis.__wgDrawerWeaponEngine.isItemWeapon(item) : item.group === "WEAPON"',
   isItemArmor: '() => false',
   useMantineTheme: '() => ({colors:{gray:Array(10).fill("gray")}})',
   getVariable:
@@ -59,6 +61,7 @@ const special = {
   getAnchorStyles: '() => ({})',
   cloneDeep: 'x=>structuredClone(x)',
   getWeaponGroup: '() => ""',
+  getWeaponStats: '(...args) => globalThis.__wgDrawerWeaponEngine.getWeaponStats(...args)',
   getWeaponSpecialization: '() => ({})',
   getArmorSpecialization: '() => ({})',
   toLabel: 'x=>x',
@@ -87,6 +90,7 @@ await build({
         b.onResolve({ filter: /.*/ }, (args) => {
           if (args.path === '@common/ItemIcon') return { path: `${root}/src/common/ItemIcon.tsx` };
           if (args.path === '@drawers/ShowInjectedText') return { path: `${root}/src/drawers/ShowInjectedText.tsx` };
+          if (args.path === '@items/armor-grade-view') return { path: `${root}/src/process/items/armor-grade-view.ts` };
           if (args.path.includes('/node_modules/react/')) return { path: args.path, external: true };
           if (args.path === 'react' || args.path.startsWith('react/'))
             return { path: require.resolve(args.path), external: true };
@@ -136,6 +140,38 @@ for (const [name, Component, props, store] of tests) {
     assert.ok(!html.includes(otherStore + ' RESEARCH FIELD TEXT'));
   });
 }
+
+test('catalog and inventory drawers preserve real non-damaging grenade classification and omit damage', async (t) => {
+  const rows = await readContentRows([{ table: 'item', id: 21284 }]);
+  const flash = rows.find((entry) => entry.table === 'item').row;
+  const engine = await createOperationEngine();
+  t.after(async () => {
+    delete globalThis.__wgDrawerWeaponEngine;
+    await engine.cleanup();
+  });
+  engine.setFixtures(rows);
+  engine.resetVariables('CHARACTER');
+  engine.setVariable('CHARACTER', 'STARFINDER', true);
+  engine.setVariable('CHARACTER', 'PATHFINDER', false);
+  globalThis.__wgDrawerWeaponEngine = engine;
+  assert.equal(engine.isItemWeapon(flash), false);
+  const inventoryEntry = {
+    id: 'non-damaging-grenade',
+    item: flash,
+    is_equipped: true,
+    is_invested: false,
+    container_contents: [],
+  };
+  for (const [Component, data] of [
+    [ItemDrawerContent, { item: flash, storeID: 'CHARACTER' }],
+    [InvItemDrawerContent, { invItem: inventoryEntry, storeId: 'CHARACTER' }],
+  ]) {
+    const html = renderToStaticMarkup(React.createElement(Component, { data }));
+    const text = html.replace(/<[^>]*>/g, '');
+    assert.doesNotMatch(text, /Attack/);
+    assert.doesNotMatch(text, /Damage1|Damage0|Damage/, 'A grenade with no printed damage has no damage statistic');
+  }
+});
 
 test('embedded rune links prefer current catalog content and fall back to their snapshot', () => {
   const embedded = { ...item, description: 'EMBEDDED RUNE TEXT' };
@@ -205,5 +241,173 @@ test('unavailable fundamental runes do not crash the item and leave other rune d
     delete globalThis.__wgRuneLookups;
     delete globalThis.__wgRuneQuery;
     delete globalThis.__wgRuneItems;
+  }
+});
+
+for (const [label, property] of [
+  ['names only', ['Zulu legacy rune', 'Alpha legacy rune']],
+  [
+    'mixed names and wrappers',
+    [
+      'Zulu legacy rune',
+      { id: 90001, name: 'Alpha wrapper', rune: { description: 'SAVED RUNE TEXT' } },
+      'Beta legacy rune',
+    ],
+  ],
+  [
+    'wrappers only',
+    [
+      { id: 90002, name: 'Zulu wrapper' },
+      { id: 90001, name: 'Alpha wrapper', rune: { description: 'SAVED RUNE TEXT' } },
+    ],
+  ],
+]) {
+  test(`property rune descriptions preserve frozen saved data with ${label}`, () => {
+    const weapon = {
+      ...item,
+      group: 'WEAPON',
+      meta_data: { runes: { potency: 2, property } },
+    };
+    const before = structuredClone(weapon);
+    Object.freeze(property);
+    try {
+      globalThis.__wgRuneLookups = new Map();
+      globalThis.__wgRuneItems = [{ ...item, id: 7951, name: 'Potency', description: 'FUNDAMENTAL RUNE TEXT' }];
+      const html = renderToStaticMarkup(React.createElement(ItemRunesDescription, { item: weapon }));
+      assert.ok(html.includes('FUNDAMENTAL RUNE TEXT'), 'old property names must not hide fundamental runes');
+      const names = property.map((rune) => (typeof rune === 'string' ? rune : rune.name)).sort();
+      for (let index = 1; index < names.length; index += 1)
+        assert.ok(html.indexOf(names[index - 1]) < html.indexOf(names[index]), 'display names are alphabetized');
+      for (const name of names) assert.ok(html.includes(name), `${name} remains visible`);
+      const buttonCount = [...html.matchAll(/View Item/g)].length;
+      assert.equal(
+        buttonCount,
+        1 + property.filter((rune) => typeof rune !== 'string').length,
+        'name-only runes must not acquire guessed catalog links'
+      );
+      if (label !== 'names only') assert.ok(html.includes('SAVED RUNE TEXT'));
+      assert.deepEqual(weapon, before, 'rendering must not rewrite names, wrappers, snapshots or saved order');
+      assert.equal(weapon.meta_data.runes.property, property);
+    } finally {
+      delete globalThis.__wgRuneLookups;
+      delete globalThis.__wgRuneQuery;
+      delete globalThis.__wgRuneItems;
+    }
+  });
+}
+
+test('upgrade descriptions display alphabetically without changing saved slots or snapshots', async (t) => {
+  let networkAttempts = 0;
+  t.mock.method(globalThis, 'fetch', () => {
+    networkAttempts += 1;
+    throw new Error('Item upgrade rendering must not make network requests');
+  });
+  const actualOutput = path.join(directory, 'actual-upgrade-description.mjs');
+  await build({
+    absWorkingDir: root,
+    stdin: {
+      contents: `
+        import React from 'react';
+        import { renderToStaticMarkup } from 'react-dom/server';
+        import { MantineProvider, DEFAULT_THEME } from '@mantine/core';
+        import { Provider } from 'jotai';
+        import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+        import { ItemUpgradesDescription } from './src/common/ItemRunesDescription.tsx';
+        export { ItemSchema } from './src/schemas/content';
+        export function renderUpgrades(item) {
+          const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+          try {
+            return renderToStaticMarkup(React.createElement(MantineProvider,
+              { theme: { colors: { guide: DEFAULT_THEME.colors.blue } } },
+              React.createElement(Provider, null,
+                React.createElement(QueryClientProvider, { client },
+                  React.createElement(ItemUpgradesDescription, { item })))));
+          } finally { client.clear(); }
+        }
+      `,
+      resolveDir: root,
+      loader: 'tsx',
+    },
+    tsconfig: path.join(root, 'tsconfig.json'),
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    outfile: actualOutput,
+    jsx: 'automatic',
+    banner: {
+      js: `import { createRequire } from 'node:module'; const require = createRequire(${JSON.stringify(`${root}/package.json`)});`,
+    },
+    define: {
+      'import.meta.env': JSON.stringify({
+        MODE: 'test',
+        PROD: false,
+        VITE_SUPABASE_URL: 'https://item-render.invalid',
+        VITE_SUPABASE_KEY: 'synthetic-not-a-credential',
+      }),
+      __WG_RELEASE__: JSON.stringify('item-render-test'),
+    },
+  });
+  const { renderUpgrades, ItemSchema } = await import(pathToFileURL(actualOutput).href);
+  const savedUpgrade = (id, name, grade, level, price, description) => ({
+    id,
+    created_at: '2026-10-08T00:00:00Z',
+    name,
+    price: { gp: price },
+    bulk: 'L',
+    level,
+    rarity: 'COMMON',
+    traits: [],
+    description,
+    group: 'GENERAL',
+    hands: null,
+    size: 'MEDIUM',
+    craft_requirements: null,
+    usage: 'installed',
+    meta_data: {
+      bulk: { held_or_stowed: 'L' },
+      charges: { current: id % 3, max: 5 },
+      starfinder: { capacity: '5', usage: 1, grade },
+    },
+    operations: [],
+    content_source_id: 900,
+    version: '1.0',
+  });
+  const savedItem = savedUpgrade(91000, 'Saved Host', 'SUPERIOR', 11, 14000, 'SAVED HOST DESCRIPTION');
+  savedItem.meta_data.starfinder.slots = [
+    {
+      id: 91003,
+      name: 'Zulu Upgrade',
+      upgrade: savedUpgrade(91003, 'Zulu Upgrade', 'SUPERIOR', 11, 14000, 'SAVED ZULU DESCRIPTION'),
+    },
+    {
+      id: 91001,
+      name: 'Alpha Upgrade',
+      upgrade: savedUpgrade(91001, 'Alpha Upgrade', 'ELITE', 14, 44000, 'SAVED ALPHA DESCRIPTION'),
+    },
+    {
+      id: 91002,
+      name: 'Middle Upgrade',
+      upgrade: savedUpgrade(91002, 'Middle Upgrade', 'TACTICAL', 5, 500, 'SAVED MIDDLE DESCRIPTION'),
+    },
+  ];
+  assert.equal(ItemSchema.safeParse(savedItem).success, true, 'the saved item fixture must satisfy the actual schema');
+  const before = structuredClone(savedItem);
+  const slots = savedItem.meta_data.starfinder.slots;
+  const originalSlots = [...slots];
+  const originalSnapshots = slots.map((slot) => slot.upgrade);
+  const html = renderUpgrades(savedItem);
+  assert.equal(networkAttempts, 0);
+  const headings = [...html.matchAll(/<span\b[^>]*>(Alpha Upgrade|Middle Upgrade|Zulu Upgrade)<\/span>/g)].map(
+    (match) => match[1]
+  );
+  assert.deepEqual(headings, ['Alpha Upgrade', 'Middle Upgrade', 'Zulu Upgrade']);
+  for (const description of ['SAVED ALPHA DESCRIPTION', 'SAVED MIDDLE DESCRIPTION', 'SAVED ZULU DESCRIPTION']) {
+    assert.ok(html.includes(description), `${description} must come from its saved snapshot`);
+  }
+  assert.deepEqual(savedItem, before, 'rendering must preserve the complete saved item and its upgrade order');
+  assert.equal(savedItem.meta_data.starfinder.slots, slots, 'the saved slots array must keep its identity');
+  for (let index = 0; index < originalSlots.length; index += 1) {
+    assert.equal(slots[index], originalSlots[index], `saved slot ${index} must keep its identity and position`);
+    assert.equal(slots[index].upgrade, originalSnapshots[index], `saved snapshot ${index} must keep its identity`);
   }
 });

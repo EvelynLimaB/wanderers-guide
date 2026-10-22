@@ -1,3 +1,4 @@
+import { readReviewedHistoricalSql } from './treasure-vault-historical-test-support.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -7,14 +8,14 @@ import { after, before, test } from 'node:test';
 import { build } from 'esbuild';
 import { ContentTypeSchema, ContentUpdateSchema, ItemSchema } from '../src/schemas/content.ts';
 import { OperationSchema } from '../src/schemas/operations.ts';
-import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
+import { createOperationEngine, readHistoricalContentRows } from './operation-test-harness.mjs';
 
 const frontend = fileURLToPath(new URL('../', import.meta.url));
-const migration = await readFile(
+const migration = await readReviewedHistoricalSql(
   new URL('../../supabase/migrations/20261001050000_treasure_vault_passive_bonuses.sql', import.meta.url),
   'utf8'
 );
-const predicate = await readFile(
+const predicate = await readReviewedHistoricalSql(
   new URL('../../supabase/release/treasure-vault-passive-bonuses.sql', import.meta.url),
   'utf8'
 );
@@ -200,7 +201,7 @@ const bonuses = (variable) => engine.getVariableBonuses('CHARACTER', variable);
 const bonusTotal = (variable) => engine.getProfValueParts('CHARACTER', variable).breakdown.bonusValue;
 
 before(async () => {
-  fixtureRows = await readContentRows([
+  fixtureRows = await readHistoricalContentRows([
     ...patches.map(({ id }) => ({ table: 'item', id })),
     ...dependencies.map(({ table, id }) => ({ table: table.replaceAll('-', '_'), id })),
     ...[1459, 1568, 1519, 1454].map((id) => ({ table: 'trait', id })),

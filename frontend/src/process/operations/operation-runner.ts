@@ -29,6 +29,7 @@ import {
   OperationRemoveSpell,
   OperationResult,
   OperationSelect,
+  OperationSelectFiltersSpellSchema,
   OperationSendNotification,
   OperationSetValue,
 } from '@schemas/operations';
@@ -40,6 +41,7 @@ import {
   getLevelCappedProficiencyType,
   getVariable,
   getVariables,
+  registerDailySpellPreparation,
   getListContributions,
   exportVariableStore,
   setVariable,
@@ -68,8 +70,10 @@ import {
   determineFilteredSelectionList,
   determinePredefinedSelectionList,
   extendOperations,
+  SpellSelectionOwner,
 } from './operation-utils';
-import { SelectionTrack } from './selection-tree';
+import { getDailySpellPreparationContext, snapshotSpellDatabase } from './database-spell-context';
+import { SelectionTrack, resolveSelectionNode } from './selection-tree';
 import { isEqual } from 'lodash-es';
 import {
   getContributionCategories,
@@ -86,6 +90,23 @@ import {
   replaceLanguages,
   resolveLanguageOverride,
 } from './language-operations';
+
+/** Numeric content identities must remain distinct when evaluating list membership. */
+const CONTENT_ID_LIST_VARIABLES: ReadonlySet<string> = new Set([
+  'SENSE_IDS',
+  'MODE_IDS',
+  'CLASS_IDS',
+  'ANCESTRY_IDS',
+  'BACKGROUND_IDS',
+  'HERITAGE_IDS',
+  'CLASS_ARCHETYPE_IDS',
+  'FEAT_IDS',
+  'SPELL_IDS',
+  'LANGUAGE_IDS',
+  'CLASS_FEATURE_IDS',
+  'PHYSICAL_FEATURE_IDS',
+  'EXTRA_ITEM_IDS',
+]);
 
 // import { hideNotification, showNotification } from '@mantine/notifications';
 // import { displayError } from '@utils/notifications';
@@ -175,14 +196,21 @@ export async function runOperations(
         // Run the ability block but only to pass the create variables
         return await runGiveAbilityBlock(varId, selectionTrack, operation, options, sourceLabel);
       } else if (operation.type === 'select') {
-        const subNode = selectionTrack.node?.children[operation.id];
+        const savedIdentity = resolveSelectionNode(selectionTrack.node, operation);
+        const subNode = savedIdentity.node;
         // Run the select operation but only the parts that create variables
         return await runSelect(
           varId,
-          { path: `${selectionTrack.path}_${subNode?.value}`, node: subNode },
+          {
+            path: `${selectionTrack.path}_${subNode?.value}`,
+            node: subNode,
+            choiceOwner: `${selectionTrack.choiceOwner}/${operation.id}`,
+          },
           operation,
           options,
-          sourceLabel
+          sourceLabel,
+          savedIdentity,
+          { node: selectionTrack.node, operations, path: selectionTrack.choiceOwner }
         );
       }
       return null;
@@ -196,14 +224,21 @@ export async function runOperations(
         // Run the ability block but only to pass the conditional check
         return await runGiveAbilityBlock(varId, selectionTrack, operation, options, sourceLabel);
       } else if (operation.type === 'select') {
-        const subNode = selectionTrack.node?.children[operation.id];
+        const savedIdentity = resolveSelectionNode(selectionTrack.node, operation);
+        const subNode = savedIdentity.node;
         // Run the select operation but only the parts that are conditionals
         return await runSelect(
           varId,
-          { path: `${selectionTrack.path}_${subNode?.value}`, node: subNode },
+          {
+            path: `${selectionTrack.path}_${subNode?.value}`,
+            node: subNode,
+            choiceOwner: `${selectionTrack.choiceOwner}/${operation.id}`,
+          },
           operation,
           options,
-          sourceLabel
+          sourceLabel,
+          savedIdentity,
+          { node: selectionTrack.node, operations, path: selectionTrack.choiceOwner }
         );
       }
 
@@ -254,13 +289,20 @@ export async function runOperations(
     } else if (operation.type === 'sendNotification') {
       return await runSendNotification(varId, operation, sourceLabel);
     } else if (operation.type === 'select') {
-      const subNode = selectionTrack.node?.children[operation.id];
+      const resolved = resolveSelectionNode(selectionTrack.node, operation);
+      const subNode = resolved.node;
       return await runSelect(
         varId,
-        { path: `${selectionTrack.path}_${subNode?.value}`, node: subNode },
+        {
+          path: `${selectionTrack.path}_${subNode?.value}`,
+          node: subNode,
+          choiceOwner: `${selectionTrack.choiceOwner}/${operation.id}`,
+        },
         operation,
         options,
-        sourceLabel
+        sourceLabel,
+        resolved,
+        { node: selectionTrack.node, operations, path: selectionTrack.choiceOwner }
       );
     }
     return null;
@@ -304,8 +346,45 @@ async function runSelect(
   selectionTrack: SelectionTrack,
   operation: OperationSelect,
   options?: OperationOptions,
-  sourceLabel?: string
+  sourceLabel?: string,
+  savedIdentity?: { id: string; aliases?: string[] },
+  owner?: SpellSelectionOwner
 ): Promise<OperationResult> {
+  const databaseFilter = operation.data.optionsFilters;
+  if (
+    operation.data.modeType === 'FILTERED' &&
+    operation.data.optionType === 'SPELL' &&
+    databaseFilter?.type === 'SPELL' &&
+    databaseFilter.knownSpellSource !== undefined &&
+    !finalizingDatabaseSelections
+  ) {
+    const result: OperationResult = databaseFilter.dailyPreparation
+      ? {}
+      : { selection: { id: operation.id, title: operation.data.title, options: [] } };
+    if (!options?.doOnlyValueCreation) {
+      const scopes: VariableEffectScope[] = getVariableEffectScopes(varId);
+      const identity: string = JSON.stringify([
+        varId,
+        scopes.map((scope) => scope.key),
+        selectionTrack.path,
+        operation.id,
+      ]);
+      const key: number = databaseSelections.get(identity)?.key ?? qualifiedSequence++;
+      databaseSelections.set(identity, {
+        key,
+        varId,
+        selectionTrack,
+        operation,
+        options,
+        sourceLabel,
+        savedIdentity,
+        owner,
+        scopes,
+      });
+      Object.assign(result, { [qualifiedResultKey]: key });
+    }
+    return result;
+  }
   const grantedLore = getGrantedLoreVariable(options?.grantedLore);
   if (
     grantedLore &&
@@ -324,7 +403,14 @@ async function runSelect(
     return null;
   }
   if (requiresFinalSkillSelection(operation.id) && !finalizingSkillSelections) {
-    const result: OperationResult = { selection: { id: operation.id, title: operation.data.title, options: [] } };
+    const result: OperationResult = {
+      selection: {
+        id: savedIdentity?.id ?? operation.id,
+        ...(savedIdentity?.aliases ? { aliases: savedIdentity.aliases } : {}),
+        title: operation.data.title,
+        options: [],
+      },
+    };
     if (!options?.doOnlyValueCreation) {
       const identity = `${varId}/${selectionTrack.path}`;
       const key = finalSkillSelections.get(identity)?.key ?? qualifiedSequence++;
@@ -335,6 +421,7 @@ async function runSelect(
         operation,
         options,
         sourceLabel,
+        savedIdentity,
         scopes: getVariableEffectScopes(varId),
       });
       Object.assign(result, { [qualifiedResultKey]: key });
@@ -344,7 +431,7 @@ async function runSelect(
   let optionList: ObjectWithUUID[] = [];
 
   if (operation.data.modeType === 'FILTERED' && operation.data.optionsFilters) {
-    optionList = await determineFilteredSelectionList(varId, operation.id, operation.data.optionsFilters);
+    optionList = await determineFilteredSelectionList(varId, operation.id, operation.data.optionsFilters, owner);
   } else if (operation.data.modeType === 'PREDEFINED' && operation.data.optionsPredefined) {
     optionList = await determinePredefinedSelectionList(
       varId,
@@ -353,6 +440,26 @@ async function runSelect(
       operation.data.optionsPredefined
     );
   }
+
+  // An active daily owner must expire on Rest even before selecting a spell or filling its database.
+  if (
+    finalizingDatabaseSelections &&
+    operation.data.modeType === 'FILTERED' &&
+    operation.data.optionType === 'SPELL' &&
+    databaseFilter?.type === 'SPELL' &&
+    databaseFilter.dailyPreparation === true &&
+    OperationSelectFiltersSpellSchema.safeParse(databaseFilter).success &&
+    owner?.path !== undefined &&
+    (getVariable<VariableListStr>(varId, 'CASTING_SOURCES')?.value ?? []).some(
+      (source) => source.split(':::')[0] === databaseFilter.knownSpellSource
+    )
+  ) {
+    const context = getDailySpellPreparationContext(varId);
+    if (context) registerDailySpellPreparation(varId, context);
+  }
+
+  // Future daily ranks have no actionable choice. Other empty selectors keep their existing UI.
+  if (databaseFilter?.type === 'SPELL' && databaseFilter.dailyPreparation && optionList.length === 0) return null;
 
   let selected: ObjectWithUUID | undefined = undefined;
   let results: OperationResult[] = [];
@@ -404,7 +511,10 @@ async function runSelect(
         therefore can't create that value.
         God I hope that doesn't become too big of a problem in the future 🤞
       */
-      if (!options?.doOnlyValueCreation) {
+      if (
+        !options?.doOnlyValueCreation &&
+        !(databaseFilter?.type === 'SPELL' && databaseFilter.knownSpellSource !== undefined)
+      ) {
         displayError(
           `Selected node "${selectionTrack.path}" not found, value: ${selectionTrack.node.value}, type: ${operation.data.optionType}`,
           true
@@ -422,7 +532,11 @@ async function runSelect(
           const subNode = selectionTrack.node?.children[option._select_uuid];
           results = await runOperations(
             varId,
-            { path: `${selectionTrack.path}_${subNode?.value}`, node: subNode },
+            {
+              path: `${selectionTrack.path}_${subNode?.value}`,
+              node: subNode,
+              choiceOwner: `${selectionTrack.choiceOwner}/${option._select_uuid}`,
+            },
             subOperations,
             options,
             operation.data.optionType === 'CUSTOM' ? sourceLabel : (option.name ?? 'Unknown')
@@ -451,7 +565,8 @@ async function runSelect(
 
   return {
     selection: {
-      id: operation.id,
+      id: savedIdentity?.id ?? operation.id,
+      ...(savedIdentity?.aliases ? { aliases: savedIdentity.aliases } : {}),
       title: operation.data.title,
       description: operation.data.description,
       options: optionList,
@@ -483,40 +598,12 @@ async function updateVariables(
   if (options && options.doOnlyValueCreation) {
     // Create variables based on the selected option
     if (operation.data.optionType === 'TRAIT') {
-      let isCharacterTrait = false;
-      if (selectedOption.meta_data?.class_trait) {
-        addVariable(
-          varId,
-          'num',
-          labelToVariable(`TRAIT_CLASS_${selectedOption.name}_IDS`),
-          selectedOption.id,
-          sourceLabel
-        );
-        isCharacterTrait = true;
-      } else if (selectedOption.meta_data?.archetype_trait) {
-        addVariable(
-          varId,
-          'num',
-          labelToVariable(`TRAIT_ARCHETYPE_${selectedOption.name}_IDS`),
-          selectedOption.id,
-          sourceLabel
-        );
-        isCharacterTrait = true;
-      } else if (
-        selectedOption.meta_data?.ancestry_trait ||
-        selectedOption.meta_data?.creature_trait ||
-        selectedOption.meta_data?.versatile_heritage_trait
-      ) {
-        addVariable(
-          varId,
-          'num',
-          labelToVariable(`TRAIT_ANCESTRY_${selectedOption.name}_IDS`),
-          selectedOption.id,
-          sourceLabel
-        );
-        isCharacterTrait = true;
-      }
-      if (isCharacterTrait) adjVariable(varId, 'TRAIT_NAMES', selectedOption.name.toUpperCase(), sourceLabel);
+      registerActorTrait(
+        varId,
+        { id: selectedOption.id, name: selectedOption.name, meta_data: selectedOption.meta_data },
+        'SELECTED',
+        sourceLabel
+      );
     }
     return;
   }
@@ -557,7 +644,13 @@ async function updateVariables(
         spellId: selectedOption.id,
         type: selectedOption._meta_data?.type,
         castingSource: selectedOption._meta_data?.castingSource,
+        ...(selectedOption._meta_data?.listSources === undefined
+          ? {}
+          : { listSources: selectedOption._meta_data.listSources }),
         rank: selectedOption._meta_data?.rank,
+        ...(selectedOption._meta_data?.preparation === undefined
+          ? {}
+          : { preparation: selectedOption._meta_data.preparation }),
         tradition: selectedOption._meta_data?.tradition,
         casts: selectedOption._meta_data?.casts,
         attribute: selectedOption._meta_data?.attribute,
@@ -788,6 +881,8 @@ export function clearDeferredOperations(): void {
   qualifiedSequence = 0;
   finalSkillSelections.clear();
   finalizingSkillSelections = false;
+  databaseSelections.clear();
+  finalizingDatabaseSelections = false;
 }
 
 const qualifiedResultKey = Symbol('qualified-operation-occurrence');
@@ -815,9 +910,62 @@ const finalSkillSelections = new Map<
     operation: OperationSelect;
     options?: OperationOptions;
     sourceLabel?: string;
+    savedIdentity?: { id: string; aliases?: string[] };
   }
 >();
 let finalizingSkillSelections = false;
+
+const databaseSelections = new Map<
+  string,
+  {
+    key: number;
+    varId: StoreID;
+    scopes: VariableEffectScope[];
+    selectionTrack: SelectionTrack;
+    operation: OperationSelect;
+    options?: OperationOptions;
+    sourceLabel?: string;
+    savedIdentity?: { id: string; aliases?: string[] };
+    owner?: SpellSelectionOwner;
+  }
+>();
+let finalizingDatabaseSelections = false;
+
+/** Resolve opt-in spell choices against one independent database snapshot after all ordinary grants. */
+export async function resolveDatabaseSpellSelections(): Promise<void> {
+  const entries = [...databaseSelections.values()];
+  for (const id of new Set(entries.map((entry) => entry.varId))) {
+    const sources = new Set(
+      entries
+        .filter((entry) => entry.varId === id)
+        .flatMap((entry) => {
+          const filters = entry.operation.data.optionsFilters;
+          return filters?.type === 'SPELL' && filters.knownSpellSource !== undefined ? [filters.knownSpellSource] : [];
+        })
+    );
+    snapshotSpellDatabase(id, sources);
+  }
+  finalizingDatabaseSelections = true;
+  try {
+    for (const entry of entries) {
+      const result = await withVariableEffectScopes(entry.varId, entry.scopes, () =>
+        runSelect(
+          entry.varId,
+          entry.selectionTrack,
+          entry.operation,
+          { ...entry.options, doOnlyConditionals: false, doConditionals: true },
+          entry.sourceLabel,
+          entry.savedIdentity,
+          entry.owner
+        )
+      );
+      qualifiedResults.set(entry.key, result ?? null);
+    }
+  } finally {
+    databaseSelections.clear();
+    finalizingDatabaseSelections = false;
+  }
+}
 
 /** Bind Assurance after ordinary and conditional trainings, respecting removed grants and saved occurrence paths. */
 export async function resolveFinalSkillSelections(): Promise<void> {
@@ -830,7 +978,8 @@ export async function resolveFinalSkillSelections(): Promise<void> {
           entry.selectionTrack,
           entry.operation,
           { ...entry.options, doOnlyConditionals: false, doConditionals: true },
-          entry.sourceLabel
+          entry.sourceLabel,
+          entry.savedIdentity
         )
       );
       qualifiedResults.set(entry.key, result ?? null);
@@ -1210,7 +1359,11 @@ async function runGiveAbilityBlock(
           const subNode = selectionTrack.node?.children[operation.id];
           results = await runOperations(
             varId,
-            { path: `${selectionTrack.path}_${subNode?.value}`, node: subNode },
+            {
+              path: `${selectionTrack.path}_${subNode?.value}`,
+              node: subNode,
+              choiceOwner: `${selectionTrack.choiceOwner}/${operation.id}/${abilityBlock.id}`,
+            },
             subOperations,
             { ...options, grantedLore: isAdditionalLore(abilityBlock) ? operation.data.grantedLore : undefined },
             abilityBlock.type === 'feat' || abilityBlock.type === 'class-feature'
@@ -1268,6 +1421,36 @@ async function runGiveItem(
   return null;
 }
 
+/** Register explicit actor traits without treating ordinary traits as feat origins. */
+function registerActorTrait(
+  varId: StoreID,
+  trait: Pick<Trait, 'id' | 'name' | 'meta_data'>,
+  grantKind: 'DIRECT' | 'SELECTED',
+  sourceLabel?: string
+): void {
+  let variableName: string;
+  if (trait.meta_data?.class_trait) {
+    variableName = labelToVariable(`TRAIT_CLASS_${trait.name}_IDS`);
+  } else if (trait.meta_data?.archetype_trait) {
+    variableName = labelToVariable(`TRAIT_ARCHETYPE_${trait.name}_IDS`);
+  } else if (
+    trait.meta_data?.ancestry_trait ||
+    trait.meta_data?.creature_trait ||
+    trait.meta_data?.versatile_heritage_trait ||
+    (grantKind === 'DIRECT' && trait.meta_data?.companion_type_trait)
+  ) {
+    variableName = labelToVariable(`TRAIT_ANCESTRY_${trait.name}_IDS`);
+  } else if (trait.meta_data?.companion_type_trait) {
+    /* Companion-only trait selections retain their existing non-granting behavior. */
+    return;
+  } else {
+    /* IDs keep distinct ordinary traits apart even when their normalized names collide. */
+    variableName = `TRAIT_ACTOR_${trait.id}_IDS`;
+  }
+  addVariable(varId, 'num', variableName, trait.id, sourceLabel);
+  adjVariable(varId, 'TRAIT_NAMES', trait.name.toUpperCase(), sourceLabel);
+}
+
 async function runGiveTrait(
   varId: StoreID,
   operation: OperationGiveTrait,
@@ -1280,31 +1463,7 @@ async function runGiveTrait(
     return null;
   }
 
-  // Create variables because we run variable creation first
-  let isCharacterTrait = false;
-  if (trait.meta_data?.class_trait) {
-    addVariable(varId, 'num', labelToVariable(`TRAIT_CLASS_${trait.name}_IDS`), trait.id, sourceLabel);
-    isCharacterTrait = true;
-  } else if (trait.meta_data?.archetype_trait) {
-    addVariable(varId, 'num', labelToVariable(`TRAIT_ARCHETYPE_${trait.name}_IDS`), trait.id, sourceLabel);
-    isCharacterTrait = true;
-  } else if (
-    trait.meta_data?.ancestry_trait ||
-    trait.meta_data?.creature_trait ||
-    trait.meta_data?.versatile_heritage_trait ||
-    trait.meta_data?.companion_type_trait
-  ) {
-    addVariable(varId, 'num', labelToVariable(`TRAIT_ANCESTRY_${trait.name}_IDS`), trait.id, sourceLabel);
-    isCharacterTrait = true;
-  } else {
-    console.warn(
-      `Trait is not a class, archetype, ancestry, or creature trait so it can't be given to a character: ${trait.name} (${trait.id})`
-    );
-    displayError(
-      `Trait is not a class, archetype, ancestry, or creature trait so it can't be given to a character: ${trait.name} (${trait.id})`
-    );
-  }
-  if (isCharacterTrait) adjVariable(varId, 'TRAIT_NAMES', trait.name.toUpperCase(), sourceLabel);
+  registerActorTrait(varId, trait, 'DIRECT', sourceLabel);
 
   return null;
 }
@@ -1335,6 +1494,7 @@ async function runGiveSpell(
           spellId: spell.id,
           type: operation.data.type,
           castingSource: operation.data.castingSource,
+          ...(operation.data.listSources === undefined ? {} : { listSources: operation.data.listSources }),
           rank: operation.data.rank,
           tradition: operation.data.tradition,
           casts: operation.data.casts,
@@ -1374,6 +1534,7 @@ async function runGiveSpellSlot(
       JSON.stringify({
         ...slot,
         source: operation.data.castingSource,
+        ...(operation.data.spellListSource === undefined ? {} : { spellListSource: operation.data.spellListSource }),
         opId: operation.id,
       }),
       sourceLabel
@@ -1669,7 +1830,9 @@ async function runConditional(
       } catch (e) {}
       let checkValue: string[] = [];
       const normalize = (value: string): string =>
-        labelToVariable(value, true, { preserveNumbers: variable.name === 'ACTIVE_MODES' });
+        labelToVariable(value, true, {
+          preserveNumbers: variable.name === 'ACTIVE_MODES' || CONTENT_ID_LIST_VARIABLES.has(variable.name),
+        });
       try {
         if (typeof check.value === 'string') {
           checkValue = JSON.parse(check.value.toUpperCase());

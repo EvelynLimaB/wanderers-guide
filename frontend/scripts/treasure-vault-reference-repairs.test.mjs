@@ -1,3 +1,4 @@
+import { readReviewedHistoricalSql } from './treasure-vault-historical-test-support.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -7,19 +8,21 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ItemSchema, SpellSchema } from '../src/schemas/content.ts';
-import { readContentRows } from './operation-test-harness.mjs';
+import { readHistoricalContentRows } from './operation-test-harness.mjs';
 
 const migrationNames = [
   '20261001010000_treasure_vault_reference_repairs.sql',
   '20261001020000_treasure_vault_equipment_fields.sql',
 ];
 const migrations = await Promise.all(
-  migrationNames.map((name) => readFile(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8'))
+  migrationNames.map((name) =>
+    readReviewedHistoricalSql(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8')
+  )
 );
 const specs = migrations.map((sql) => JSON.parse(sql.split('$patches$')[1]));
 const spellTargets = JSON.parse(migrations[0].split('$targets$')[1]);
 const itemIds = [...new Set(specs.flat().map((patch) => patch.id))];
-const rows = await readContentRows([
+const rows = await readHistoricalContentRows([
   ...itemIds.map((id) => ({ table: 'item', id })),
   ...spellTargets.map(({ id }) => ({ table: 'spell', id })),
 ]);
@@ -135,7 +138,7 @@ test('migrations reject identity or curator drift before replay and release chec
   const requirements = JSON.parse(
     await readFile(new URL('../../supabase/release/requirements.json', import.meta.url), 'utf8')
   );
-  const release = await readFile(
+  const release = await readReviewedHistoricalSql(
     new URL('../../supabase/release/treasure-vault-remaster-repairs.sql', import.meta.url),
     'utf8'
   );

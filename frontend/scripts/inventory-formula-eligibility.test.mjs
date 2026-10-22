@@ -26,19 +26,27 @@ const cloak = row('item', 16929);
 const plushie = row('item', 22344);
 const armor = row('item', 7068);
 const wand = row('item', 12605);
-// Use the exact reviewed after-leaves even when the sanitized dump still predates the migration.
+// Exercise the actual current staff rows, including the later complete-book prose repair.
 const beastMigration = await readFile(
   new URL('../../supabase/migrations/20261001110000_treasure_vault_beast_staff_repairs.sql', import.meta.url),
   'utf8'
 );
 const beastSpec = JSON.parse(beastMigration.split('$beast$')[1]);
+const displayMigration = await readFile(
+  new URL('../../supabase/migrations/20261002101000_treasure_vault_complete_display.sql', import.meta.url),
+  'utf8'
+);
+const displaySpec = JSON.parse(displayMigration.split('$display101$')[1]);
 const upgradedStaves = beastSpec.items.map((patch) => {
   const item = row('item', patch.id);
-  assert.ok(['before', 'after'].some((state) => item.description === patch.description[state]));
-  assert.ok(
-    ['before', 'after'].some((state) => JSON.stringify(item.operations) === JSON.stringify(patch.operations[state]))
-  );
-  return { ...item, description: patch.description.after, operations: structuredClone(patch.operations.after) };
+  const expected = displaySpec.catalog.find((entry) => entry.table === 'item' && entry.id === item.id)?.after;
+  assert.ok(expected, `Current Beast Staff ${item.id} has a complete reviewed book tuple`);
+  const { updated_at, search_tsv, ...actual } = item;
+  actual.uuid = String(actual.uuid);
+  actual.created_at = actual.created_at.replace(' ', 'T').replace(/\+00$/, '+00:00');
+  assert.deepEqual(actual, expected, `Current Beast Staff ${item.id} remains exactly reviewed`);
+  assert.deepEqual(item.operations, patch.operations.after, 'Later prose edits preserve the passive operation');
+  return item;
 });
 
 // Full local homebrew clones exercise equipment/grant shapes, not new published rules.

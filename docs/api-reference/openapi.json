@@ -251,7 +251,7 @@
         }
       },
       "Operation": {
-        "description": "An entry in the operations engine. See the Content Model and Operations guides. Shape varies by `type`; treated as opaque JSON by the API. Innate spell grants and spell selections accept an optional casting attribute, defaulting to ATTRIBUTE_CHA. A giveAbilityBlock grant of Additional Lore accepts optional data.grantedLore for that grant's subject.",
+        "description": "An entry in the operations engine. See the Content Model and Operations guides. Shape varies by `type`; treated as opaque JSON by the API. Filtered additional Lore selections may use optional `data.selectionAliases` to preserve an explicitly listed sibling choice across rank branches. Other selection kinds cannot use this field. Innate spell grants and spell selections accept an optional casting attribute, defaulting to ATTRIBUTE_CHA. A giveAbilityBlock grant of Additional Lore accepts optional data.grantedLore for that grant's subject. NORMAL giveSpell grants may add named list memberships with data.listSources. giveSpellSlot may restrict preparation to one named list with data.spellListSource. Filtered SPELL selections may opt in to data.optionsFilters.knownSpellSource for independently known normal spells at their exact saved ranks; spellData must retain that castingSource and omit rank. Optional distinctRankFromSelections references one earlier unpaired selection under the same owner and source to exclude its selected rank. Invalid or stale choices grant nothing without erasing saved selections. Optional dailyPreparation true requires one fixed rank from 1 to 10 and a named normal-spell list. Its choices belong to their actual entity, caster, owner and saved daily_preparation generation; the next Rest expires them, while reload and ordinary saves retain them. Unmarked grants and slots retain their existing behavior.",
         "type": "object",
         "additionalProperties": true
       },
@@ -531,6 +531,102 @@
               "inventory_label": {
                 "type": "string",
                 "description": "Display-only inventory name when the stat block differs from the embedded attack name."
+              },
+              "starfinder": {
+                "type": "object",
+                "description": "Optional equipment metadata. Final armor and pregraded weapons opt in with paired base_grade and base_upgrade_slots; printed stats and price remain the starting printing. Selected grade derives only improvements above that baseline without rewriting saved items. Weapon Tracking follows the selected grade. Built-in upgrades are armor-only, fixed, and do not consume available slots.",
+                "dependentRequired": {
+                  "base_grade": [
+                    "base_upgrade_slots"
+                  ],
+                  "base_upgrade_slots": [
+                    "base_grade"
+                  ],
+                  "built_in_upgrades": [
+                    "base_grade",
+                    "base_upgrade_slots"
+                  ]
+                },
+                "properties": {
+                  "grade": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "COMMERCIAL",
+                      "TACTICAL",
+                      "ADVANCED",
+                      "SUPERIOR",
+                      "ELITE",
+                      "ULTIMATE",
+                      "PARAGON",
+                      null
+                    ]
+                  },
+                  "base_grade": {
+                    "type": "string",
+                    "enum": [
+                      "COMMERCIAL",
+                      "TACTICAL",
+                      "ADVANCED",
+                      "SUPERIOR",
+                      "ELITE",
+                      "ULTIMATE",
+                      "PARAGON"
+                    ]
+                  },
+                  "base_upgrade_slots": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "capacity": {
+                    "type": "string"
+                  },
+                  "usage": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "slots": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ItemUpgradeReference"
+                    }
+                  },
+                  "built_in_upgrades": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ItemUpgradeReference"
+                    }
+                  }
+                }
+              },
+              "spellheart_casting": {
+                "type": "object",
+                "description": "Optional explicit printed spellheart casting values. Missing fields are unknown and are never inferred. Cantrips may use a higher corresponding character value; other spellheart spells use the printed value.",
+                "additionalProperties": false,
+                "anyOf": [
+                  {
+                    "required": [
+                      "attack"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "dc"
+                    ]
+                  }
+                ],
+                "properties": {
+                  "attack": {
+                    "type": "integer"
+                  },
+                  "dc": {
+                    "type": "integer"
+                  }
+                }
               }
             }
           },
@@ -1183,7 +1279,15 @@
           },
           "spells": {
             "type": "object",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "properties": {
+              "slots": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SpellSlot"
+                }
+              }
+            }
           },
           "meta_data": {
             "type": "object",
@@ -1365,11 +1469,40 @@
                   "hp": {
                     "type": "integer"
                   },
+                  "hp_note": {
+                    "type": "string",
+                    "description": "Source-authored HP qualification, such as HP per 5-foot cube. Prose only; without a separately listed numeric hp, this does not create an aggregate encounter HP counter."
+                  },
                   "bt": {
                     "type": "integer"
                   },
                   "immunities": {
                     "type": "string"
+                  },
+                  "weaknesses": {
+                    "type": "string"
+                  },
+                  "resistances": {
+                    "type": "string"
+                  }
+                }
+              },
+              "passive_abilities": {
+                "type": "array",
+                "description": "Source-ordered passive rules, manually applied by the GM.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "text"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
                   }
                 }
               },
@@ -1396,6 +1529,9 @@
                   "trigger": {
                     "type": "string"
                   },
+                  "requirements": {
+                    "type": "string"
+                  },
                   "effect": {
                     "type": "string"
                   }
@@ -1413,6 +1549,40 @@
                   },
                   "text": {
                     "type": "string"
+                  }
+                }
+              },
+              "secondary_activities": {
+                "type": "array",
+                "description": "Source-ordered additional activities, manually applied by the GM. A trigger is optional when none is printed.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "effect"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "actions": {
+                      "$ref": "#/components/schemas/ActionCost"
+                    },
+                    "traits": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "trigger": {
+                      "type": "string"
+                    },
+                    "requirements": {
+                      "type": "string"
+                    },
+                    "effect": {
+                      "type": "string"
+                    }
                   }
                 }
               },
@@ -1530,7 +1700,15 @@
           },
           "spells": {
             "type": "object",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "properties": {
+              "slots": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SpellSlot"
+                }
+              }
+            }
           },
           "operation_data": {
             "type": "object",
@@ -2346,6 +2524,55 @@
           "unresolved"
         ],
         "additionalProperties": false
+      },
+      "SpellSlot": {
+        "type": "object",
+        "required": [
+          "rank",
+          "source"
+        ],
+        "properties": {
+          "rank": {
+            "type": "number"
+          },
+          "source": {
+            "type": "string"
+          },
+          "spell_id": {
+            "type": "number"
+          },
+          "exhausted": {
+            "type": "boolean"
+          },
+          "color": {
+            "type": "string"
+          },
+          "spell_list_source": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional named-list restriction authored by the spell-slot grant. Keeps this preparation separate from ordinary slots of the same rank and source. Missing fields retain ordinary behavior. Current list membership is computed from grants and saved spell lists; it is not persisted in the slot."
+          }
+        }
+      },
+      "ItemUpgradeReference": {
+        "type": "object",
+        "required": [
+          "name",
+          "id"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "upgrade": {
+            "$ref": "#/components/schemas/Item",
+            "description": "Optional exact configured snapshot. Its ID must match the reference."
+          }
+        }
       }
     },
     "responses": {
@@ -5253,7 +5480,7 @@
           "Users"
         ],
         "summary": "Complete Patreon OAuth flow",
-        "description": "Receives the OAuth `code` from Patreon's redirect, exchanges it for tokens, and stores them on the caller's `public_user.patreon` field.",
+        "description": "Requires a signed-in, non-anonymous, active account. Exchanges the one-use OAuth code once, reads Patreon API v2 identity and current entitled tiers for the Wanderer's Guide campaign, and stores the validated link on the caller's public_user.patreon field. New Game Masters receive a group code in the same write; reconnecting preserves existing group codes. Provider and persistence failures return a safe error and retain existing linked data. The browser quietly returns to Account on success, rejection, cancellation or timeout, without recovery messages. Production requires matching v2 client configuration in the frontend and edge functions.",
         "operationId": "handlePatreonRedirect",
         "requestBody": {
           "required": true,
@@ -5267,7 +5494,9 @@
                 ],
                 "properties": {
                   "code": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
                   },
                   "redirectOrigin": {
                     "type": "string",
@@ -5280,7 +5509,7 @@
         },
         "responses": {
           "200": {
-            "description": "JSend envelope.",
+            "description": "Patreon connected only after a confirmed account write; validation and provider failures use fail/error envelopes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5295,18 +5524,29 @@
                           ]
                         },
                         "data": {
-                          "type": "object",
-                          "additionalProperties": true
+                          "type": "string",
+                          "const": "Patreon connected"
                         }
                       }
                     },
                     {
                       "$ref": "#/components/schemas/JSendError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JSendFail"
                     }
                   ]
                 }
               }
             }
+          },
+          "401": {
+            "description": "A valid non-anonymous account session is required.",
+            "$ref": "#/components/responses/JSendFail"
+          },
+          "503": {
+            "description": "Authentication is temporarily unavailable.",
+            "$ref": "#/components/responses/JSendError"
           }
         }
       }

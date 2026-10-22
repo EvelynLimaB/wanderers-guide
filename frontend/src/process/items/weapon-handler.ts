@@ -35,18 +35,28 @@ export function parseOtherDamage(
   });
 }
 
+/** Calculate attack and damage statistics without adding dice to an explicitly damage-free base profile. */
 export function getWeaponStats(id: StoreID, item: Item) {
   // Get adjustments from Starfinder item grade
   const gradeImprovements = getGradeImprovements(item);
   const sharedRunes = getSharedEidolonRunes(id, item);
 
-  // Get the number of dice for the weapon
-  let dice =
-    Number(item.meta_data?.damage?.dice ?? 1) +
-    Math.max(Math.min(Number(item.meta_data?.runes?.striking ?? 0), 4), sharedRunes.striking) +
-    (gradeImprovements.damage_dice - 1);
+  const damage = item.meta_data?.damage;
+  /** Explicit zero/empty dice and empty printed die/type mean no base damage, not an unknown profile. */
+  const hasNoBaseDamage: boolean =
+    (damage?.dice === 0 || (typeof damage?.dice === 'string' && ['', '0'].includes(damage.dice.trim()))) &&
+    (damage?.die === null || (typeof damage?.die === 'string' && damage.die.trim() === '')) &&
+    typeof damage?.damageType === 'string' &&
+    damage.damageType.trim() === '';
+
+  // Minimum dice, striking and grade improve existing damage, never create base damage where none was printed.
+  let dice = hasNoBaseDamage
+    ? 0
+    : Number(item.meta_data?.damage?.dice ?? 1) +
+      Math.max(Math.min(Number(item.meta_data?.runes?.striking ?? 0), 4), sharedRunes.striking) +
+      (gradeImprovements.damage_dice - 1);
   const minDice = getVariable<VariableNum>(id, 'MINIMUM_WEAPON_DAMAGE_DICE')?.value ?? 1;
-  if (dice < minDice) dice = minDice;
+  if (!hasNoBaseDamage && dice < minDice) dice = minDice;
 
   // Pathbuilder may explicitly select a two-hand mode for a weapon.
   const pathbuilderState = getPathbuilderWeaponState(item);
@@ -490,7 +500,14 @@ export function determineWeaponDivisions(item: Item): string[] {
 
   // One-handed agile/finesse weapons (ex. SF2e Striker Operative specialization).
   // "One-handed" counts anything wieldable in a single hand: 1, 1+, or 1 or 2.
-  const isOneHanded = ['1', '1+', '1 or 2'].includes(`${item.hands ?? ''}`.trim());
+  // Specific weapons can print Usage instead of Hands. Keep explicit grip values authoritative.
+  const usage = `${item.usage ?? ''}`.trim().toLowerCase().replaceAll('-', ' ');
+  const isOneHanded =
+    item.hands == null
+      ? item.meta_data?.category !== 'unarmed_attack' &&
+        !hasTraitType('UNARMED', traitsIds) &&
+        /^held in (?:1|one) hand$/.test(usage)
+      : ['1', '1+', '1 or 2'].includes(`${item.hands}`.trim());
   if (isOneHanded && (hasTraitType('AGILE', traitsIds) || hasTraitType('FINESSE', traitsIds))) {
     divisions.push('WEAPON_DIVISION_ONE_HANDED_AGILE_FINESSE');
   }

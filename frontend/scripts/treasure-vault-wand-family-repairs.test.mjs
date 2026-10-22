@@ -1,6 +1,6 @@
+import { readReviewedHistoricalSql } from './treasure-vault-historical-test-support.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { before, after, test } from 'node:test';
 import {
   ItemSchema,
@@ -11,20 +11,20 @@ import {
   ContentSourceSchema,
 } from '../src/schemas/content.ts';
 import uploadUtils from '../../supabase/functions/_shared/upload-utils.ts';
-import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
+import { createOperationEngine, readHistoricalContentRows } from './operation-test-harness.mjs';
 import { content as emptyContent, inventoryItem, summoner } from './fixtures/eidolon.mjs';
 
 const { uniqueId } = uploadUtils;
-const migration = await readFile(
+const migration = await readReviewedHistoricalSql(
   new URL('../../supabase/migrations/20261001170000_treasure_vault_wand_family_repairs.sql', import.meta.url),
   'utf8'
 );
-const release = await readFile(
+const release = await readReviewedHistoricalSql(
   new URL('../../supabase/release/treasure-vault-wand-family-repairs.sql', import.meta.url),
   'utf8'
 );
 const spec = JSON.parse(migration.split('$wandfamilies$')[1]);
-const rows = await readContentRows([
+const rows = await readHistoricalContentRows([
   ...spec.items.map(({ id }) => ({ table: 'item', id })),
   ...spec.dependencies.map(({ table, id }) => ({ table: table.replace('-', '_'), id })),
   ...spec.sources.map(({ id }) => ({ table: 'content_source', id })),

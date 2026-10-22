@@ -63,15 +63,11 @@ export function ItemRunesDescription({ item }: { item: Item }) {
 
   const fundamentalRunes = data || [];
 
-  // For old broken item runes, we just return null to not show anything in order to avoid the page from breaking.
-  if (
-    item.meta_data?.runes?.property &&
-    item.meta_data.runes.property.length > 0 &&
-    item.meta_data.runes.property.every((s) => typeof s === 'string')
-  ) {
-    return null;
-  }
-  const propertyRunes = (item.meta_data?.runes?.property || []).sort((a, b) => a.name.localeCompare(b.name));
+  // Legacy names and newer wrappers can coexist. Sort a display copy without rewriting either format.
+  const runeName = (rune: string | { name: string }) => (typeof rune === 'string' ? rune : rune.name);
+  const propertyRunes = [...(item.meta_data?.runes?.property || [])].sort((a, b) =>
+    runeName(a).localeCompare(runeName(b))
+  );
 
   return (
     <>
@@ -84,27 +80,29 @@ export function ItemRunesDescription({ item }: { item: Item }) {
               <Group align='start' justify='space-between' pb={2}>
                 <Box>
                   <Text fw={600} c='gray.2' span>
-                    {rune.name}
+                    {runeName(rune)}
                   </Text>
                 </Box>
-                <Button
-                  variant='light'
-                  size='compact-xs'
-                  radius='xl'
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    openDrawer({
-                      type: 'item',
-                      data: { id: rune.id, item: rune.rune },
-                      extra: { addToHistory: true },
-                    });
-                  }}
-                >
-                  View Item
-                </Button>
+                {typeof rune !== 'string' && (
+                  <Button
+                    variant='light'
+                    size='compact-xs'
+                    radius='xl'
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openDrawer({
+                        type: 'item',
+                        data: { id: rune.id, item: rune.rune },
+                        extra: { addToHistory: true },
+                      });
+                    }}
+                  >
+                    View Item
+                  </Button>
+                )}
               </Group>
-              <RichText>{rune.rune?.description}</RichText>
+              {typeof rune !== 'string' && <RichText>{rune.rune?.description}</RichText>}
             </Box>
           ))}
         </Box>
@@ -148,49 +146,65 @@ export function ItemRunesDescription({ item }: { item: Item }) {
   );
 }
 
-export function ItemUpgradesDescription(props: { item: Item }) {
+/** Displays counted upgrades and fixed built-ins without modifying their saved reference arrays. */
+export function ItemUpgradesDescription(props: { item: Item; builtInOnly?: boolean }) {
   const [_drawer, openDrawer] = useAtom(drawerState);
   const { item } = props;
 
-  if (!isItemWithUpgrades(item)) {
+  const slots = !props.builtInOnly && isItemWithUpgrades(item) ? [...(item.meta_data?.starfinder?.slots ?? [])] : [];
+  const builtIns = [...(item.meta_data?.starfinder?.built_in_upgrades ?? [])];
+  if (slots.length === 0 && builtIns.length === 0) {
     return <></>;
   }
 
-  const slots = item.meta_data?.starfinder?.slots || [];
+  // Sort the display copy without changing saved upgrade order or snapshots.
   slots.sort((a, b) => a.name.localeCompare(b.name));
+  const renderReferences = (references: { name: string; id: number; upgrade?: Item }[], fixed = false) =>
+    references.map((slot, index) => (
+      <Box key={index}>
+        {index > 0 && <Divider my='sm' />}
+        <Group align='start' justify='space-between' pb={2}>
+          <Box>
+            <Text fw={600} c={fixed ? undefined : 'gray.2'} span>
+              {slot.name}
+            </Text>
+          </Box>
+          <Button
+            variant='light'
+            size='compact-xs'
+            radius='xl'
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openDrawer({
+                type: 'item',
+                // Fixed snapshots can retain source-specific configuration, such as electricity.
+                data: fixed && slot.upgrade?.id === slot.id ? { item: slot.upgrade } : { id: slot.id },
+                extra: { addToHistory: true },
+              });
+            }}
+          >
+            View Item
+          </Button>
+        </Group>
+        <RichText>{slot.upgrade?.description}</RichText>
+      </Box>
+    ));
 
   return (
     <>
-      <Divider mb='sm' />
-      {slots.map((slot, index) => (
-        <Box key={index}>
-          {index > 0 && <Divider my='sm' />}
-          <Group align='start' justify='space-between' pb={2}>
-            <Box>
-              <Text fw={600} c='gray.2' span>
-                {slot.name}
-              </Text>
-            </Box>
-            <Button
-              variant='light'
-              size='compact-xs'
-              radius='xl'
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                openDrawer({
-                  type: 'item',
-                  data: { id: slot.id },
-                  extra: { addToHistory: true },
-                });
-              }}
-            >
-              View Item
-            </Button>
-          </Group>
-          <RichText>{slot.upgrade?.description}</RichText>
-        </Box>
-      ))}
+      {slots.length > 0 && (
+        <>
+          <Divider mb='sm' />
+          {renderReferences(slots)}
+        </>
+      )}
+      {builtIns.length > 0 && (
+        <>
+          <Divider mb='sm' label='Built-in Upgrades' />
+          {renderReferences(builtIns, true)}
+        </>
+      )}
     </>
   );
 }

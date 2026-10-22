@@ -3,7 +3,7 @@ import { supabase } from '../../supabase-client';
 import { getPublicUser } from '@auth/user-manager';
 import { COMMON_CORE_ID } from '@constants/data';
 import { makeRequest } from '@requests/request-manager';
-import { idbGet, idbSet, idbDelete } from './content-cache-db';
+import { idbGet, idbSet, idbDelete, idbDeleteIf } from './content-cache-db';
 import {
   AbilityBlock,
   AbilityBlockSchema,
@@ -179,12 +179,18 @@ type PersistedContentCache = {
   contentStore: Map<number, any>;
 };
 
+type ContentFreshness =
+  | { status: 'ok' | 'unverified' }
+  | { status: 'stale'; sourceId: number; cachedToken: ContentSource['updated_at'] };
+
 // De-dupe concurrent identical fetches so the ~12-way package fan-out and rapid repeat
 // lookups share a single in-flight request instead of each hitting the network.
 const inFlightFetches = new Map<string, Promise<any>>();
 
 // A generation owns every request, hydration and persist. Reset invalidates all old work.
 let cacheGeneration = 0;
+// A late confirmed change retires persistence, not the content already used by this visit.
+let retiredCacheGeneration: number | undefined;
 let cacheActorId = 'anonymous';
 let storageWrites: Promise<void> = Promise.resolve();
 
@@ -234,18 +240,18 @@ function assertCurrentGeneration(generation: number): void {
  * backstop — this is what makes every rollout order safe. A cached source with NO token
  * (pre-migration blob) compares as `undefined` vs a server string and reads as stale.
  */
-async function verifyPersistedContentVersions(rec: PersistedContentCache): Promise<'ok' | 'stale' | 'unverified'> {
+async function verifyPersistedContentVersions(rec: PersistedContentCache): Promise<ContentFreshness> {
   const sourceMap = rec.idStore instanceof Map ? rec.idStore.get('content-source') : undefined;
   const sources = sourceMap instanceof Map ? ([...sourceMap.values()].filter(isTruthy) as ContentSource[]) : [];
   // Nothing to compare against (or too many for one call): fall back to the TTL.
-  if (sources.length === 0 || sources.length > 500) return 'unverified';
+  if (sources.length === 0 || sources.length > 500) return { status: 'unverified' };
 
   const result = await makeRequest<{ id: number; updated_at: string }[]>(
     'get-content-versions',
     { ids: sources.map((s) => s.id) },
     false
   );
-  if (!Array.isArray(result)) return 'unverified';
+  if (!Array.isArray(result)) return { status: 'unverified' };
 
   const serverTokens = new Map(result.map((r) => [r.id, r.updated_at]));
   for (const source of sources) {
@@ -253,10 +259,42 @@ async function verifyPersistedContentVersions(rec: PersistedContentCache): Promi
     // changed. Raw string comparison on purpose — tokens are opaque, never date-parsed.
     if (serverTokens.get(source.id) !== source.updated_at) {
       console.log('[CONTENT-CACHE] Source', source.id, 'changed on the server');
-      return 'stale';
+      return { status: 'stale', sourceId: source.id, cachedToken: source.updated_at };
     }
   }
-  return 'ok';
+  return { status: 'ok' };
+}
+
+/** Retire a proven stale snapshot without replacing this visit's calculation inputs. */
+function retirePersistedContentCache(
+  generation: number,
+  actorId: string,
+  freshness: Extract<ContentFreshness, { status: 'stale' }>
+): void {
+  if (generation !== cacheGeneration || actorId !== cacheActorId) return;
+  retiredCacheGeneration = generation;
+  cacheDirty = false;
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  void writeCache(async () => {
+    if (generation !== cacheGeneration || actorId !== cacheActorId) return;
+    // Other tabs share IndexedDB. Never delete a replacement bearing a newer token.
+    await idbDeleteIf<PersistedContentCache>(cacheKey(actorId), (rec) => {
+      if (!rec || generation !== cacheGeneration || actorId !== cacheActorId) return false;
+      const sources = rec.idStore instanceof Map ? rec.idStore.get('content-source') : undefined;
+      const source = sources instanceof Map ? sources.get(freshness.sourceId) : undefined;
+      return (
+        rec.version === CONTENT_CACHE_VERSION &&
+        rec.actorId === actorId &&
+        source?.id === freshness.sourceId &&
+        source.updated_at === freshness.cachedToken
+      );
+    });
+  }).catch(() => {
+    console.warn('[CONTENT-CACHE] Could not retire stale saved content');
+  });
 }
 
 async function hydrateContentCache(generation: number, actorId: string): Promise<void> {
@@ -275,15 +313,20 @@ async function hydrateContentCache(generation: number, actorId: string): Promise
       Date.now() - rec.savedAt > CONTENT_CACHE_TTL_MS
     )
       return;
+    // Fetch results are always arrays. Ignore malformed optional cache data before
+    // it can bypass network reads and enter a character's calculation package.
+    if (rec.contentStore instanceof Map && [...rec.contentStore.values()].some((value) => !Array.isArray(value))) {
+      console.warn('[CONTENT-CACHE] Ignoring malformed saved query results');
+      return;
+    }
     // A slow freshness endpoint must not turn a usable local snapshot into a full download.
     // Keep this visit consistent: a late verdict cannot swap content during calculations.
-    const freshness = await withinCacheBudget(
-      verifyPersistedContentVersions(rec),
-      CONTENT_CACHE_VERSION_TIMEOUT_MS,
-      'unverified'
-    );
-    if (freshness === 'stale' || generation !== cacheGeneration || actorId !== cacheActorId) return;
-    unverifiedCacheSavedAt = freshness === 'unverified' ? rec.savedAt : undefined;
+    const verification = verifyPersistedContentVersions(rec);
+    const freshness = await withinCacheBudget<ContentFreshness>(verification, CONTENT_CACHE_VERSION_TIMEOUT_MS, {
+      status: 'unverified',
+    });
+    if (freshness.status === 'stale' || generation !== cacheGeneration || actorId !== cacheActorId) return;
+    unverifiedCacheSavedAt = freshness.status === 'unverified' ? rec.savedAt : undefined;
     if (rec.contentStore instanceof Map) {
       for (const [key, value] of rec.contentStore) if (!contentStore.has(key)) contentStore.set(key, value);
     }
@@ -294,6 +337,16 @@ async function hydrateContentCache(generation: number, actorId: string): Promise
           for (const [id, value] of records) if (!target.has(id)) target.set(id, value);
         }
       }
+    }
+    if (freshness.status === 'unverified') {
+      // A late verdict must not swap live content, but must not be forgotten on reload.
+      void verification
+        .then((verdict) => {
+          if (verdict.status === 'stale') retirePersistedContentCache(generation, actorId, verdict);
+        })
+        .catch(() => {
+          console.warn('[CONTENT-CACHE] Could not verify saved content');
+        });
     }
   } catch {
     console.warn('[CONTENT-CACHE] Could not hydrate saved content');
@@ -317,7 +370,7 @@ let cacheDirty = false;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function persistContentCache(): Promise<void> {
-  if (!cacheDirty) return;
+  if (!cacheDirty || retiredCacheGeneration === cacheGeneration) return;
   cacheDirty = false;
   const generation = cacheGeneration;
   const actorId = cacheActorId;
@@ -330,7 +383,7 @@ async function persistContentCache(): Promise<void> {
     contentStore,
   });
   await writeCache(async () => {
-    if (generation === cacheGeneration && actorId === cacheActorId) {
+    if (generation === cacheGeneration && actorId === cacheActorId && retiredCacheGeneration !== generation) {
       await idbSet(cacheKey(actorId), record);
     }
   });
@@ -341,6 +394,7 @@ async function persistContentCache(): Promise<void> {
 // once activity settles. The pagehide/visibilitychange flush below covers a close mid-burst.
 const CONTENT_CACHE_PERSIST_DEBOUNCE_MS = 10000;
 function scheduleContentCachePersist(): void {
+  if (retiredCacheGeneration === cacheGeneration) return;
   cacheDirty = true;
   if (persistTimer) clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
@@ -644,6 +698,7 @@ export async function fetchContent<T = Record<string, any>>(
  */
 export function resetContentStore(resetSources = true, clearPersisted = false) {
   cacheGeneration += 1;
+  retiredCacheGeneration = undefined;
   if (resetSources) {
     defineDefaultSources('BOTH', 'ALL-USER-ACCESSIBLE');
   }

@@ -1,26 +1,26 @@
+import { readReviewedHistoricalSql } from './treasure-vault-historical-test-support.mjs';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import { after, before, test } from 'node:test';
 import { AbilityBlockSchema, ContentSourceSchema, TraitSchema } from '../src/schemas/content.ts';
 import { OperationSchema } from '../src/schemas/operations.ts';
-import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
+import { createOperationEngine, readHistoricalContentRows } from './operation-test-harness.mjs';
 
-const migration = await readFile(
+const migration = await readReviewedHistoricalSql(
   new URL('../../supabase/migrations/20261001220000_treasure_vault_winter_resistance.sql', import.meta.url),
   'utf8'
 );
-const release = await readFile(
+const release = await readReviewedHistoricalSql(
   new URL('../../supabase/release/treasure-vault-winter-resistance.sql', import.meta.url),
   'utf8'
 );
 const spec = JSON.parse(migration.split('$winter$')[1]);
-const rows = await readContentRows([
+const rows = await readHistoricalContentRows([
   ...[51111, 29500, 20730].map((id) => ({ table: 'ability_block', id })),
   ...[3295, 3460, 3487, 3479, 1468, 1542, 1346].map((id) => ({ table: 'trait', id })),
   { table: 'content_source', id: 16 },
 ]);
 const get = (table, id, input = rows) => input.find((entry) => entry.table === table && entry.row.id === id)?.row;
-const original = get('ability_block', 51111);
+const published = get('ability_block', 51111);
 const source = get('content_source', 16);
 const dependency = get('trait', 3295);
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -76,7 +76,14 @@ function repair(row, sourceRow = source, traitRow = dependency, queue = []) {
     meta_data: { ...structuredClone(row.meta_data), source: structuredClone(spec.owner.after.source) },
   };
 }
+stateOf(published);
+const original = {
+  ...structuredClone(published),
+  operations: structuredClone(spec.owner.before.operations),
+  meta_data: { ...structuredClone(published.meta_data), source: structuredClone(spec.owner.before.source) },
+};
 const proposed = repair(original);
+assert.deepEqual(repair(published), proposed, 'the current dump retains the reviewed complete state');
 let engine;
 before(async () => {
   engine = await createOperationEngine();

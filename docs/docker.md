@@ -78,11 +78,28 @@ schema and sanitized content dump and is intended for a fresh or disposable
 database. Do not use it to replace the public schema of an existing production
 database.
 
+The two Tech Core spell imports first verify already imported batches with their
+complete registered read-only compatibility checks. Exact success preserves the
+current batch; otherwise the original migration and its complete post-import
+compatibility check must both succeed. Invalid or
+failed check output stops setup. The later Incarnate guard uses the same complete
+registered check. Tech Core accepts only `NULL` or an empty dependency array;
+nonempty dependencies and unrelated changes still fail.
+
 If an existing installation reports **User not found** after login, verify that
 data/auth-trigger.sql is installed. The trigger creates profiles for new
 accounts. It does not repair accounts registered before the trigger was installed.
 
 ## Known limitations of the bundled self-hosted skeleton
+- **Patreon linking.** Configure `PATREON_V2_CLIENT_ID` and
+  `PATREON_V2_CLIENT_SECRET` for a v2 application registered under your creator
+  account. Compose passes the public ID into the frontend build as
+  `VITE_PATREON_CLIENT_ID`; rebuild the frontend after changing it. Keep the old
+  `PATREON_CLIENT_ID` and `PATREON_CLIENT_SECRET` for refreshing existing grants.
+  Register your site's `/auth/patreon/redirect` URL with Patreon. Leave these
+  variables empty if Patreon linking is unused. See the
+  [development guide](/development#patreon-api-v2-configuration) for migration
+  and release verification.
 
 The bundled stack is intentionally incomplete compared with the full Supabase
 distribution. It does not include realtime, analytics/log-stream, image proxy,

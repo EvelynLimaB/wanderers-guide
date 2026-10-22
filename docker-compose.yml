@@ -13,6 +13,7 @@ services:
         VITE_SUPABASE_URL: ${PUBLIC_SUPABASE_URL}
         VITE_SUPABASE_KEY: ${ANON_KEY}
         VITE_ENV: ${VITE_ENV:-production}
+        VITE_PATREON_CLIENT_ID: ${PATREON_V2_CLIENT_ID:-}
     # Bind address is configurable because rootless Podman cannot publish
     # privileged ports (<1024) and because publishing 0.0.0.0 leaks the stack
     # onto the LAN. Default 127.0.0.1 = reachable from the host (and therefore
@@ -143,6 +144,10 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       SUPABASE_DB_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
       CONTENT_UPDATE_KEY: ${CONTENT_UPDATE_KEY:-}
+      PATREON_CLIENT_ID: ${PATREON_CLIENT_ID:-}
+      PATREON_CLIENT_SECRET: ${PATREON_CLIENT_SECRET:-}
+      PATREON_V2_CLIENT_ID: ${PATREON_V2_CLIENT_ID:-}
+      PATREON_V2_CLIENT_SECRET: ${PATREON_V2_CLIENT_SECRET:-}
       VERIFY_JWT: "false"
     command:
       - start

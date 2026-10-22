@@ -24,6 +24,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Fetch pinned historical content fixture
+        working-directory: .
+        run: |
+          git fetch --no-tags --depth=1 origin b5dd54c018ecd414be4dc5659a7c28e7ad4633b7
+          git fetch --no-tags --depth=1 origin 756a80011e1d0e3ac9db0e14a304d8cf0f1479a5
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -38,6 +44,7 @@ jobs:
         working-directory: .
         run: |
           npm run test:release
+          npm run test:content:contracts
           npm run release:check
           npm run release:manifest -- --output "$RUNNER_TEMP/release-manifest.json"
 
@@ -64,9 +71,16 @@ jobs:
       - name: Pathbuilder import regression tests
         run: npm run test:pathbuilder-import
 
+      - name: Tech Core spell and conditional regression tests
+        run: |
+          node --import=tsx --test scripts/tech-core-introductory-spells.test.mjs scripts/tech-core-general-spells.test.mjs scripts/spell-targets.test.mjs scripts/list-id-conditionals.test.mjs
+
       - name: Rules and content audit regression tests
         run: |
           npm run test:rules
+          npm run test:armor:grades
+          npm run test:spell-slots
+          npm run test:spell-database
           npm run test:infra
           npm run test:audit:content
 

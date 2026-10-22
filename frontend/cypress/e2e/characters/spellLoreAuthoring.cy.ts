@@ -1,4 +1,5 @@
 import { AbilityBlockSchema, CharacterSchema, ContentSourceSchema, SpellSchema } from '../../../src/schemas/content';
+import { describeClientFailure } from '../../support/client-failure';
 
 const actor = '00000000-0000-4000-8000-000000000181';
 const profile = { id: 990181, user_id: actor, display_name: 'Authoring Fixture', is_admin: false, is_mod: false };
@@ -104,7 +105,15 @@ const original = CharacterSchema.parse({
         title: 'Filtered spell',
         modeType: 'FILTERED',
         optionType: 'SPELL',
-        optionsFilters: { id: 'filter', type: 'SPELL', level: { min: 0, max: 1 }, spellData: metadata },
+        optionsFilters: {
+          id: 'filter',
+          type: 'SPELL',
+          level: { min: 0, max: 1 },
+          spellData: metadata,
+          rarity: 'COMMON',
+          traditionFromSelection: { key: 'spell-tradition-choice', castingSource: 'BLOODRAGER' },
+          traits: ['Legacy spell trait'],
+        },
       },
     },
     {
@@ -123,6 +132,25 @@ const original = CharacterSchema.parse({
         ],
       },
     },
+    {
+      id: 'familiarity',
+      type: 'select',
+      data: {
+        title: 'Weapon familiarity',
+        modeType: 'FILTERED',
+        optionType: 'ADJ_VALUE',
+        optionsFilters: {
+          id: 'familiarity-filter',
+          type: 'ADJ_VALUE',
+          group: 'WEAPON',
+          value: { value: 'T' },
+          addToFamiliarity: true,
+          familiarityCategories: ['advanced'],
+          rarities: ['COMMON', 'UNCOMMON'],
+          traits: ['Legacy weapon trait'],
+        },
+      },
+    },
   ],
 });
 
@@ -135,6 +163,10 @@ describe('Spell attribute and granted Lore authoring', () => {
     });
     cy.intercept('POST', '**/functions/v1/*', (req) => {
       const endpoint = new URL(req.url).pathname.split('/').pop()!;
+      if (endpoint === 'report-client-error') {
+        const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        throw new Error(`Unexpected authoring client failure: ${describeClientFailure(body)}`);
+      }
       let data: unknown = [];
       if (endpoint === 'get-user') data = profile;
       else if (endpoint === 'find-character') data = typeof req.body.id === 'number' ? saved : [saved];
@@ -250,6 +282,53 @@ describe('Spell attribute and granted Lore authoring', () => {
     cy.get<HTMLInputElement>('input')
       .filter((_, input) => (input as HTMLInputElement).labels?.[0]?.textContent === 'Casting attribute')
       .should('have.length', 2);
+  });
+
+  it('editing spell metadata preserves authored rarity, tradition resolution and legacy trait names across reload', () => {
+    pick(1, 'Wisdom');
+    cy.wrap(null, { timeout: 15000 }).should(() => {
+      const operation = saved.custom_operations![2];
+      expect(operation.type).to.eq('select');
+      if (operation.type !== 'select' || operation.data.optionsFilters?.type !== 'SPELL')
+        throw new Error('Missing spell filter');
+      expect(operation.data.optionsFilters.spellData?.attribute).to.eq('ATTRIBUTE_WIS');
+      expect(operation.data.optionsFilters.rarity).to.eq('COMMON');
+      expect(operation.data.optionsFilters.traditionFromSelection).to.deep.eq({
+        key: 'spell-tradition-choice',
+        castingSource: 'BLOODRAGER',
+      });
+      expect(operation.data.optionsFilters.traits).to.deep.eq(['Legacy spell trait']);
+    });
+    cy.reload();
+    cy.contains('[role="tab"]', 'Options', { timeout: 30000 }).click();
+    cy.contains('button', 'Open Operations').click();
+    attribute(1).should('have.value', 'Wisdom');
+  });
+
+  it('editing weapon filters preserves advanced-only familiarity and clears it when switching groups', () => {
+    cy.contains('label', 'Only weapons with an ancestry trait').click();
+    cy.wrap(null, { timeout: 15000 }).should(() => {
+      const operation = saved.custom_operations![4];
+      if (operation.type !== 'select' || operation.data.optionsFilters?.type !== 'ADJ_VALUE')
+        throw new Error('Missing weapon filter');
+      expect(operation.data.optionsFilters.hasAncestryTrait).to.eq(true);
+      expect(operation.data.optionsFilters.addToFamiliarity).to.eq(true);
+      expect(operation.data.optionsFilters.familiarityCategories).to.deep.eq(['advanced']);
+      expect(operation.data.optionsFilters.rarities).to.deep.eq(['COMMON', 'UNCOMMON']);
+      expect(operation.data.optionsFilters.traits).to.deep.eq(['Legacy weapon trait']);
+    });
+    cy.get('.mantine-Modal-body')
+      .find('label')
+      .contains(/^Armor$/)
+      .click();
+    cy.wrap(null, { timeout: 15000 }).should(() => {
+      const operation = saved.custom_operations![4];
+      if (operation.type !== 'select' || operation.data.optionsFilters?.type !== 'ADJ_VALUE')
+        throw new Error('Missing armor filter');
+      expect(operation.data.optionsFilters.group).to.eq('ARMOR');
+      expect(operation.data.optionsFilters.addToFamiliarity).to.eq(undefined);
+      expect(operation.data.optionsFilters.familiarityCategories).to.eq(undefined);
+    });
   });
 
   for (const width of [390, 1280]) {

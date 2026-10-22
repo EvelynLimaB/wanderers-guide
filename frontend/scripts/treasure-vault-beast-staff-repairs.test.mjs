@@ -1,4 +1,6 @@
+import { readReviewedHistoricalSql } from './treasure-vault-historical-test-support.mjs';
 import assert from 'node:assert/strict';
+import { assertReviewedTransition } from './war-of-immortals-test-support.mjs';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { after, before, test } from 'node:test';
@@ -8,20 +10,20 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AbilityBlockSchema, InventorySchema, ItemSchema, SpellSchema, TraitSchema } from '../src/schemas/content.ts';
 import uploadUtils from '../../supabase/functions/_shared/upload-utils.ts';
-import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
+import { createOperationEngine, readHistoricalContentRows } from './operation-test-harness.mjs';
 import { content as emptyContent, inventoryItem, summoner } from './fixtures/eidolon.mjs';
 
 const { uniqueId } = uploadUtils;
-const migration = await readFile(
+const migration = await readReviewedHistoricalSql(
   new URL('../../supabase/migrations/20261001110000_treasure_vault_beast_staff_repairs.sql', import.meta.url),
   'utf8'
 );
-const release = await readFile(
+const release = await readReviewedHistoricalSql(
   new URL('../../supabase/release/treasure-vault-beast-staff-repairs.sql', import.meta.url),
   'utf8'
 );
 const spec = JSON.parse(migration.split('$beast$')[1]);
-const rows = await readContentRows([
+const rows = await readHistoricalContentRows([
   ...spec.items.map(({ id }) => ({ table: 'item', id })),
   ...spec.dependencies.map(({ table, id }) => ({ table, id })),
   ...spec.sources.map(({ id }) => ({ table: 'content_source', id })),
@@ -39,14 +41,12 @@ const ownerState = (row, patch) => {
     assert.deepEqual(field === 'uuid' ? Number(row[field]) : row[field], value, `${row.id} ${field}`);
   for (const [field, value] of Object.entries(patch.metadata)) assert.deepEqual(row.meta_data?.[field], value);
   const actual = leafPair(row);
-  for (const state of ['before', 'after']) {
-    if (
-      JSON.stringify(actual) ===
-      JSON.stringify({ description: patch.description[state], operations: patch.operations[state] })
-    )
-      return state;
-  }
-  assert.fail('Unreviewed Beast Staff description/operations pair');
+  return assertReviewedTransition(
+    actual,
+    { description: patch.description.before, operations: patch.operations.before },
+    { description: patch.description.after, operations: patch.operations.after },
+    'Unreviewed Beast Staff description/operations pair'
+  );
 };
 function ownerAt(row, patch, state) {
   ownerState(row, patch);
@@ -57,9 +57,12 @@ function ownerAt(row, patch, state) {
 }
 const spellState = (row) => {
   const actual = { traditions: row.traditions, defense: row.defense };
-  for (const state of ['before', 'after'])
-    if (JSON.stringify(actual) === JSON.stringify(spec.spell[state])) return state;
-  assert.fail('Unreviewed Cursed Metamorphosis traditions/defense pair');
+  return assertReviewedTransition(
+    actual,
+    spec.spell.before,
+    spec.spell.after,
+    'Unreviewed Cursed Metamorphosis traditions/defense pair'
+  );
 };
 function curseAt(row, state) {
   spellState(row);

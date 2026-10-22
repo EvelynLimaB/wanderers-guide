@@ -14,19 +14,22 @@ import {
   OperationCharacterResultPackage,
   OperationCreatureResultPackage,
 } from '@schemas/content';
-import { getRootSelection, resetSelections, setSelections } from './selection-tree';
+import { getRootSelection, resetSelections, setSelections, SelectionTreeNode } from './selection-tree';
 import { Operation, OperationOptions, OperationResult, OperationSelect } from '@schemas/operations';
 import {
   clearDeferredOperations,
   resolveDeferredOperations,
   resolveQualifiedOperations,
   resolveFinalSkillSelections,
+  resolveDatabaseSpellSelections,
   reconcileQualifiedResults,
   runOperations,
   withContentGrant,
 } from './operation-runner';
+import { bindSpellDatabase, clearSpellDatabase } from './database-spell-context';
 import {
   addVariable,
+  addVariableBonus,
   areVariableEffectScopesActive,
   getVariableEffectScopes,
   finishVariableEffects,
@@ -67,7 +70,9 @@ import { setCalculatedStatsInStore } from '@variables/calculated-stats';
 import { getEntityLevel } from '@utils/entity-utils';
 import { defineDefaultSources, importFromContentPackage } from '@content/content-store';
 import { setEidolonRunesInStore } from '@items/eidolon-runes';
+import { getArmorGradeBonusKey, getArmorGradeView } from '@items/armor-grade-view';
 import { getExecutableModes, resolveActiveModeKeys } from '@common/modes/mode-rules';
+import { copyPetOwnerDefenses, publishPetOwnerDefenses } from '@variables/pet-defenses';
 
 let executionQueue: Promise<void> = Promise.resolve();
 
@@ -140,9 +145,10 @@ async function _executeOps(
 ) {
   const execute = async (): Promise<OperationResult[]> => {
     const selectionNode = getRootSelection().children[primarySource];
+    if (primarySource === 'ancestry') clearConflictingBoostSelections(operations, selectionNode);
     let results = await runOperations(
       varId,
-      { path: `${primarySource}_${selectionNode?.value}`, node: selectionNode },
+      { path: `${primarySource}_${selectionNode?.value}`, node: selectionNode, choiceOwner: primarySource },
       operations,
       { ...cloneDeep(options), sourceLevel },
       sourceLabel
@@ -188,6 +194,7 @@ export async function _executeCharacterOperations(data: {
     try {
       return await executeCharacterOperations(data);
     } finally {
+      clearSpellDatabase('CHARACTER');
       finishVariableEffects('CHARACTER');
       clearDeferredOperations();
     }
@@ -201,6 +208,12 @@ async function executeCharacterOperations(
   const { character, content, context } = data;
 
   resetVariables('CHARACTER');
+  bindSpellDatabase(
+    'CHARACTER',
+    character.spells?.list ?? [],
+    character.operation_data?.daily_preparation,
+    character.id
+  );
   clearDeferredOperations();
   defineSelectionTree(character);
   defineDefaultSources('INFO', content.defaultSources.INFO);
@@ -1029,6 +1042,18 @@ async function executeCharacterOperations(
         undefined,
         character.level
       );
+      const armorGrade = getArmorGradeView(invItem.item);
+      if (!options && armorGrade.kind === 'final') {
+        addVariableBonus(
+          'CHARACTER',
+          'AC_BONUS',
+          armorGrade.acDelta,
+          'item',
+          '',
+          invItem.item.name,
+          getArmorGradeBonusKey(invItem.item)
+        );
+      }
 
       if (results.length > 0) {
         itemResults.push({
@@ -1105,10 +1130,12 @@ async function executeCharacterOperations(
   const errors = await resolveDeferredOperations();
   errors.push(...(await resolveQualifiedOperations()));
   await resolveFinalSkillSelections();
+  await resolveDatabaseSpellSelections();
   reconcileQualifiedResults({ results, conditionalResults });
 
   // Set calculated stats
   setEidolonRunesInStore(character);
+  if (errors.length === 0) publishPetOwnerDefenses(character);
   setCalculatedStatsInStore('CHARACTER', character);
 
   const mergedResults = mergeOperationResults(results, conditionalResults) as typeof results;
@@ -1167,6 +1194,7 @@ export async function _executeCreatureOperations(data: {
     try {
       return await executeCreatureOperations(data);
     } finally {
+      clearSpellDatabase(data.id);
       finishVariableEffects(data.id);
       clearDeferredOperations();
     }
@@ -1180,6 +1208,7 @@ async function executeCreatureOperations(
   const { id, creature, content } = data;
 
   resetVariables(id);
+  bindSpellDatabase(id, creature.spells?.list ?? [], creature.operation_data?.daily_preparation, creature.id);
   clearDeferredOperations();
   defineSelectionTree(creature);
   defineDefaultSources('INFO', content.defaultSources.INFO);
@@ -1255,6 +1284,18 @@ async function executeCreatureOperations(
         undefined,
         getEntityLevel(creature)
       );
+      const armorGrade = getArmorGradeView(invItem.item);
+      if (!options && armorGrade.kind === 'final') {
+        addVariableBonus(
+          id,
+          'AC_BONUS',
+          armorGrade.acDelta,
+          'item',
+          '',
+          invItem.item.name,
+          getArmorGradeBonusKey(invItem.item)
+        );
+      }
 
       if (results.length > 0) {
         itemResults.push({
@@ -1298,9 +1339,11 @@ async function executeCreatureOperations(
   const errors = await resolveDeferredOperations();
   errors.push(...(await resolveQualifiedOperations()));
   await resolveFinalSkillSelections();
+  await resolveDatabaseSpellSelections();
   reconcileQualifiedResults({ results, conditionalResults });
 
   // Set calculated stats
+  if (errors.length === 0) copyPetOwnerDefenses(id, creature);
   setCalculatedStatsInStore(id, creature);
 
   const mergedResults = mergeOperationResults(results, conditionalResults) as typeof results;
@@ -1401,12 +1444,67 @@ function mergeOperationResults(normal: Record<string, any[]>, conditional: Recor
   return merged;
 }
 
+/** Include fixed boosts only from selected CUSTOM branches, never from inactive alternatives. */
+function getActiveBoostOperations(operations: Operation[], node?: SelectionTreeNode): Operation[] {
+  return operations.flatMap((operation) => {
+    if (operation.type !== 'select' || operation.data.optionType !== 'CUSTOM') return [operation];
+    const selectedNode = node?.children[operation.id];
+    const selected = operation.data.optionsPredefined?.find((option) => option.id === selectedNode?.value);
+    if (selected?.type !== 'CUSTOM') return [];
+    return getActiveBoostOperations(selected.operations ?? [], selectedNode?.children[selected.id]);
+  });
+}
+
+/** Ignore a saved free boost that now conflicts with a fixed boost after a branch change. */
+function clearConflictingBoostSelections(operations: Operation[], node?: SelectionTreeNode): void {
+  const fixedBoosts = new Set(
+    getActiveBoostOperations(operations, node).flatMap((operation) =>
+      operation.type === 'adjValue' &&
+      operation.data.variable.startsWith('ATTRIBUTE_') &&
+      isAttributeValue(operation.data.value) &&
+      operation.data.value.value === 1
+        ? [operation.data.variable]
+        : []
+    )
+  );
+  const walk = (current: Operation[], parent?: SelectionTreeNode): void => {
+    for (const operation of current) {
+      if (operation.type !== 'select') continue;
+      const selectedNode = parent?.children[operation.id];
+      if (!selectedNode?.value) continue;
+      if (operation.data.optionType === 'CUSTOM') {
+        const selected = operation.data.optionsPredefined?.find((option) => option.id === selectedNode.value);
+        if (selected?.type === 'CUSTOM') walk(selected.operations ?? [], selectedNode.children[selected.id]);
+      } else if (
+        operation.data.optionType === 'ADJ_VALUE' &&
+        operation.data.optionsFilters?.type === 'ADJ_VALUE' &&
+        operation.data.optionsFilters.group === 'ATTRIBUTE' &&
+        isAttributeValue(operation.data.optionsFilters.value) &&
+        operation.data.optionsFilters.value.value === 1
+      ) {
+        if (fixedBoosts.has(selectedNode.value)) selectedNode.value = null;
+        else fixedBoosts.add(selectedNode.value);
+      }
+    }
+  };
+  walk(operations, node);
+}
+
 function limitBoostOptions(operations: Operation[], operationResults: OperationResult[]): OperationResult[] {
   operationResults = cloneDeep(operationResults);
   const unselectedOptions: string[] = [];
+  const allResults: OperationResult[] = [];
+  const collect = (results: OperationResult[]): void => {
+    for (const result of results) {
+      if (!result) continue;
+      allResults.push(result);
+      collect(result.result?.results ?? []);
+    }
+  };
+  collect(operationResults);
 
   // Pull from all selections already made
-  for (const opR of operationResults) {
+  for (const opR of allResults) {
     const selectedOption = opR?.result?.source?.variable;
     const amount = opR?.result?.source?.value?.value;
     if (selectedOption && +amount === 1 && selectedOption.startsWith('ATTRIBUTE_')) {
@@ -1415,7 +1513,8 @@ function limitBoostOptions(operations: Operation[], operationResults: OperationR
   }
 
   // Pull from all hardset attribute boosts
-  for (const op of operations) {
+  const activeOperations = [...operations, ...allResults.flatMap((result) => result?.result?.source?.operations ?? [])];
+  for (const op of activeOperations) {
     if (op.type === 'adjValue') {
       // setValue isn't a boost
       // @ts-ignore
@@ -1427,7 +1526,7 @@ function limitBoostOptions(operations: Operation[], operationResults: OperationR
   }
 
   // Limit all boosts to only be selectable if they haven't been given yet
-  for (const opR of operationResults) {
+  for (const opR of allResults) {
     if (opR?.selection?.options) {
       opR.selection.options = opR.selection.options.filter((option) => {
         if (
@@ -1538,15 +1637,23 @@ export function getAdjustedAncestryOperations(varId: StoreID, character: Charact
   let operations = cloneDeep(inputOps);
   if (character.options?.alternate_ancestry_boosts) {
     // Remove all ancestry boost/flaws operations
-    const newOps = operations.filter(
-      (op) =>
-        !(
-          op.type === 'adjValue' &&
-          getAllAttributeVariables(varId)
-            .map((v) => v.name)
-            .includes(op.data.variable)
-        ) && !(op.type === 'select' && op.data.title === 'Select an Attribute')
-    );
+    const attributes = new Set(getAllAttributeVariables(varId).map((variable) => variable.name));
+    /** Retain size and other branch effects while replacing every ancestry attribute adjustment. */
+    const removeBoosts = (current: Operation[]): Operation[] =>
+      current.flatMap((operation): Operation[] => {
+        if (operation.type === 'adjValue' && attributes.has(operation.data.variable)) return [];
+        if (operation.type === 'select' && operation.data.title === 'Select an Attribute') return [];
+        if (operation.type === 'select' && operation.data.optionType === 'CUSTOM') {
+          operation.data.optionsPredefined = operation.data.optionsPredefined?.map((option) =>
+            option.type === 'CUSTOM' ? { ...option, operations: removeBoosts(option.operations ?? []) } : option
+          );
+        } else if (operation.type === 'conditional') {
+          operation.data.trueOperations = removeBoosts(operation.data.trueOperations ?? []);
+          operation.data.falseOperations = removeBoosts(operation.data.falseOperations ?? []);
+        }
+        return [operation];
+      });
+    const newOps = removeBoosts(operations);
 
     newOps.push({
       id: 'eadjpcd7-5jad-4f7c-a712-95d5e272bcf3-1',

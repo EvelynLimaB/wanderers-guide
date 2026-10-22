@@ -1,4 +1,5 @@
 import Markdown from 'react-markdown';
+import type { Options as MarkdownOptions } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Anchor, Blockquote, Code, Divider, List, Table, Text, TextProps, Title, useMantineTheme } from '@mantine/core';
 import { getContentDataFromHref } from './rich_text_input/ContentLinkExtension';
@@ -8,25 +9,29 @@ import { useAtom } from 'jotai';
 import React, { ReactNode, useRef } from 'react';
 import IndentedText from './IndentedText';
 import { IconQuote } from '@tabler/icons-react';
-import { getAllConditions } from '@conditions/condition-handler';
+import { getConditionReferenceNames } from '@conditions/condition-handler';
 import { compileExpressions } from '@variables/variable-utils';
 import { StoreID } from '@schemas/variables';
 import { isString } from 'lodash-es';
+import { remarkConditionLinks } from './rich-text-conditions';
 
 interface RichTextProps extends TextProps {
   children: any;
   conditionBlacklist?: string[];
   store?: StoreID;
+  /** Optional prose transforms run in the existing parser before automatic condition links. */
+  remarkPlugins?: MarkdownOptions['remarkPlugins'];
 }
 
 export default function RichText(props: RichTextProps) {
+  const { children: content, store, conditionBlacklist, remarkPlugins, ...textProps } = props;
   const theme = useMantineTheme();
   const [_drawer, openDrawer] = useAtom(drawerState);
 
   const prevProcessedP = useRef<ReactNode | null>(null);
   const inDoubleTiersChain = useRef(false);
 
-  let convertedChildren = props.children as string | undefined | null;
+  let convertedChildren = content as string | undefined | null;
 
   if (Array.isArray(convertedChildren)) {
     convertedChildren = convertedChildren.join('');
@@ -36,7 +41,7 @@ export default function RichText(props: RichTextProps) {
   }
 
   if (convertedChildren) {
-    convertedChildren = compileExpressions(props.store ?? 'CHARACTER', convertedChildren, true);
+    convertedChildren = compileExpressions(store ?? 'CHARACTER', convertedChildren, true);
   }
 
   // Convert action symbol text of abbr to code markdown (then convert it back)
@@ -50,19 +55,9 @@ export default function RichText(props: RichTextProps) {
   // Convert the string output from editor table format to be read by react-markdown
   convertedChildren = convertedChildren?.replace(/\|\n\n\|/g, '|\n|');
 
-  // Auto-detect conditions and convert to content links
-  const conditions = getAllConditions()
-    .map((c) => c.name.toLowerCase())
-    .filter((c) => !props.conditionBlacklist?.includes(c) && c !== 'persistent damage');
-  const conditionRegex = new RegExp(`(?<!\\[)\\b(${conditions.join('|')})\\b(?!\\])`, 'g');
-  convertedChildren = convertedChildren?.replace(conditionRegex, (match) => {
-    return `[${match}](link_condition_${match.replace(' ', '~')})`;
-  });
-
-  // Auto-detect persistent damage separately
-  convertedChildren = convertedChildren?.replace(/persistent (\w*?\s|)damage/gi, (match) => {
-    return `[${match}](link_condition_persistent~damage)`;
-  });
+  const conditions = getConditionReferenceNames()
+    .map((name) => name.toLowerCase())
+    .filter((c) => !conditionBlacklist?.includes(c) && c !== 'persistent damage');
 
   // Replace arrow up emoji with the actual arrow up unicode character
   convertedChildren = convertedChildren?.replace(/⬆️/g, '⇧');
@@ -70,7 +65,11 @@ export default function RichText(props: RichTextProps) {
   return (
     <Markdown
       children={convertedChildren}
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[
+        remarkGfm,
+        ...(remarkPlugins ?? []),
+        [remarkConditionLinks, { conditions, persistentDamage: !conditionBlacklist?.includes('persistent damage') }],
+      ]}
       components={{
         // Override the default html tags with Mantine components
         p(innerProps) {
@@ -88,8 +87,8 @@ export default function RichText(props: RichTextProps) {
             if (inDoubleTiersChain.current) {
               if (indented.reason === 'SUCCESS-TIER') {
                 return (
-                  <IndentedText {...props} indentMod={1} className={className}>
-                    <IndentedText {...props} className={className}>
+                  <IndentedText {...textProps} component='div' indentMod={1} className={className}>
+                    <IndentedText {...textProps} className={className}>
                       {children}
                     </IndentedText>
                   </IndentedText>
@@ -100,7 +99,7 @@ export default function RichText(props: RichTextProps) {
             }
 
             return (
-              <IndentedText {...props} className={className}>
+              <IndentedText {...textProps} className={className}>
                 {children}
               </IndentedText>
             );
@@ -110,7 +109,7 @@ export default function RichText(props: RichTextProps) {
 
             // Normal text
             return (
-              <Text {...props} className={className}>
+              <Text {...textProps} className={className}>
                 {children}
               </Text>
             );
@@ -119,7 +118,7 @@ export default function RichText(props: RichTextProps) {
         span(innerProps) {
           const { children, className } = innerProps;
           return (
-            <Text {...props} className={className} span>
+            <Text {...textProps} className={className} span>
               {children}
             </Text>
           );
@@ -172,7 +171,7 @@ export default function RichText(props: RichTextProps) {
           const { children, className } = innerProps;
           return (
             <List.Item className={className}>
-              <Text {...props} mr={25}>
+              <Text {...textProps} mr={25}>
                 {children}
               </Text>
             </List.Item>
@@ -216,7 +215,7 @@ export default function RichText(props: RichTextProps) {
                   textDecorationColor: theme.colors['guide'][7],
                 }}
                 className={className}
-                {...props}
+                {...textProps}
               >
                 {children}
               </Anchor>
@@ -240,7 +239,7 @@ export default function RichText(props: RichTextProps) {
                 target='_blank'
                 underline='hover'
                 className={className}
-                {...props}
+                {...textProps}
               >
                 {children}
               </Anchor>

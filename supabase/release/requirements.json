@@ -331,5 +331,114 @@
   "20261007000000_pathbuilder_import.sql": {
     "check": "pathbuilder-import.sql",
     "order": "before-functions"
+  },
+  "20260927245900_treasure_vault_terminal_status.sql": {
+    "check": "treasure-vault-terminal-status.sql",
+    "order": "before-functions",
+    "function_signature": "public.treasure_vault_terminal_status_v1()"
+  },
+  "20261002010000_treasure_vault_relic_seeds.sql": {
+    "check": "treasure-vault-relic-seeds.sql",
+    "order": "before-functions"
+  },
+  "20261002020000_treasure_vault_relic_gifts.sql": {
+    "check": "treasure-vault-relic-gifts.sql",
+    "order": "before-functions"
+  },
+  "20261002030000_treasure_vault_oozeform_chair.sql": {
+    "check": "treasure-vault-oozeform-chair.sql",
+    "order": "before-functions"
+  },
+  "20261002040000_treasure_vault_physical_headers.sql": {
+    "check": "treasure-vault-physical-headers.sql",
+    "order": "before-functions"
+  },
+  "20261002050000_treasure_vault_repository_selections.sql": {
+    "check": "treasure-vault-repository-selections.sql",
+    "order": "before-functions"
+  },
+  "20261002060000_animal_companion_full_increases.sql": {
+    "check": "animal-companion-full-increases.sql",
+    "order": "before-functions"
+  },
+  "20261002070000_treasure_vault_immortal_bastion_prose.sql": {
+    "check": "treasure-vault-immortal-bastion-prose.sql",
+    "order": "before-functions"
+  },
+  "20261002080000_treasure_vault_equipment_trait_definitions.sql": {
+    "check": "treasure-vault-equipment-trait-definitions.sql",
+    "order": "before-functions"
+  },
+  "20261002090000_treasure_vault_third_eye_apex.sql": {
+    "check": "treasure-vault-third-eye-apex.sql",
+    "order": "before-functions"
+  },
+  "20261002095000_treasure_vault_scalar_mechanics.sql": {
+    "check": "treasure-vault-scalar-mechanics.sql",
+    "order": "before-functions"
+  },
+  "20261002096000_treasure_vault_item_operations.sql": {
+    "check": "treasure-vault-item-operations.sql",
+    "order": "before-functions"
+  },
+  "20261002097000_treasure_vault_artifact_access.sql": {
+    "check": "treasure-vault-artifact-access.sql",
+    "order": "before-functions"
+  },
+  "20261002098000_treasure_vault_legacy_grips.sql": {
+    "check": "treasure-vault-legacy-grips.sql",
+    "order": "before-functions"
+  },
+  "20261002099000_treasure_vault_embedded_display_links.sql": {
+    "check": "treasure-vault-embedded-display-links.sql",
+    "order": "before-functions"
+  },
+  "20261002100000_treasure_vault_complete_catalog.sql": {
+    "check": "treasure-vault-complete-catalog.sql",
+    "order": "before-functions"
+  },
+  "20261002101000_treasure_vault_complete_display.sql": {
+    "check": "treasure-vault-complete-display.sql",
+    "order": "before-functions"
+  },
+  "20261008105800_treasure_vault_terminal_catalog_compatibility.sql": {
+    "check": "treasure-vault-terminal-catalog-compatibility.sql",
+    "order": "before-functions"
+  },
+  "20261008105900_treasure_vault_terminal_source_corrections.sql": {
+    "check": "treasure-vault-terminal-source-corrections.sql",
+    "order": "before-functions"
+  },
+  "20261008110000_treasure_vault_source_corrections.sql": {
+    "check": "treasure-vault-source-corrections.sql",
+    "order": "before-functions"
+  },
+  "20261008160000_tech_core_introductory_spells.sql": {
+    "check": "tech-core-introductory-spells-citation-compatibility.sql",
+    "order": "before-functions"
+  },
+  "20261008190000_tech_core_general_spells.sql": {
+    "check": "tech-core-general-spells-citation-compatibility.sql",
+    "order": "before-functions"
+  },
+  "20261010000000_shared_ancestry_release_compatibility.sql": {
+    "check": "shared-ancestry-release-compatibility.sql",
+    "order": "before-functions"
+  },
+  "20261010000100_shared_ancestries.sql": {
+    "check": "shared-ancestries.sql",
+    "order": "before-functions"
+  },
+  "20261011000000_restore_heal_companion.sql": {
+    "check": "heal-companion-recovery.sql",
+    "order": "before-functions"
+  },
+  "20261011000100_incarnate_release_compatibility.sql": {
+    "check": "tech-core-general-spells-citation-compatibility.sql",
+    "order": "before-functions"
+  },
+  "20261015000000_rust_cloud_release_compatibility.sql": {
+    "check": "treasure-vault-terminal-status.sql",
+    "order": "before-functions"
   }
 }

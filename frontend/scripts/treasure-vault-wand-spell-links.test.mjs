@@ -1,26 +1,26 @@
+import { readReviewedHistoricalSql } from './treasure-vault-historical-test-support.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { after, before, test } from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { InventoryItemSchema, ItemSchema, SpellSchema, TraitSchema } from '../src/schemas/content.ts';
-import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
+import { createOperationEngine, readHistoricalContentRows } from './operation-test-harness.mjs';
 
-const migration = await readFile(
+const migration = await readReviewedHistoricalSql(
   new URL('../../supabase/migrations/20261001100000_treasure_vault_wand_spell_links.sql', import.meta.url),
   'utf8'
 );
-const release = await readFile(
+const release = await readReviewedHistoricalSql(
   new URL('../../supabase/release/treasure-vault-wand-spell-links.sql', import.meta.url),
   'utf8'
 );
 const patches = JSON.parse(migration.split('$patches$')[1]);
 const dependencies = JSON.parse(migration.split('$dependencies$')[1]);
 const expected = JSON.parse(release.split('$expected$')[1]);
-const rows = await readContentRows([
+const rows = await readHistoricalContentRows([
   ...patches.map(({ id }) => ({ table: 'item', id })),
   ...dependencies.map(({ table, id }) => ({ table, id })),
   ...[3, 13, 16].map((id) => ({ table: 'content_source', id })),

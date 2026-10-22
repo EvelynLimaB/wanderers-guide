@@ -1,16 +1,20 @@
+import { readReviewedHistoricalSql } from './treasure-vault-historical-test-support.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { after, before, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { AbilityBlockSchema, InventorySchema } from '../src/schemas/content.ts';
 import uploadUtils from '../../supabase/functions/_shared/upload-utils.ts';
-import { createOperationEngine, readContentRows } from './operation-test-harness.mjs';
+import { createOperationEngine, readHistoricalContentRows } from './operation-test-harness.mjs';
 import { assertReviewedTransition } from './war-of-immortals-test-support.mjs';
 
 const { uniqueId } = uploadUtils;
 const migrationName = '20261001070000_treasure_vault_ursine_feats.sql';
-const migration = await readFile(new URL('../../supabase/migrations/' + migrationName, import.meta.url), 'utf8');
-const release = await readFile(
+const migration = await readReviewedHistoricalSql(
+  new URL('../../supabase/migrations/' + migrationName, import.meta.url),
+  'utf8'
+);
+const release = await readReviewedHistoricalSql(
   new URL('../../supabase/release/treasure-vault-ursine-feats.sql', import.meta.url),
   'utf8'
 );
@@ -26,7 +30,7 @@ const candidates = [
   ['Mighty Bear', 18, 6633677401327609, [3351], ['Great Bear'], ''],
   ['Immortal Bear', 20, 6875755095101542, [3351], ['Ursine Avenger Form'], ''],
 ];
-const rows = await readContentRows([
+const rows = await readHistoricalContentRows([
   ...dependencies.map(({ table, id }) => ({ table: table.replaceAll('-', '_'), id })),
   ...repairs.map(({ id }) => ({ table: 'ability_block', id })),
   { table: 'content_source', id: 3 },
@@ -217,7 +221,10 @@ test('seven complete remaster rows have canonical identity, source, traits, prer
 test('every numeric prose reference resolves through the production helper and Mighty uses the local Great Bear ID', () => {
   for (const firstId of [990101, 123456]) {
     const allocated = importedRows(firstId);
-    engine.setFixtures([...fixtures, ...allocated.map((row) => ({ table: 'ability_block', row }))]);
+    engine.setFixtures([
+      ...lookupFixtures.filter(({ table, row }) => table !== 'ability_block' || !candidateIds.has(row.id)),
+      ...allocated.map((row) => ({ table: 'ability_block', row })),
+    ]);
     const great = allocated.find(({ name }) => name === 'Great Bear');
     const mighty = allocated.find(({ name }) => name === 'Mighty Bear');
     assert.ok(mighty.description.includes(engine.convertToHardcodedLink('feat', 'Great Bear')));
