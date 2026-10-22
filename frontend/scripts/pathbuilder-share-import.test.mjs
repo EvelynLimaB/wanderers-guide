@@ -496,6 +496,36 @@ test('unresolved share armor UUID falls back to the chassis rule when JSON worn 
   );
 });
 
+test('an explicit share armor name wins over contradictory multiple worn flags', () => {
+  const build = structuredClone(fixture.build);
+  build.characterData.playerArmor = {
+    ...(build.characterData.playerArmor ?? {}),
+    armorName: 'Full Plate',
+    potency: 1,
+    listPropertyRunes: [],
+  };
+
+  const recovered = resolveBuild(build, {
+    buildId: fixture.build_id,
+    formatVersion: fixture.format_version,
+    derived: {
+      ancestry: 'Automaton',
+      armor: [
+        { name: 'Full Plate', worn: true, pot: 1 },
+        { name: 'Automaton Chassi (10th level)', worn: true, pot: 1 },
+      ],
+    },
+  });
+
+  assert.equal(recovered.armor?.name, 'Full Plate');
+  assert.equal(recovered.armor?.raw, 'Full Plate');
+  assert.equal(
+    recovered.hints.some((hint) => /row matching the share armor identity "Full Plate" was used/i.test(hint)),
+    true,
+    'the share armor identity should explain the resolution choice'
+  );
+});
+
 test('a uniquely worn JSON armor row replaces Pathbuilder’s placeholder Unarmored value', () => {
   const build = structuredClone(fixture.build);
   build.characterData.ancestry = 'Human';
