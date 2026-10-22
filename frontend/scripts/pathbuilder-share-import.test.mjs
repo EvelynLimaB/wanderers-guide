@@ -16,7 +16,11 @@ import {
   stripCategoryPrefix,
 } from '../src/process/import/pathbuilder/pathbuilder-resolve.ts';
 import { PATHBUILDER_DERIVED_ENDPOINT, extractBuildId, fetchPathbuilderDerived, fetchPathbuilderShare } from '../src/process/import/pathbuilder/fetch-pathbuilder-share.ts';
-import { findFreeArchetypeBranch, getAbilityBoostOriginForPath } from '../src/process/import/pathbuilder/pathbuilder-selection-routing.ts';
+import {
+  findFreeArchetypeBranch,
+  getAbilityBoostOriginForPath,
+  inferPathbuilderOperationLevel,
+} from '../src/process/import/pathbuilder/pathbuilder-selection-routing.ts';
 import { PathbuilderShareBuildSchema } from '../src/schemas/pathbuilder.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -122,6 +126,20 @@ test('level-1 class boosts and free-archetype branches route to native WG operat
   assert.equal(getAbilityBoostOriginForPath('class-feature-123'), 'levelled');
   assert.equal(getAbilityBoostOriginForPath('ancestry_abc'), 'ancestry');
   assert.equal(getAbilityBoostOriginForPath('background_abc'), 'background');
+
+  assert.equal(
+    inferPathbuilderOperationLevel(
+      'class-feature-1110485945182216_9594307d-b111-437f-a55a-de101e8d46b1-2_a525eb70-e18f-4a95-80d9-29f6aaee0d3e-2_1c575456-4cb7-44eb-a153-9d6884b272a8-2',
+      1
+    ),
+    2,
+    'a nested class-feature path must recover the explicit feat level instead of trusting the enclosing level-1 result'
+  );
+  assert.equal(
+    inferPathbuilderOperationLevel('class_7ed73bc5-6a92-497c-8fc9-2a6dc408f40b', 1),
+    1,
+    'paths without an explicit level suffix must preserve the operation engine level'
+  );
 
   const dedication = findFreeArchetypeBranch(
     [

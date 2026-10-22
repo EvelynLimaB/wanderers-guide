@@ -46,7 +46,11 @@ import { extractBuildId, fetchPathbuilderDerived, fetchPathbuilderShare, getPath
 import { assertPathbuilderDerivedMatchesShare } from './pathbuilder-export-identity';
 import { parseFeatSlotKey, pathbuilderAbilityLabel, resolveBuild } from './pathbuilder-resolve';
 import { PathbuilderCustomFile, ResolvedBuild, ResolvedItemRef } from './types';
-import { findFreeArchetypeBranch, getAbilityBoostOriginForPath } from './pathbuilder-selection-routing';
+import {
+  findFreeArchetypeBranch,
+  getAbilityBoostOriginForPath,
+  inferPathbuilderOperationLevel,
+} from './pathbuilder-selection-routing';
 
 export type PathbuilderImportOptions = {
   signal?: AbortSignal;
@@ -2012,8 +2016,9 @@ async function resolveSelections(
     // selected parent may reveal new children, so rerun the engine after this batch.
     while (found) {
       const current = found;
+      const selectionLevel = inferPathbuilderOperationLevel(current.path, current.level);
       const selectionId = current.selection?.selection?.id ?? '';
-      const selectionKey = selectionId ? `${selectionId}:${current.level}` : '';
+      const selectionKey = selectionId ? `${selectionId}:${selectionLevel}` : '';
       const trackingKey = selectionKey || current.path;
       const selectionKeyWasResolved = resolvedSelectionKeys.has(trackingKey);
       const options = current.selection?.selection?.options ?? [];
@@ -2035,7 +2040,7 @@ async function resolveSelections(
       let requestedSelections: { name: string; level: number }[] = [];
       let result: Pick<ObjectWithUUID, '_select_uuid'> | null = previouslySelectedOption;
 
-      const freeArchetypeBranch = findFreeArchetypeBranch(options, selections, current.level);
+      const freeArchetypeBranch = findFreeArchetypeBranch(options, selections, selectionLevel);
       if (freeArchetypeBranch) {
         result = freeArchetypeBranch;
       }
@@ -2043,8 +2048,8 @@ async function resolveSelections(
         current.path.split('_').includes(uuid)
       );
       const freeArchetypeChoicesAtLevel = resolved.feats
-        .filter((feat) => feat.level === current.level && /^free archetype/i.test(feat.slot))
-        .map((feat) => ({ name: feat.name, level: current.level }));
+        .filter((feat) => feat.level === selectionLevel && /^free archetype/i.test(feat.slot))
+        .map((feat) => ({ name: feat.name, level: selectionLevel }));
 
       if (attributeSelection) {
         const isClassAttributeSelection = current.path.startsWith('class_');
@@ -2052,7 +2057,7 @@ async function resolveSelections(
           isClassAttributeSelection && classAttributeSelectionIndex === 0;
         if (isFirstClassAttributeSelection) {
           if (resolved.identity.keyAbility) {
-            requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: current.level }];
+            requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: selectionLevel }];
           } else if (options.length === 1) {
             result = options[0];
           } else {
@@ -2061,14 +2066,14 @@ async function resolveSelections(
             requestedSelections = [];
           }
         } else if (keyAbilitySelection && resolved.identity.keyAbility) {
-          requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: current.level }];
+          requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: selectionLevel }];
         } else {
           const origin = getAbilityBoostOriginForPath(current.path);
           if (origin) {
-            const cursorKey = origin + ':' + current.level;
+            const cursorKey = origin + ':' + selectionLevel;
             const cursor = abilityBoostCursors.get(cursorKey) ?? 0;
             const candidates = resolved.abilityBoosts.filter(
-              (boost) => boost.origin === origin && boost.level === current.level
+              (boost) => boost.origin === origin && boost.level === selectionLevel
             );
             const candidate = candidates[cursor];
             requestedSelections = candidate
@@ -2079,22 +2084,22 @@ async function resolveSelections(
           }
         }
       } else if (skillSelection) {
-        const cursor = skillCursors.get(current.level) ?? 0;
+        const cursor = skillCursors.get(selectionLevel) ?? 0;
         const candidates = [
           ...resolved.trainedSkills.map((skill) => ({ name: skill, level: 1 })),
           ...resolved.skillIncreases.map((increase) => ({ name: increase.skill, level: increase.level })),
-        ].filter((selection) => selection.level === current.level);
+        ].filter((selection) => selection.level === selectionLevel);
         const candidate = candidates[cursor];
         requestedSelections = candidate ? [candidate] : [];
       } else if (languageSelection) {
-        requestedSelections = resolved.languages.map((name) => ({ name, level: current.level }));
+        requestedSelections = resolved.languages.map((name) => ({ name, level: selectionLevel }));
       } else if (/\bfeat\b/i.test(current.selection?.selection?.title ?? '')) {
         const key = current.path;
         const cursor = featCursors.get(key) ?? 0;
-        const candidates = getFeatSelectionsForOperation(current.selection?.selection?.title ?? '', current.level, resolved);
+        const candidates = getFeatSelectionsForOperation(current.selection?.selection?.title ?? '', selectionLevel, resolved);
         requestedSelections = candidates.slice(cursor);
       } else {
-        requestedSelections = getSpecialSelectionsForOperation(current.selection?.selection, current.level, resolved);
+        requestedSelections = getSpecialSelectionsForOperation(current.selection?.selection, selectionLevel, resolved);
       }
 
       if (!result && resolved.identity.heritage) {
@@ -2113,7 +2118,7 @@ async function resolveSelections(
       const seenOptionIds = new Set<string>();
       for (const option of manualOptions) {
         if (seenOptionIds.has(option._select_uuid)) {
-          const message = `Pathbuilder selection options contain duplicate identifiers for "${selectionTitle}" at level ${current.level}: ${option._select_uuid}`;
+          const message = `Pathbuilder selection options contain duplicate identifiers for "${selectionTitle}" at level ${selectionLevel}: ${option._select_uuid}`;
           console.error(message);
           throw new Error(message);
         }
@@ -2137,19 +2142,19 @@ async function resolveSelections(
         // Do not rely only on WG's title text: the content graph has used both
         // "Select a Dedication" and generic feat selectors for the same branch.
         // Match the recorded choice only if it appears as a legal option here.
-        result = findPathbuilderOption(freeArchetypeChoicesAtLevel, options, current.level);
+        result = findPathbuilderOption(freeArchetypeChoicesAtLevel, options, selectionLevel);
       }
       if (!result) {
         result = findDomainSpellOption(
           current.selection?.selection?.title ?? '',
-          current.level,
+          selectionLevel,
           options,
           resolved,
           content
         );
       }
       if (!result) {
-        result = findPathbuilderOption(requestedSelections, options, current.level);
+        result = findPathbuilderOption(requestedSelections, options, selectionLevel);
       }
       if (!result) {
         pendingSelection = {
@@ -2157,7 +2162,7 @@ async function resolveSelections(
           path: current.path,
           title: selectionTitle,
           description: current.selection?.selection?.description,
-          level: current.level,
+          level: selectionLevel,
           options: manualOptions.map((option) => ({
             value: option._select_uuid,
             label: String(option._display_label ?? option.name ?? option.title ?? option._select_uuid ?? 'Unnamed option'),
@@ -2186,13 +2191,13 @@ async function resolveSelections(
         if (attributeSelection && !keyAbilitySelection && !(current.path.startsWith('class_') && classAttributeSelectionIndex === 1)) {
           const origin = getAbilityBoostOriginForPath(current.path);
           if (origin) {
-            const cursorKey = origin + ':' + current.level;
+            const cursorKey = origin + ':' + selectionLevel;
             abilityBoostCursors.set(cursorKey, (abilityBoostCursors.get(cursorKey) ?? 0) + 1);
           }
         }
         if (skillSelection) {
-          const cursor = skillCursors.get(current.level) ?? 0;
-          skillCursors.set(current.level, cursor + 1);
+          const cursor = skillCursors.get(selectionLevel) ?? 0;
+          skillCursors.set(selectionLevel, cursor + 1);
         }
         if (/\bfeat\b/i.test(current.selection?.selection?.title ?? '')) {
           const key = current.path;

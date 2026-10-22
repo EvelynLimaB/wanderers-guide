@@ -16,6 +16,20 @@ export type PathbuilderSelectionChoice = {
   level: number;
 };
 
+/**
+ * Level-specific operations encode their level after the final 12 hex digits
+ * of each UUID in the selection path (for example, "...de101e8d46b1-2").
+ * Some operation result packages still report the enclosing level as 1, so
+ * use the explicit path level when it is unambiguous.
+ */
+export function inferPathbuilderOperationLevel(path: string, fallback: number): number {
+  const matches = [...path.matchAll(/-[0-9a-f]{12}-(\d+)(?=_|$)/gi)];
+  const lastMatch = matches[matches.length - 1];
+  if (!lastMatch) return fallback;
+  const level = Number(lastMatch[1]);
+  return Number.isInteger(level) && level >= 1 && level <= 20 ? level : fallback;
+}
+
 export function getAbilityBoostOriginForPath(
   path: string
 ): 'levelled' | 'ancestry' | 'background' | null {
