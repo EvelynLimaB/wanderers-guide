@@ -642,6 +642,45 @@ test('missing shared armor name is reconstructed from an Automaton Reinforced Ch
   );
 });
 
+test('armor resilience is preserved from the share when the source actually provides it', () => {
+  const majorResilientBuild = structuredClone(fixture.build);
+  majorResilientBuild.characterData.playerArmor = {
+    ...(majorResilientBuild.characterData.playerArmor ?? {}),
+    res: 'major resilient',
+  };
+  const majorResilient = resolveBuild(majorResilientBuild, {
+    buildId: fixture.build_id,
+    formatVersion: fixture.format_version,
+  });
+  assert.equal(majorResilient.armorResilience, 3, 'Major Resilient must map to rank 3 from the share payload');
+
+  const numericResilientBuild = structuredClone(fixture.build);
+  numericResilientBuild.characterData.playerArmor = {
+    ...(numericResilientBuild.characterData.playerArmor ?? {}),
+    res: 2,
+  };
+  const numericResilient = resolveBuild(numericResilientBuild, {
+    buildId: fixture.build_id,
+    formatVersion: fixture.format_version,
+  });
+  assert.equal(numericResilient.armorResilience, 2, 'numeric resilience ranks must survive schema parsing');
+
+  const unknownResilientBuild = structuredClone(fixture.build);
+  unknownResilientBuild.characterData.playerArmor = {
+    ...(unknownResilientBuild.characterData.playerArmor ?? {}),
+    res: 'homebrew resilient tier',
+  };
+  const unknownResilient = resolveBuild(unknownResilientBuild, {
+    buildId: fixture.build_id,
+    formatVersion: fixture.format_version,
+  });
+  assert.equal(unknownResilient.armorResilience, null, 'unrecognized ranks must remain unknown, not guessed');
+  assert.ok(
+    unknownResilient.hints.some((hint) => /share resilience rune "homebrew resilient tier" could not be mapped/i.test(hint)),
+    'unrecognized source data must be explicitly reported'
+  );
+});
+
 test('armor rune state alone does not invent armor for an ordinary build', () => {
   const build = structuredClone(fixture.build);
   for (const [slot, value] of Object.entries(build.characterData.hashMapFeatSelections ?? {})) {

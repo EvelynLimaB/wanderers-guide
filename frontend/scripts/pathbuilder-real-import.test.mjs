@@ -599,6 +599,32 @@ try {
   assert.equal(outcome.character?.id, 9001);
   assert.equal(outcome.character?.name, 'Kasane');
 
+  const importedBackpack = outcome.character.inventory.items.find((entry) => entry.item.name === 'Backpack');
+  assert.ok(importedBackpack, 'the Pathbuilder backpack must remain the parent of its contents');
+  const importedChalk = importedBackpack.container_contents.filter((entry) => entry.item.name === 'Chalk');
+  assert.equal(importedChalk.length, 10, 'Pathbuilder Chalk quantity 10 must create ten physical units');
+  assert.deepEqual(
+    importedChalk.map((entry) => entry.item.meta_data?.quantity),
+    Array(10).fill(1),
+    'each imported unit must have quantity 1; stack quantity must not be duplicated on every row'
+  );
+  assert.equal(
+    importedChalk.reduce((total, entry) => total + Number(entry.item.meta_data?.quantity ?? 1), 0),
+    10,
+    'inventory math must retain exactly ten Chalk, not one hundred'
+  );
+  assert.notStrictEqual(importedChalk[0].item, importedChalk[1].item, 'inventory units must not share Item objects');
+  assert.notStrictEqual(importedChalk[0].item.meta_data, importedChalk[1].item.meta_data, 'inventory units must not share metadata');
+
+  const importedClaw = outcome.character.inventory.items.find((entry) => entry.item.name === 'Claw')?.item;
+  assert.ok(importedClaw, 'Automaton Armament Claw must be retained');
+  assert.equal(importedClaw.meta_data?.damage?.damageType, 'S', 'Automaton Armament Claw deals slashing damage');
+  assert.equal(
+    importedClaw.meta_data?.display_traits?.includes('Nonlethal') ?? false,
+    false,
+    'Automaton Armament Claw must not gain an unsupported Nonlethal trait'
+  );
+
   const hunterSpeedAdjustment = (outcome.character.custom_operations ?? []).filter(
     (operation) =>
       operation.type === 'adjValue' &&
@@ -755,14 +781,24 @@ try {
     // source and the exact initial-spell selector, then assert the saved choice
     // is the spell granted by this domain's own description.
     const domainSelectionEntry = Object.entries(outcome.character.operation_data?.selections ?? {}).find(
-      ([path, value]) =>
-        path.includes(`_${domainFeat.id}_${initialDomainSpellSelector.id}`) &&
-        String(value) === initialSpellReference[2]
+      ([path]) => path.includes('_' + domainFeat.id + '_' + initialDomainSpellSelector.id)
     );
     assert.ok(
       domainSelectionEntry,
+      'the imported tree must save a choice for the initial-domain-spell selector'
+    );
+    // The link_spell_* token in authored content is a source-link identifier;
+    // operation_data stores WG's local Spell.id. Resolve the saved ID to a catalog
+    // spell and compare the actual rules choice instead of crossing ID namespaces.
+    const selectedInitialDomainSpell = content.spells.find(
+      (spell) => String(spell.id) === String(domainSelectionEntry[1])
+    );
+    assert.equal(
+      selectedInitialDomainSpell?.name,
+      initialSpellReference[1],
       'the imported tree must select "' + initialSpellReference[1] + '" for domain "' + chosenDomainName + '"'
     );
+
     assert.ok(
       !promptTitles.some((title) => /initial.*domain.*spell/i.test(title)),
       'the import must infer the granted initial domain spell instead of prompting for it again'

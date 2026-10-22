@@ -1861,9 +1861,9 @@ function getSpecialSelectionsForOperation(
 
 /**
  * Pathbuilder records the selected domain, not a second choice for its granted
- * initial/advanced domain spell. Resolve that spell from WG's own Domains
- * option description so remaster/legacy content stays data-driven; never select
- * the first spell just to satisfy the required selector.
+ * initial/advanced domain spell. Resolve the spell from the selected domain's WG
+ * content when possible, then verify it against the legal options surfaced by the
+ * operation engine. Never choose the first available spell merely to satisfy it.
  */
 function findDomainSpellOption(
   title: string,
@@ -1879,15 +1879,35 @@ function findDomainSpellOption(
       : null;
   if (!spellKind || !/\bdomain\s+spell\b/i.test(title)) return null;
 
-  const domainChoices = resolved.specialSelections.filter((special) => {
+  const domainSelections = resolved.specialSelections.filter((special) => {
     const prompt = labelToVariable(special.prompt.replace(/^select\s+(?:an?\s+)?/i, ''));
-    return prompt === 'DOMAIN' && parseFeatSlotKey(special.slot).level === level;
+    return prompt === 'DOMAIN';
   });
-  if (domainChoices.length !== 1) return null;
+  // Champion's initial and advanced domain spells belong to the level-1 and
+  // level-8 domain feats. Prefer those source slots because some operation result
+  // packages report the enclosing class feature's level instead of the nested
+  // level-specific operation's level; use the operation level as a safe fallback.
+  const expectedDomainLevel = spellKind === 'Initial' ? 1 : 8;
+  const atExpectedLevel = domainSelections.filter(
+    (special) => parseFeatSlotKey(special.slot).level === expectedDomainLevel
+  );
+  const atOperationLevel = domainSelections.filter(
+    (special) => parseFeatSlotKey(special.slot).level === level
+  );
+  const candidates =
+    atExpectedLevel.length === 1
+      ? atExpectedLevel
+      : atOperationLevel.length === 1
+        ? atOperationLevel
+        : domainSelections.length === 1
+          ? domainSelections
+          : [];
+  if (candidates.length !== 1) return null;
+  const chosenDomainName = candidates[0].value;
+  const normalizedDomainName = labelToVariable(chosenDomainName);
 
-  // Content packages may contain multiple legacy/remastered "Domains" records.
-  // Select the actual domain picker that offers the recorded choice, rather than
-  // trusting the first block with this name (which may not contain the same options).
+  // Legacy and Remastered content may contain multiple domains records; use the
+  // record whose domain picker actually offers this character's recorded choice.
   const domainSelector = content.abilityBlocks
     .flatMap((block) => block.operations ?? [])
     .find((operation) => {
@@ -1900,31 +1920,49 @@ function findDomainSpellOption(
       return (operation.data.optionsPredefined ?? []).some(
         (option) =>
           option.type === 'CUSTOM' &&
-          labelToVariable(option.title) === labelToVariable(domainChoices[0].value)
+          labelToVariable(option.title) === normalizedDomainName
       );
     });
-  if (!domainSelector || domainSelector.type !== 'select') return null;
+  const domainOption = domainSelector?.type === 'select'
+    ? (domainSelector.data.optionsPredefined ?? []).find(
+        (option) =>
+          option.type === 'CUSTOM' &&
+          labelToVariable(option.title) === normalizedDomainName
+      )
+    : undefined;
 
-  const domainOption = domainSelector.data.optionsPredefined?.find(
-    (option) =>
-      option.type === 'CUSTOM' &&
-      labelToVariable(option.title) === labelToVariable(domainChoices[0].value)
+  if (domainOption?.type === 'CUSTOM') {
+    const spellMatch = new RegExp(
+      '\\*\\*' + spellKind + ' Spell\\*\\*\\s*\\[([^\\]]+)\\]\\(link_spell_(\\d+)\\)',
+      'i'
+    ).exec(domainOption.description);
+    if (spellMatch) {
+      // The link_spell_* token is a source-link identifier, not necessarily WG's
+      // local Spell.id. Match the authored spell name against legal WG options.
+      const spellName = spellMatch[1];
+      const byName = options.find(
+        (option) => labelToVariable(option.name ?? option.title ?? '') === labelToVariable(spellName)
+      );
+      if (byName) return byName;
+    }
+  }
+
+  // Some descriptions use source IDs while the selection tree stores WG-local
+  // IDs. A unique legal option carrying the selected domain trait is a second
+  // rules-backed way to identify the granted spell.
+  const domainTraitId = content.traits.find(
+    (trait) => labelToVariable(trait.name) === normalizedDomainName
+  )?.id;
+  if (domainTraitId === undefined) return null;
+  const traitMatches = options.filter((option) =>
+    Array.isArray(option.traits) &&
+    option.traits.some((trait) =>
+      typeof trait === 'number'
+        ? trait === domainTraitId
+        : labelToVariable(String(trait)) === normalizedDomainName
+    )
   );
-  if (!domainOption || domainOption.type !== 'CUSTOM') return null;
-
-  const spellMatch = new RegExp(
-    '\\*\\*' + spellKind + ' Spell\\*\\*\\s*\\[([^\\]]+)\\]\\(link_spell_(\\d+)\\)',
-    'i'
-  ).exec(domainOption.description);
-  if (!spellMatch) return null;
-
-  const spellName = spellMatch[1];
-  const spellId = spellMatch[2];
-  return options.find(
-    (option) => String(option._select_uuid) === spellId || String(option.id) === spellId
-  ) ?? options.find(
-    (option) => labelToVariable(option.name ?? option.title ?? '') === labelToVariable(spellName)
-  ) ?? null;
+  return traitMatches.length === 1 ? traitMatches[0] : null;
 }
 
 /**
@@ -2448,31 +2486,32 @@ function buildInventory(
   ): InventoryItem[] => {
     const sourceItem = itemOverride ?? findInventoryItem(ref, content, customItems);
     if (!sourceItem) {
-      warnings.push(`item: could not resolve "${ref.name}"`);
+      warnings.push('item: could not resolve "' + ref.name + '"');
       return [];
     }
 
-    // WG stores item quantity on the Item metadata. Since Pathbuilder quantities
-    // are expanded to one InventoryItem row per unit below, every row must be a
-    // single unit or getItemQuantity() multiplies the quantity a second time.
-    const item = cloneDeep(sourceItem);
-    const itemMetadata = item.meta_data ?? ({ bulk: {} } as NonNullable<Item['meta_data']>);
-    item.meta_data = { ...itemMetadata, quantity: 1 };
-
-    const entry: InventoryItem = {
-      id: crypto.randomUUID(),
-      item,
-      is_formula: false,
-      is_equipped: forceEquipped || isItemEquippable(item),
-      is_invested: isItemInvestable(item),
-      is_implanted: isItemImplantable(item),
-      container_contents: [],
-    };
-
+    // Pathbuilder quantities are references (e.g. Chalk quantity 10), while WG
+    // stores one physical row per unit. Never reuse a content-cache Item object
+    // across rows: editing the quantity/runes of one row must not mutate every
+    // duplicate through a shared object reference.
     const quantity = Math.max(1, ref.quantity ?? 1);
-    return Array.from({ length: quantity }, (_, index) =>
-      index === 0 ? entry : { ...entry, id: crypto.randomUUID() }
-    );
+    return Array.from({ length: quantity }, () => {
+      const item = cloneDeep(sourceItem);
+      const existing = item.meta_data ?? ({ bulk: {} } as NonNullable<Item['meta_data']>);
+      // Each row represents exactly one unit. Total quantity is represented by
+      // the number of rows, not by repeating the source stack count on every row.
+      item.meta_data = { ...existing, quantity: 1 };
+
+      return {
+        id: crypto.randomUUID(),
+        item,
+        is_formula: false,
+        is_equipped: forceEquipped || isItemEquippable(item),
+        is_invested: isItemInvestable(item),
+        is_implanted: isItemImplantable(item),
+        container_contents: [],
+      };
+    });
   };
 
   const items: InventoryItem[] = [];
@@ -2483,7 +2522,7 @@ function buildInventory(
     if (containerItem) {
       items.push({
         id: crypto.randomUUID(),
-        item: containerItem,
+        item: cloneDeep(containerItem),
         is_formula: false,
         is_equipped: false,
         is_invested: false,
