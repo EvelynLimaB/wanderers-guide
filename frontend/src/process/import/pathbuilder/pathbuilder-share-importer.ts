@@ -49,6 +49,7 @@ import { PathbuilderCustomFile, ResolvedBuild, ResolvedItemRef } from './types';
 import {
   findFreeArchetypeBranch,
   getAbilityBoostOriginForPath,
+  inferPathbuilderAncestryFeatLevel,
   inferPathbuilderOperationLevel,
 } from './pathbuilder-selection-routing';
 
@@ -2103,8 +2104,18 @@ async function resolveSelections(
     // selected parent may reveal new children, so rerun the engine after this batch.
     while (found) {
       const current = found;
-      const selectionLevel = inferPathbuilderOperationLevel(current.path, current.level);
       const selectionId = current.selection?.selection?.id ?? '';
+      const selectionLevel = inferPathbuilderAncestryFeatLevel(
+        current.path,
+        current.level,
+        resolved.variants.ancestry_paragon
+      ) === current.level
+        ? inferPathbuilderOperationLevel(current.path, current.level)
+        : inferPathbuilderAncestryFeatLevel(
+            current.path,
+            current.level,
+            resolved.variants.ancestry_paragon
+          );
       const selectionKey = selectionId ? `${selectionId}:${selectionLevel}` : '';
       const trackingKey = selectionKey || current.path;
       const selectionKeyWasResolved = resolvedSelectionKeys.has(trackingKey);
