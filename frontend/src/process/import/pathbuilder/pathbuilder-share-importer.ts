@@ -1885,14 +1885,24 @@ function findDomainSpellOption(
   });
   if (domainChoices.length !== 1) return null;
 
-  const domainsFeature = content.abilityBlocks.find(
-    (block) => labelToVariable(block.name) === 'DOMAINS'
-  );
-  const domainSelector = domainsFeature?.operations?.find(
-    (operation) =>
-      operation.type === 'select' &&
-      labelToVariable(operation.data.title ?? '') === 'SELECT_A_DOMAIN'
-  );
+  // Content packages may contain multiple legacy/remastered "Domains" records.
+  // Select the actual domain picker that offers the recorded choice, rather than
+  // trusting the first block with this name (which may not contain the same options).
+  const domainSelector = content.abilityBlocks
+    .flatMap((block) => block.operations ?? [])
+    .find((operation) => {
+      if (
+        operation.type !== 'select' ||
+        labelToVariable(operation.data.title ?? '') !== 'SELECT_A_DOMAIN'
+      ) {
+        return false;
+      }
+      return (operation.data.optionsPredefined ?? []).some(
+        (option) =>
+          option.type === 'CUSTOM' &&
+          labelToVariable(option.title) === labelToVariable(domainChoices[0].value)
+      );
+    });
   if (!domainSelector || domainSelector.type !== 'select') return null;
 
   const domainOption = domainSelector.data.optionsPredefined?.find(
