@@ -2136,6 +2136,9 @@ async function resolveSelections(
     while (found) {
       const current = found;
       const selectionId = current.selection?.selection?.id ?? '';
+      const ancestryFeatSlotIndex = current.path.startsWith('ancestry-section-')
+        ? getPathbuilderAncestryFeatSelectorIndex(selectionId)
+        : undefined;
       const ancestryFeatLevel = inferPathbuilderAncestryFeatLevel(
         selectionId,
         resolved.variants.ancestry_paragon
@@ -2225,9 +2228,6 @@ async function resolveSelections(
       } else if (languageSelection) {
         requestedSelections = resolved.languages.map((name) => ({ name, level: selectionLevel }));
       } else if (/\bfeat\b/i.test(current.selection?.selection?.title ?? '')) {
-        const ancestryFeatSlotIndex = current.path.startsWith('ancestry-section-')
-          ? getPathbuilderAncestryFeatSelectorIndex(selectionId)
-          : undefined;
         if (ancestryFeatSlotIndex !== undefined) {
           requestedSelections = getAncestryFeatSelectionsForOperation(
             ancestryFeatSlotIndex,
@@ -2305,6 +2305,31 @@ async function resolveSelections(
       // first-option choice for a selector that this importer can now resolve.
       if (!result) {
         result = findPathbuilderOption(requestedSelections, options, selectionLevel);
+      }
+      if (!result && ancestryFeatSlotIndex !== undefined && requestedSelections.length === 1) {
+        const requestedFeatName = requestedSelections[0].name;
+        const matchingContentFeats = content.abilityBlocks.filter(
+          (block) =>
+            block.type === 'feat' &&
+            labelToVariable(block.name) === labelToVariable(requestedFeatName)
+        );
+        if (matchingContentFeats.length === 1) {
+          const matchingFeat = matchingContentFeats[0];
+          // The engine can restore an ability block by numeric ID even if a selector's
+          // ancestry filter omits it. Pathbuilder's explicit choice is authoritative.
+          result = {
+            ...matchingFeat,
+            _select_uuid: String(matchingFeat.id),
+            _content_type: 'ability-block',
+          };
+        } else {
+          const reason = matchingContentFeats.length === 0
+            ? 'does not exist in the loaded Wanderer\'s Guide content package'
+            : 'matches multiple Wanderer\'s Guide feat records';
+          throw new Error(
+            `Pathbuilder selected ancestry feat "${requestedFeatName}" at level ${selectionLevel}, but it ${reason}. The import cannot preserve this choice safely.`
+          );
+        }
       }
       const manualSelectionUuid = selectionOverrides[trackingKey] ?? selectionOverrides[current.path];
       if (!result && manualSelectionUuid) {
