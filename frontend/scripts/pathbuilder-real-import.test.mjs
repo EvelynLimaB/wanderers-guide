@@ -463,6 +463,50 @@ try {
     'the derived resilient rune must survive armor reconstruction'
   );
 
+  // Regression for the live payload: Pathbuilder shares an armor UUID absent from
+  // listCustomFiles while json.php marks several armor rows as worn. The uniquely named
+  // chassis row plus the Automaton/Reinforced Chassis selections must win deterministically.
+  const ambiguousArmorShare = structuredClone(certifiedBuild);
+  ambiguousArmorShare.characterData.playerArmor = {
+    ...(ambiguousArmorShare.characterData.playerArmor ?? {}),
+    armorName: 'be5e11f6-4459-4080-9107-8145dd57014b',
+    potency: 1,
+    listPropertyRunes: ['Raiment'],
+  };
+  const multipleWornChassisOutcome = await importer.importFromPathbuilderShare('1597410', {
+    silent: true,
+    selectionOverrides,
+    fetchImpl: createFetch(ambiguousArmorShare),
+    derivedOverride: {
+      ...derivedFixture,
+      armor: [
+        { name: 'Automaton Chassi (5th level)', pot: 1, res: 'resilient', runes: ['Raiment'], worn: true },
+        { name: 'Clothing', worn: true },
+      ],
+      acTotal: { acProfBonus: 11, acAbilityBonus: 1, acItemBonus: 5, acTotal: 27, shieldBonus: '1' },
+    },
+  });
+  assert.equal(
+    multipleWornChassisOutcome.ok,
+    true,
+    multipleWornChassisOutcome.ok ? '' : multipleWornChassisOutcome.error
+  );
+  const selectedChassisFromAmbiguousRows = multipleWornChassisOutcome.character.inventory.items.find(
+    (entry) => entry.is_equipped && entry.item?.name === 'Automaton Chassi (5th level)'
+  )?.item;
+  assert.ok(selectedChassisFromAmbiguousRows, 'the identifiable chassis must be equipped despite other worn flags');
+  assert.equal(selectedChassisFromAmbiguousRows.meta_data?.category, 'unarmored_defense');
+  assert.equal(selectedChassisFromAmbiguousRows.meta_data?.runes?.potency, 1);
+  assert.equal(
+    multipleWornChassisOutcome.warnings.some((warning) => warning.startsWith('AC mismatch:')),
+    false,
+    'a correctly recovered chassis should calculate the supplied AC 27 without a mismatch warning'
+  );
+  assert.ok(
+    multipleWornChassisOutcome.warnings.some((warning) => /multiple armor rows as worn/i.test(warning)),
+    'the contradictory JSON worn flags must still be reported'
+  );
+
   // A chassis feat must not rewrite a different explicitly named armor item.
   const fullPlateOutcome = await importer.importFromPathbuilderShare('1597410', {
     silent: true,
