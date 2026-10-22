@@ -16,6 +16,8 @@ export type PathbuilderSelectionChoice = {
   level: number;
 };
 
+const ANCESTRY_FEAT_SELECTOR_PREFIX = '9f26290c-a2db-4c45-9b34-5053e60c106d-';
+
 /**
  * Level-specific operations encode their level after the final 12 hex digits
  * of each UUID in the selection path (for example, "...de101e8d46b1-2").
@@ -23,7 +25,13 @@ export type PathbuilderSelectionChoice = {
  * use the explicit path level when it is unambiguous.
  */
 export function inferPathbuilderOperationLevel(path: string, fallback: number): number {
-  const matches = [...path.matchAll(/-[0-9a-f]{12}-(\d+)(?=_|$)/gi)];
+  // An ancestry-section selector suffix is a slot index, not a level. Remove
+  // that synthetic segment before inferring levels for any nested child selector.
+  const levelPath = path
+    .split('_')
+    .filter((segment) => !segment.startsWith(ANCESTRY_FEAT_SELECTOR_PREFIX))
+    .join('_');
+  const matches = [...levelPath.matchAll(/-[0-9a-f]{12}-(\d+)(?=_|$)/gi)];
   const lastMatch = matches[matches.length - 1];
   if (!lastMatch) return fallback;
   const level = Number(lastMatch[1]);
@@ -43,11 +51,10 @@ export function inferPathbuilderAncestryFeatLevel(
   selectorId: string,
   ancestryParagon: boolean
 ): number | undefined {
-  const ancestryFeatSelectorPrefix = '9f26290c-a2db-4c45-9b34-5053e60c106d-';
-  if (!selectorId.startsWith(ancestryFeatSelectorPrefix)) return undefined;
+  if (!selectorId.startsWith(ANCESTRY_FEAT_SELECTOR_PREFIX)) return undefined;
 
-  const indexText = selectorId.slice(ancestryFeatSelectorPrefix.length);
-  if (!/^\\d+$/.test(indexText)) return undefined;
+  const indexText = selectorId.slice(ANCESTRY_FEAT_SELECTOR_PREFIX.length);
+  if (!/^\d+$/.test(indexText)) return undefined;
   const index = Number(indexText);
 
   const levels = ancestryParagon
