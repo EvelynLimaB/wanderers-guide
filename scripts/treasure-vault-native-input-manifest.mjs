@@ -30,7 +30,7 @@ export async function captureNativeInputManifest({root}) {
     return text;
   }
   const migrationFiles=(await readdir(root+'/supabase/migrations')).filter(path=>migrationName.test(path)).sort();
-  assert.equal(migrationFiles.length,116,'Complete reviewed chronology is mandatory');
+  assert.equal(migrationFiles.length,117,'Complete reviewed chronology is mandatory');
   assert.equal(migrationFiles.at(-1),'20261015000000_rust_cloud_release_compatibility.sql','Exact reviewed release recovery chronology successor');
   assert.deepEqual(migrationFiles.slice(-4),['20261010000100_shared_ancestries.sql','20261011000000_restore_heal_companion.sql','20261011000100_incarnate_release_compatibility.sql','20261015000000_rust_cloud_release_compatibility.sql']);
   const requirements=JSON.parse(await capture('supabase/release/requirements.json'));
