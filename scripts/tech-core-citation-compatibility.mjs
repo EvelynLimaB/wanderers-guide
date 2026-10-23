@@ -313,10 +313,15 @@ export function prepare(repository, proposalPath) {
     originalRequirements[migration].check = original;
     historicalRequirements[migration].check = original;
   }
+  const canonicalHistoricalRequirements = Object.fromEntries(
+    Object.entries(historicalRequirements).sort(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+  );
   assert.equal(
-    sha256(JSON.stringify(historicalRequirements, null, 2) + "\n"),
+    sha256(JSON.stringify(canonicalHistoricalRequirements, null, 2) + "\n"),
     ORIGINALS["supabase/release/requirements.json"],
-    "Tech Core registrations must match the pinned historical registry",
+    "Canonical Tech Core registry must match the pinned historical content",
   );
   let suppliedRows;
   if (proposalPath) {
