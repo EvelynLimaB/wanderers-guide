@@ -436,5 +436,9 @@
   "20261015000000_rust_cloud_release_compatibility.sql": {
     "check": "treasure-vault-terminal-status.sql",
     "order": "before-functions"
+  },
+  "20261007000000_pathbuilder_import.sql": {
+    "check": "pathbuilder-import.sql",
+    "order": "before-functions"
   }
 }
