@@ -291,7 +291,16 @@ export function prepare(repository, proposalPath) {
   const rustUpgrade = '20261015000000_rust_cloud_release_compatibility.sql';
   const rustRequirement = originalRequirements[rustUpgrade];
   assert.deepEqual(rustRequirement, {check:'treasure-vault-terminal-status.sql',order:'before-functions'});
-  delete originalRequirements[rustUpgrade];
+  const pathbuilderUpgrade = '20261007000000_pathbuilder_import.sql';
+  const pathbuilderRequirement = originalRequirements[pathbuilderUpgrade];
+  assert.deepEqual(pathbuilderRequirement, {check:'pathbuilder-import.sql',order:'before-functions'});
+
+  // Compare the Tech Core registration edits with the pinned historical registry.
+  // Rust Cloud and Pathbuilder are independently reviewed additions and remain
+  // in the live registry; only the temporary baseline copy excludes them.
+  const historicalRequirements = structuredClone(originalRequirements);
+  delete historicalRequirements[rustUpgrade];
+  delete historicalRequirements[pathbuilderUpgrade];
   for (const [migration, original] of Object.entries(originalCheckPaths)) {
     assert(
       [
@@ -302,13 +311,13 @@ export function prepare(repository, proposalPath) {
       ].includes(originalRequirements[migration].check),
     );
     originalRequirements[migration].check = original;
+    historicalRequirements[migration].check = original;
   }
   assert.equal(
-    sha256(JSON.stringify(originalRequirements, null, 2) + "\n"),
+    sha256(JSON.stringify(historicalRequirements, null, 2) + "\n"),
     ORIGINALS["supabase/release/requirements.json"],
-    "Only the three checked registration paths may differ",
+    "Tech Core registrations must match the pinned historical registry",
   );
-  originalRequirements[rustUpgrade] = rustRequirement;
   let suppliedRows;
   if (proposalPath) {
     const proposalBytes = fs.readFileSync(proposalPath);
@@ -379,10 +388,10 @@ export function prepare(repository, proposalPath) {
     requirements[migration].check = check;
     return { migration, before, after: requirements[migration] };
   });
-  assert.equal(Object.keys(requirements).length, 109);
+  assert.equal(Object.keys(requirements).length, 110);
   assert.equal(
     new Set(Object.values(requirements).map((entry) => entry.check)).size,
-    70,
+    71,
   );
   if (!proposalPath) {
     assert.equal(
