@@ -141,6 +141,21 @@ test('level-1 class boosts and free-archetype branches route to native WG operat
     1,
     'paths without an explicit level suffix must preserve the operation engine level'
   );
+  assert.equal(
+    inferPathbuilderOperationLevel('class_720d2fe6-f042-4353-8313-1293375b1301-2', 1),
+    1,
+    'the class skill-training selector suffix is an index, not a character level'
+  );
+  assert.equal(
+    inferPathbuilderOperationLevel('ancestry_957ee14b-c6dc-44eb-881b-e99a1b4e5118-3', 1),
+    1,
+    'the ancestry language selector suffix is an index, not a character level'
+  );
+  assert.equal(
+    inferPathbuilderOperationLevel('class-feature-123_7be7c32a-5d54-4d20-8cda-3e4c7a0a0ba6-3', 17),
+    17,
+    'the apex attribute selector suffix is an index, not a character level'
+  );
 
   assert.equal(
     inferPathbuilderAncestryFeatLevel('9f26290c-a2db-4c45-9b34-5053e60c106d-0', true),
