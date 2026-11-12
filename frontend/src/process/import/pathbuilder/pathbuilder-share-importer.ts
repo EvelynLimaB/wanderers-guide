@@ -1688,6 +1688,22 @@ async function validatePathbuilderDerived(
     }
   }
 
+  for (const [loreName, sourceRank] of derived.lores ?? []) {
+    const variableName = `SKILL_LORE_${labelToVariable(loreName)}`;
+    const expectedType = proficiencyRanks[sourceRank];
+    const variable = getVariable('CHARACTER', variableName);
+    if (!expectedType) {
+      fatalMismatches.push(`lore ${loreName}: unsupported Pathbuilder rank code ${sourceRank}`);
+    } else if (!variable || variable.type !== 'prof') {
+      fatalMismatches.push(`lore ${loreName}: native WG variable ${variableName} is missing`);
+    } else {
+      const actualType = compileProficiencyType(variable.value);
+      if (actualType !== expectedType) {
+        fatalMismatches.push(`lore ${loreName}: Pathbuilder ${expectedType}, WG ${actualType}`);
+      }
+    }
+  }
+
   // These base values are represented directly by native WG variables.
   // Pathbuilder's speedBonus is included in the final Speed comparison.
   const baseAttributeVariables: Record<string, string> = {
