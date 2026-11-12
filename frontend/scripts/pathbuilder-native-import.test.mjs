@@ -486,6 +486,10 @@ assert.ok(
   Object.keys(importedArsene.operation_data?.selections ?? {}).length > 0,
   'native WG operation selections must be persisted on the imported character'
 );
+assert.ok(
+  Object.values(importedArsene.operation_data?.selections ?? {}).includes('SKILL_LORE_UNDERWORLD'),
+  'the Pathbuilder Underworld Lore choice must be persisted as a native selection'
+);
 
 // A result of AC 12 must fail against Arsene's Pathbuilder AC 24 oracle.
 await assert.rejects(
