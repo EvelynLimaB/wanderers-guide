@@ -266,7 +266,7 @@ const content = {
         attributeSelect('wizard-boost-2'),
         attributeSelect('wizard-boost-3'),
         attributeSelect('wizard-boost-4'),
-        { id: 'wizard-unarmored', type: 'adjValue', data: { variable: 'UNARMORED_DEFENSE', value: { value: 'T' } } },
+        { id: 'wizard-unarmored', type: 'setValue', data: { variable: 'UNARMORED_DEFENSE', value: { value: 'T' } } },
         {
           id: 'wizard-lore-selection',
           type: 'select',
@@ -283,7 +283,6 @@ const content = {
             }],
           },
         },
-        { id: 'wizard-underworld-lore', type: 'adjValue', data: { variable: 'SKILL_LORE_UNDERWORLD', value: { value: 'T' } } },
         { id: 'wizard-class-hp', type: 'setValue', data: { variable: 'MAX_HEALTH_CLASS_PER_LEVEL', value: 6 } },
       ],
     },
