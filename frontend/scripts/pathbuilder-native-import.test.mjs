@@ -279,6 +279,15 @@ const content = {
             }],
           },
         },
+        {
+          id: 'wizard-underworld-lore-base',
+          type: 'createValue',
+          data: {
+            variable: 'SKILL_LORE_UNDERWORLD',
+            type: 'prof',
+            value: { value: 'U', attribute: 'ATTRIBUTE_INT' },
+          },
+        },
         { id: 'wizard-underworld-lore', type: 'adjValue', data: { variable: 'SKILL_LORE_UNDERWORLD', value: { value: 'T' } } },
         { id: 'wizard-class-hp', type: 'setValue', data: { variable: 'MAX_HEALTH_CLASS_PER_LEVEL', value: 6 } },
       ],
@@ -476,6 +485,10 @@ assert.equal(paddedArmor.item.meta_data?.runes?.potency, 1, 'the +1 potency rune
 assert.ok(
   Object.keys(importedArsene.operation_data?.selections ?? {}).length > 0,
   'native WG operation selections must be persisted on the imported character'
+);
+assert.ok(
+  Object.values(importedArsene.operation_data?.selections ?? {}).includes('SKILL_LORE_UNDERWORLD'),
+  'the Pathbuilder Underworld Lore choice must be persisted as a native selection'
 );
 
 // A result of AC 12 must fail against Arsene's Pathbuilder AC 24 oracle.
