@@ -126,7 +126,14 @@ try {
   await build({
   absWorkingDir: root,
   stdin: {
-    contents: 'export { buildCharacter } from "./src/process/import/pathbuilder/pathbuilder-share-importer.ts";',
+    contents: `
+      export { buildCharacter } from "./src/process/import/pathbuilder/pathbuilder-share-importer.ts";
+      export { importFromContentPackage } from "@content/content-store";
+      export { _executeCharacterOperations } from "@operations/operation-controller";
+      export { importVariableStore, getVariable } from "@variables/variable-manager";
+      export { getFinalAcValue, getFinalVariableValue } from "@variables/variable-helpers";
+      export { getAcParts } from "@items/armor-handler";
+    `,
     resolveDir: root,
   },
   outfile,
@@ -184,7 +191,16 @@ export function getIconFromContentType() { return undefined; }
   await stop();
 }
 
-const { buildCharacter } = await import(pathToFileURL(outfile).href);
+const {
+  buildCharacter,
+  importFromContentPackage,
+  _executeCharacterOperations,
+  importVariableStore,
+  getVariable,
+  getFinalAcValue,
+  getFinalVariableValue,
+  getAcParts,
+} = await import(pathToFileURL(outfile).href);
 
 const attributeSelect = (id, title = 'Select an Attribute') => ({
   id,
@@ -249,7 +265,7 @@ const content = {
       operations: [
         { id: 'wizard-key', type: 'select', data: {
           title: 'Select Key Ability', modeType: 'FILTERED', optionType: 'ADJ_VALUE',
-          optionsPredefined: [], optionsFilters: { id: 'wizard-key-filter', type: 'ADJ_VALUE', group: 'ATTRIBUTE', value: { value: 0 } },
+          optionsPredefined: [], optionsFilters: { id: 'wizard-key-filter', type: 'ADJ_VALUE', group: 'ATTRIBUTE', value: { value: 1 } },
         } },
         attributeSelect('wizard-boost-1'),
         attributeSelect('wizard-boost-2'),
@@ -314,6 +330,8 @@ const content = {
           optionsPredefined: [{
             id: 'rogue-option',
             type: 'ABILITY_BLOCK',
+            name: 'Rogue Dedication',
+            title: 'Rogue Dedication',
             operation: { id: 'rogue-give', type: 'giveAbilityBlock', data: { abilityBlockId: 5001, type: 'feat' } },
           }],
         },
@@ -326,9 +344,7 @@ const content = {
       name: 'Padded Armor',
       group: 'ARMOR',
       traits: [],
-      operations: [
-        { id: 'padded-potency', type: 'addBonusToValue', data: { variable: 'AC_BONUS', value: '+1', type: 'item', text: '' } },
-      ],
+      operations: [],
       meta_data: {
         category: 'light',
         ac_bonus: 1,
@@ -348,15 +364,26 @@ const content = {
   archetypes: [],
   classArchetypes: [],
 };
+importFromContentPackage(content);
 
 const derived = {
+  name: 'Arsene (Reset)',
+  class: 'Wizard',
+  level: 7,
+  ancestry: 'Fleshwarp',
+  heritage: 'Ifrit',
+  background: 'Criminal',
+  keyability: 'int',
   abilities: { str: 10, dex: 16, con: 16, int: 20, wis: 12, cha: 12 },
-  acTotal: { acTotal: 24 },
+  proficiencies: { light: 2, unarmored: 2 },
+  attributes: { ancestryhp: 10, classhp: 6, bonushp: 0, bonushpPerLevel: 0, speed: 25, speedBonus: 0 },
+  armor: [{ name: 'Padded Armor', qty: 1, prof: 'light', pot: 1, display: '+1 Padded Armor', worn: true, runes: [] }],
+  acTotal: { acProfBonus: 9, acAbilityBonus: 3, acItemBonus: 2, acTotal: 24, shieldBonus: null },
 };
 
-// This intentionally small content fixture does not contain every rule option
-// for Arsene's class feature tree. Preflight must surface the missing required
-// selection as structured UI data rather than silently choosing or persisting it.
+// Import the complete synthetic Arsene payload through the real WG operation
+// engine. This is a fail-closed parity test: it must reproduce the exact source
+// attributes, Light Armor training, armor components, and AC before creation.
 const preflightOutcome = await buildCharacter(
   resolved,
   content,
@@ -367,14 +394,77 @@ const preflightOutcome = await buildCharacter(
   derived,
   { preflightOnly: true }
 );
-assert.equal(preflightOutcome.status, 'selection-required');
-assert.ok(preflightOutcome.selection.key);
-assert.ok(preflightOutcome.selection.path);
-assert.ok(preflightOutcome.selection.title);
-assert.ok(preflightOutcome.selection.level >= 1);
-assert.ok(Array.isArray(preflightOutcome.selection.options));
+assert.equal(preflightOutcome.status, 'ready', preflightOutcome.status === 'selection-required'
+  ? `Unexpected manual selection: ${preflightOutcome.selection.title} at ${preflightOutcome.selection.path}`
+  : preflightOutcome.error ?? 'preflight should be ready');
+assert.equal(preflightOutcome.current.acTotal, 24);
+assert.deepEqual(
+  Object.fromEntries(preflightOutcome.current.abilities.map((ability) => [
+    ability.key.toUpperCase(),
+    10 + ability.modifier * 2,
+  ])),
+  { STR: 10, DEX: 16, CON: 16, INT: 20, WIS: 12, CHA: 12 }
+);
 
-await rm(bundleDir, { recursive: true, force: true });
+const warnings = [];
+const importedCharacter = await buildCharacter(
+  resolved,
+  content,
+  new Map(),
+  new Map(),
+  null,
+  warnings,
+  derived
+);
+assert.ok(importedCharacter && !('status' in importedCharacter));
+assert.deepEqual(warnings, [], `Arsene import warnings: ${warnings.join('; ')}`);
+assert.equal(importedCharacter.name, 'Arsene (Reset)');
+assert.ok(importedCharacter.operation_data?.selections);
+assert.ok(
+  Object.keys(importedCharacter.operation_data.selections).some((key) => key === 'class_wizard-boost-1'),
+  `the first class attribute choice must be stored under its operation path, got: ${Object.keys(importedCharacter.operation_data.selections).join(', ')}`
+);
+assert.ok(
+  Object.values(importedCharacter.operation_data.selections).includes('ATTRIBUTE_DEX'),
+  'the actual selected attribute variable must be stored as the selection value'
+);
+
+const packet = await _executeCharacterOperations({
+  character: importedCharacter,
+  content,
+  context: 'CHARACTER-SHEET',
+});
+assert.deepEqual(packet.errors, [], `WG operation errors: ${packet.errors.join('; ')}`);
+importVariableStore('CHARACTER', packet.store);
+
+const score = (name) => {
+  const attribute = getVariable('CHARACTER', `ATTRIBUTE_${name}`);
+  const modifier = getFinalVariableValue('CHARACTER', `ATTRIBUTE_${name}`).total;
+  return 10 + modifier * 2 + (attribute?.value?.partial ? 1 : 0);
+};
+assert.deepEqual(
+  Object.fromEntries(['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'].map((name) => [name, score(name)])),
+  { STR: 10, DEX: 16, CON: 16, INT: 20, WIS: 12, CHA: 12 }
+);
+
+const armor = importedCharacter.inventory.items.find(
+  (entry) => entry.is_equipped && entry.item?.name === 'Padded Armor'
+)?.item;
+assert.ok(armor, 'the imported +1 Padded Armor must be equipped');
+const acParts = getAcParts('CHARACTER', armor);
+assert.deepEqual(
+  {
+    proficiency: acParts.profBonus,
+    dexterity: acParts.dexBonus,
+    item: acParts.armorBonus,
+  },
+  { proficiency: 9, dexterity: 3, item: 2 }
+);
+assert.equal(getFinalAcValue('CHARACTER', armor), 24);
+
+const lightArmor = getVariable('CHARACTER', 'LIGHT_ARMOR');
+assert.equal(lightArmor?.type, 'prof');
+assert.equal(lightArmor.value.value, 'T', 'Rogue Dedication must grant Light Armor training natively');
 
 // TDD guard: an unresolved required selection must fail the import instead of becoming a warning
 // or causing the selection resolver to spin until the global calculation timeout.
