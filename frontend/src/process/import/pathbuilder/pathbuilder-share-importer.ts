@@ -32,6 +32,7 @@ import { defineDefaultSources, fetchContent, fetchContentPackage, fetchContentSo
 import { toMarkdown } from '@content/content-utils';
 import { findFirstSelection, findMatchingOption } from '@import/ftc/import-from-ftc';
 import { getBestArmor, isItemEquippable, isItemImplantable, isItemInvestable } from '@items/inv-utils';
+import { getAcParts } from '@items/armor-handler';
 import { hideNotification, showNotification } from '@mantine/notifications';
 import { ObjectWithUUID } from '@operations/operation-utils';
 import { executeOperations } from '@operations/operations.main';
@@ -39,6 +40,8 @@ import { makeRequest } from '@requests/request-manager';
 import { Character, InventoryItem, Item, ItemMetaCategorySchema, ItemMetaGroupSchema, OperationCharacterResultPackage, Spell, Trait } from '@schemas/content';
 import { Operation } from '@schemas/operations';
 import { getFinalAcValue, getFinalVariableValue } from '@variables/variable-helpers';
+import { getVariable } from '@variables/variable-manager';
+import { compileProficiencyType } from '@variables/variable-utils';
 import { labelToVariable } from '@variables/variable-utils';
 import { cloneDeep } from 'lodash-es';
 
@@ -1418,6 +1421,53 @@ const PATHBUILDER_PROFICIENCY_RANKS: Record<number, string> = {
   8: 'Legendary',
 };
 
+const PATHBUILDER_PROFICIENCY_TYPES: Record<number, string> = {
+  0: 'U',
+  2: 'T',
+  4: 'E',
+  6: 'M',
+  8: 'L',
+};
+
+const PATHBUILDER_PROFICIENCY_VARIABLES: Record<string, string> = {
+  classDC: 'CLASS_DC',
+  perception: 'PERCEPTION',
+  fortitude: 'SAVE_FORT',
+  reflex: 'SAVE_REFLEX',
+  will: 'SAVE_WILL',
+  heavy: 'HEAVY_ARMOR',
+  medium: 'MEDIUM_ARMOR',
+  light: 'LIGHT_ARMOR',
+  unarmored: 'UNARMORED_DEFENSE',
+  advanced: 'ADVANCED_WEAPONS',
+  martial: 'MARTIAL_WEAPONS',
+  simple: 'SIMPLE_WEAPONS',
+  unarmed: 'UNARMED_ATTACKS',
+  acrobatics: 'SKILL_ACROBATICS',
+  arcana: 'SKILL_ARCANA',
+  athletics: 'SKILL_ATHLETICS',
+  crafting: 'SKILL_CRAFTING',
+  deception: 'SKILL_DECEPTION',
+  diplomacy: 'SKILL_DIPLOMACY',
+  intimidation: 'SKILL_INTIMIDATION',
+  medicine: 'SKILL_MEDICINE',
+  nature: 'SKILL_NATURE',
+  occultism: 'SKILL_OCCULTISM',
+  performance: 'SKILL_PERFORMANCE',
+  religion: 'SKILL_RELIGION',
+  society: 'SKILL_SOCIETY',
+  stealth: 'SKILL_STEALTH',
+  survival: 'SKILL_SURVIVAL',
+  thievery: 'SKILL_THIEVERY',
+};
+
+const PATHBUILDER_ATTRIBUTE_VARIABLES: Record<string, string> = {
+  ancestryhp: 'MAX_HEALTH_ANCESTRY',
+  classhp: 'MAX_HEALTH_CLASS_PER_LEVEL',
+  bonushp: 'MAX_HEALTH_BONUS',
+  speed: 'SPEED',
+};
+
 function summarizePathbuilderTargets(
   derived: import('@schemas/pathbuilder').PathbuilderDerivedBuild
 ): PathbuilderTargetSummary {
@@ -1609,10 +1659,86 @@ async function validatePathbuilderDerived(
     }
   }
 
+  // Compare source proficiency ranks with the native WG variables. Pathbuilder
+  // stores rank codes (0, 2, 4, 6, 8), not final roll modifiers.
+  for (const [sourceName, sourceRank] of Object.entries(derived.proficiencies ?? {})) {
+    if (typeof sourceRank !== 'number') continue;
+    if ((sourceName === 'piloting' || sourceName === 'computers') && sourceRank === 0) continue;
+
+    const variableName = sourceName.startsWith('casting')
+      ? sourceRank === 0 ? null : 'SPELL_ATTACK'
+      : PATHBUILDER_PROFICIENCY_VARIABLES[sourceName];
+
+    if (!variableName) {
+      if (sourceRank !== 0) {
+        fatalMismatches.push(
+          `proficiency ${sourceName}: Pathbuilder rank ${PATHBUILDER_PROFICIENCY_RANKS[sourceRank] ?? sourceRank} has no WG mapping`
+        );
+      }
+      continue;
+    }
+
+    const expectedType = PATHBUILDER_PROFICIENCY_TYPES[sourceRank];
+    const variable = getVariable('CHARACTER', variableName);
+    if (!expectedType) {
+      fatalMismatches.push(`proficiency ${sourceName}: unsupported Pathbuilder rank code ${sourceRank}`);
+      continue;
+    }
+    if (!variable || variable.type !== 'prof') {
+      fatalMismatches.push(`proficiency ${sourceName}: WG variable ${variableName} is missing`);
+      continue;
+    }
+
+    const actualType = compileProficiencyType(variable.value);
+    if (actualType !== expectedType) {
+      const actualLabel = Object.entries(PATHBUILDER_PROFICIENCY_TYPES)
+        .find(([, type]) => type === actualType)?.[0];
+      fatalMismatches.push(
+        `proficiency ${sourceName}: Pathbuilder ${PATHBUILDER_PROFICIENCY_RANKS[sourceRank]}, WG ${actualLabel ? PATHBUILDER_PROFICIENCY_RANKS[Number(actualLabel)] : actualType}`
+      );
+    }
+  }
+
+  // The JSON export exposes base HP and Speed values separately. Preserve that
+  // distinction instead of comparing them with a single combined derived stat.
+  for (const [sourceName, sourceValue] of Object.entries(derived.attributes ?? {})) {
+    if (typeof sourceValue !== 'number') continue;
+    const variableName = PATHBUILDER_ATTRIBUTE_VARIABLES[sourceName];
+    if (!variableName) {
+      if (sourceValue !== 0) {
+        fatalMismatches.push(`attribute ${sourceName}: Pathbuilder value ${sourceValue} has no WG mapping`);
+      }
+      continue;
+    }
+    const actualValue = getFinalVariableValue('CHARACTER', variableName).total;
+    if (actualValue !== sourceValue) {
+      fatalMismatches.push(`attribute ${sourceName}: Pathbuilder ${sourceValue}, WG ${variableName} ${actualValue}`);
+    }
+  }
+
   const armor = getBestArmor('CHARACTER', character.inventory)?.item;
   if (derived.acTotal?.acTotal !== undefined) {
+    const parts = getAcParts('CHARACTER', armor);
     const actualAc = getFinalAcValue('CHARACTER', armor);
     const sourceAc = derived.acTotal.acTotal;
+    const sourceWornArmor = (derived.armor ?? []).filter((entry) => entry.worn === true);
+    const explicitShareArmor =
+      resolved.armor?.kind === 'standard' &&
+      !resolved.armor.raw.startsWith('inferred:') &&
+      (!sourceWornArmor.length ||
+        (sourceWornArmor.length === 1 &&
+          labelToVariable(sourceWornArmor[0].name ?? '') === labelToVariable(resolved.armor.name)));
+
+    for (const [label, expected, actual] of [
+      ['proficiency', derived.acTotal.acProfBonus, parts.profBonus],
+      ['Dexterity', derived.acTotal.acAbilityBonus, parts.dexBonus],
+      ['item', derived.acTotal.acItemBonus, parts.armorBonus],
+    ] as const) {
+      if (expected !== undefined && expected !== actual && explicitShareArmor) {
+        fatalMismatches.push(`AC ${label}: Pathbuilder ${expected}, WG ${actual}`);
+      }
+    }
+
     if (actualAc !== sourceAc) {
       const difference = actualAc - sourceAc;
       const signedDifference = difference > 0 ? `+${difference}` : String(difference);
@@ -1621,7 +1747,7 @@ async function validatePathbuilderDerived(
       );
       const chassisIsResolved = resolved.feats.some(
         (feat) => labelToVariable(feat.name) === 'REINFORCED_CHASSIS'
-      ) && /automaton\s+chassi/i.test(resolved.armor?.name ?? '');
+      ) && /automaton\\s+chassi/i.test(resolved.armor?.name ?? '');
       const hasUnnamedArmorRuneState =
         !resolved.armor && (resolved.armorPotency > 0 || resolved.armorRunes.length > 0);
       const explanation = reconstructedChassis
@@ -1634,9 +1760,9 @@ async function validatePathbuilderDerived(
               ? 'No reliable equipped armor reference was available to explain the difference.'
               : 'The resolved armor exists, but its rules calculation differs. Review armor statistics, proficiency, Dexterity cap, runes, shield state, and temporary bonuses.';
 
-      warnings.push(
-        `AC mismatch: Pathbuilder JSON reports ${sourceAc}; Wanderer's Guide calculates ${actualAc} (difference ${signedDifference}). ${explanation}`
-      );
+      const message = `AC mismatch: Pathbuilder JSON reports ${sourceAc}; Wanderer's Guide calculates ${actualAc} (difference ${signedDifference}). ${explanation}`;
+      if (explicitShareArmor) fatalMismatches.push(message);
+      else warnings.push(message);
     }
   }
 
