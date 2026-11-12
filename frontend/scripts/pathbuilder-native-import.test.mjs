@@ -253,7 +253,6 @@ const content = {
       id: 1, name: 'Wizard', trait_id: WIZARD_TRAIT, skill_training_base: 0,
       operations: [
         // Seed the untrained rank so Rogue Dedication can promote it.
-        { id: 'wizard-light-armor-base', type: 'setValue', data: { variable: 'LIGHT_ARMOR', value: 'U' } },
         { id: 'wizard-key', type: 'select', data: {
           title: 'Select Key Ability', modeType: 'FILTERED', optionType: 'ADJ_VALUE',
           optionsPredefined: [], optionsFilters: { id: 'wizard-key-filter', type: 'ADJ_VALUE', group: 'ATTRIBUTE', value: { value: 0 } },
