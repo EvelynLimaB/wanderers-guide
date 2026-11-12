@@ -431,7 +431,7 @@ for (let attempt = 0; completePreflight.status === 'selection-required' && attem
       title: prompt.title,
       level: prompt.level,
       path: prompt.path,
-      choices: candidates.map((feat) => feat.name),
+      choices: candidates,
       options: prompt.options.map((option) => option.label),
     })}`
   );
