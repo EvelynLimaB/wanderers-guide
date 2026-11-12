@@ -41,8 +41,7 @@ import { Character, InventoryItem, Item, ItemMetaCategorySchema, ItemMetaGroupSc
 import { Operation } from '@schemas/operations';
 import { getFinalAcValue, getFinalVariableValue } from '@variables/variable-helpers';
 import { getVariable } from '@variables/variable-manager';
-import { compileProficiencyType } from '@variables/variable-utils';
-import { labelToVariable } from '@variables/variable-utils';
+import { compileProficiencyType, labelToVariable } from '@variables/variable-utils';
 import { cloneDeep } from 'lodash-es';
 
 import { extractBuildId, fetchPathbuilderDerived, fetchPathbuilderShare, getPathbuilderDerivedFetchError } from './fetch-pathbuilder-share';
