@@ -1737,10 +1737,16 @@ async function validatePathbuilderDerived(
   const armor = getBestArmor('CHARACTER', character.inventory)?.item;
   if (derived.acTotal?.acTotal !== undefined) {
     const acParts = getAcParts('CHARACTER', armor);
+    // WG may represent an AC item bonus on the armor itself or as a separate
+    // AC_BONUS effect. Compare the effective item category, not only the armor row.
+    const effectiveItemBonus = Math.max(
+      acParts.armorBonus,
+      acParts.breakdown.bonuses.get('item bonus')?.value ?? 0
+    );
     const componentChecks = [
       ['proficiency', derived.acTotal.acProfBonus, acParts.profBonus],
       ['Dexterity', derived.acTotal.acAbilityBonus, acParts.dexBonus],
-      ['item', derived.acTotal.acItemBonus, acParts.armorBonus],
+      ['item', derived.acTotal.acItemBonus, effectiveItemBonus],
     ] as const;
     for (const [component, expected, actual] of componentChecks) {
       if (expected !== undefined && expected !== actual) {
