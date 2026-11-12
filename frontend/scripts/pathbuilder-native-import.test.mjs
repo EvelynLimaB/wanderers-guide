@@ -253,7 +253,7 @@ const content = {
       id: 1, name: 'Wizard', trait_id: WIZARD_TRAIT, skill_training_base: 0,
       operations: [
         // Seed the untrained rank so Rogue Dedication can promote it.
-        { id: 'wizard-light-armor-base', type: 'setValue', data: { variable: 'LIGHT_ARMOR', value: 'U' } },
+        { id: 'wizard-light-armor-base', type: 'setValue', data: { variable: 'LIGHT_ARMOR', value: 0 } },
         { id: 'wizard-key', type: 'select', data: {
           title: 'Select Key Ability', modeType: 'FILTERED', optionType: 'ADJ_VALUE',
           optionsPredefined: [], optionsFilters: { id: 'wizard-key-filter', type: 'ADJ_VALUE', group: 'ATTRIBUTE', value: { value: 0 } },
@@ -316,7 +316,7 @@ const content = {
     {
       id: 5001, name: 'Rogue Dedication', type: 'feat', traits: [DEDICATION_TRAIT],
       operations: [
-        { id: 'rogue-light-armor', type: 'adjValue', data: { variable: 'LIGHT_ARMOR', value: { value: 'T' } } },
+        { id: 'rogue-light-armor', type: 'adjValue', data: { variable: 'LIGHT_ARMOR', value: { value: 2 } } },
       ],
       meta_data: { archetype_trait: true },
     },
