@@ -32,6 +32,7 @@ import { defineDefaultSources, fetchContent, fetchContentPackage, fetchContentSo
 import { toMarkdown } from '@content/content-utils';
 import { findFirstSelection, findMatchingOption } from '@import/ftc/import-from-ftc';
 import { getBestArmor, isItemEquippable, isItemImplantable, isItemInvestable } from '@items/inv-utils';
+import { getAcParts } from '@items/armor-handler';
 import { hideNotification, showNotification } from '@mantine/notifications';
 import { ObjectWithUUID } from '@operations/operation-utils';
 import { executeOperations } from '@operations/operations.main';
@@ -39,7 +40,8 @@ import { makeRequest } from '@requests/request-manager';
 import { Character, InventoryItem, Item, ItemMetaCategorySchema, ItemMetaGroupSchema, OperationCharacterResultPackage, Spell, Trait } from '@schemas/content';
 import { Operation } from '@schemas/operations';
 import { getFinalAcValue, getFinalVariableValue } from '@variables/variable-helpers';
-import { labelToVariable } from '@variables/variable-utils';
+import { getVariable } from '@variables/variable-manager';
+import { compileProficiencyType, labelToVariable } from '@variables/variable-utils';
 import { cloneDeep } from 'lodash-es';
 
 import { extractBuildId, fetchPathbuilderDerived, fetchPathbuilderShare, getPathbuilderDerivedFetchError } from './fetch-pathbuilder-share';
@@ -1386,7 +1388,6 @@ export async function buildCharacter(
   const mechanicalWarnings = warnings.filter(
     (warning) =>
       !warning.startsWith('provenance:') &&
-      !warning.startsWith('AC mismatch:') &&
       !warning.startsWith('armor warning:')
   );
   if (mechanicalWarnings.length > 0) {
@@ -1578,9 +1579,8 @@ async function calculatePathbuilderCurrentSummary(
 
 /**
  * Compare Pathbuilder's calculated values with WG's native operation engine.
- * Ability-score mismatches remain fatal because they indicate the character's
- * core build was not reproduced. AC is a diagnostic instead: Pathbuilder share
- * links can lose armor state, so a mismatch must not prevent character creation.
+ * Ability-score and AC mismatches are fatal: the character must not be created
+ * when its core attributes or defense differ from the source calculation.
  */
 async function validatePathbuilderDerived(
   character: Character,
@@ -1609,8 +1609,154 @@ async function validatePathbuilderDerived(
     }
   }
 
+
+  // Compare proficiency ranks independently from the final AC/roll totals.
+  // Pathbuilder serializes proficiency rank codes as 0/2/4/6/8 (U/T/E/M/L).
+  // This prevents an unrelated bonus from compensating for missing native training.
+  const proficiencyRanks: Record<number, string> = {
+    0: 'U',
+    2: 'T',
+    4: 'E',
+    6: 'M',
+    8: 'L',
+  };
+  const proficiencyNames: Record<string, string> = {
+    classDC: 'CLASS_DC',
+    perception: 'PERCEPTION',
+    fortitude: 'SAVE_FORT',
+    reflex: 'SAVE_REFLEX',
+    will: 'SAVE_WILL',
+    heavy: 'HEAVY_ARMOR',
+    medium: 'MEDIUM_ARMOR',
+    light: 'LIGHT_ARMOR',
+    unarmored: 'UNARMORED_DEFENSE',
+    advanced: 'ADVANCED_WEAPONS',
+    martial: 'MARTIAL_WEAPONS',
+    simple: 'SIMPLE_WEAPONS',
+    unarmed: 'UNARMED_ATTACKS',
+    acrobatics: 'SKILL_ACROBATICS',
+    arcana: 'SKILL_ARCANA',
+    athletics: 'SKILL_ATHLETICS',
+    crafting: 'SKILL_CRAFTING',
+    deception: 'SKILL_DECEPTION',
+    diplomacy: 'SKILL_DIPLOMACY',
+    intimidation: 'SKILL_INTIMIDATION',
+    medicine: 'SKILL_MEDICINE',
+    nature: 'SKILL_NATURE',
+    occultism: 'SKILL_OCCULTISM',
+    performance: 'SKILL_PERFORMANCE',
+    religion: 'SKILL_RELIGION',
+    society: 'SKILL_SOCIETY',
+    stealth: 'SKILL_STEALTH',
+    survival: 'SKILL_SURVIVAL',
+    thievery: 'SKILL_THIEVERY',
+  };
+
+  for (const [sourceName, sourceRank] of Object.entries(derived.proficiencies ?? {})) {
+    if (typeof sourceRank !== 'number') continue;
+    // These Starfinder-only skills have no PF2e variable and are untrained here.
+    if ((sourceName === 'piloting' || sourceName === 'computers') && sourceRank === 0) continue;
+
+    const variableName = sourceName.startsWith('casting')
+      ? sourceRank === 0 ? null : 'SPELL_ATTACK'
+      : proficiencyNames[sourceName];
+    if (!variableName) {
+      if (sourceRank !== 0) {
+        fatalMismatches.push(
+          `proficiency ${sourceName}: Pathbuilder rank code ${sourceRank} has no native WG mapping`
+        );
+      }
+      continue;
+    }
+
+    const expectedType = proficiencyRanks[sourceRank];
+    const variable = getVariable('CHARACTER', variableName);
+    if (!expectedType) {
+      fatalMismatches.push(`proficiency ${sourceName}: unsupported Pathbuilder rank code ${sourceRank}`);
+      continue;
+    }
+    if (!variable || variable.type !== 'prof') {
+      fatalMismatches.push(`proficiency ${sourceName}: native WG variable ${variableName} is missing`);
+      continue;
+    }
+
+    const actualType = compileProficiencyType(variable.value);
+    if (actualType !== expectedType) {
+      fatalMismatches.push(
+        `proficiency ${sourceName}: Pathbuilder ${expectedType}, WG ${actualType} (${variableName})`
+      );
+    }
+  }
+
+  for (const [loreName, sourceRank] of derived.lores ?? []) {
+    const variableName = `SKILL_LORE_${labelToVariable(loreName)}`;
+    const expectedType = proficiencyRanks[sourceRank];
+    const variable = getVariable('CHARACTER', variableName);
+    if (!expectedType) {
+      fatalMismatches.push(`lore ${loreName}: unsupported Pathbuilder rank code ${sourceRank}`);
+    } else if (!variable || variable.type !== 'prof') {
+      fatalMismatches.push(`lore ${loreName}: native WG variable ${variableName} is missing`);
+    } else {
+      const actualType = compileProficiencyType(variable.value);
+      if (actualType !== expectedType) {
+        fatalMismatches.push(`lore ${loreName}: Pathbuilder ${expectedType}, WG ${actualType}`);
+      }
+    }
+  }
+
+  // These base values are represented directly by native WG variables.
+  // Pathbuilder's speedBonus is included in the final Speed comparison.
+  const baseAttributeVariables: Record<string, string> = {
+    ancestryhp: 'MAX_HEALTH_ANCESTRY',
+    classhp: 'MAX_HEALTH_CLASS_PER_LEVEL',
+    bonushp: 'MAX_HEALTH_BONUS',
+  };
+  for (const [sourceName, sourceValue] of Object.entries(derived.attributes ?? {})) {
+    if (typeof sourceValue !== 'number') continue;
+    const variableName = baseAttributeVariables[sourceName];
+    if (variableName) {
+      const actual = getFinalVariableValue('CHARACTER', variableName).total;
+      if (actual !== sourceValue) {
+        fatalMismatches.push(
+          `attribute ${sourceName}: Pathbuilder ${sourceValue}, WG ${actual} (${variableName})`
+        );
+      }
+    } else if (sourceName === 'speed') {
+      const expected = sourceValue + (typeof derived.attributes?.speedBonus === 'number' ? derived.attributes.speedBonus : 0);
+      const actual = getFinalVariableValue('CHARACTER', 'SPEED').total;
+      if (actual !== expected) {
+        fatalMismatches.push(`attribute speed: Pathbuilder ${expected}, WG ${actual}`);
+      }
+    } else if (sourceName === 'speedBonus' && typeof derived.attributes?.speed === 'number') {
+      // Already included above in the final Speed comparison.
+      continue;
+    } else if (sourceValue !== 0) {
+      fatalMismatches.push(
+        `attribute ${sourceName}: non-zero Pathbuilder value ${sourceValue} has no native WG mapping`
+      );
+    }
+  }
+
   const armor = getBestArmor('CHARACTER', character.inventory)?.item;
   if (derived.acTotal?.acTotal !== undefined) {
+    const acParts = getAcParts('CHARACTER', armor);
+    // WG may represent an AC item bonus on the armor itself or as a separate
+    // AC_BONUS effect. Compare the effective item category, not only the armor row.
+    const effectiveItemBonus = Math.max(
+      acParts.armorBonus,
+      acParts.breakdown.bonuses.get('item bonus')?.value ?? 0
+    );
+    const componentChecks = [
+      ['proficiency', derived.acTotal.acProfBonus, acParts.profBonus],
+      ['Dexterity', derived.acTotal.acAbilityBonus, acParts.dexBonus],
+      ['item', derived.acTotal.acItemBonus, effectiveItemBonus],
+    ] as const;
+    for (const [component, expected, actual] of componentChecks) {
+      if (expected !== undefined && expected !== actual) {
+        fatalMismatches.push(`AC ${component}: Pathbuilder ${expected}, WG ${actual}`);
+      }
+    }
+
     const actualAc = getFinalAcValue('CHARACTER', armor);
     const sourceAc = derived.acTotal.acTotal;
     if (actualAc !== sourceAc) {
@@ -1621,7 +1767,7 @@ async function validatePathbuilderDerived(
       );
       const chassisIsResolved = resolved.feats.some(
         (feat) => labelToVariable(feat.name) === 'REINFORCED_CHASSIS'
-      ) && /automaton\s+chassi/i.test(resolved.armor?.name ?? '');
+      ) && /automaton\\s+chassi/i.test(resolved.armor?.name ?? '');
       const hasUnnamedArmorRuneState =
         !resolved.armor && (resolved.armorPotency > 0 || resolved.armorRunes.length > 0);
       const explanation = reconstructedChassis
@@ -1634,7 +1780,7 @@ async function validatePathbuilderDerived(
               ? 'No reliable equipped armor reference was available to explain the difference.'
               : 'The resolved armor exists, but its rules calculation differs. Review armor statistics, proficiency, Dexterity cap, runes, shield state, and temporary bonuses.';
 
-      warnings.push(
+      fatalMismatches.push(
         `AC mismatch: Pathbuilder JSON reports ${sourceAc}; Wanderer's Guide calculates ${actualAc} (difference ${signedDifference}). ${explanation}`
       );
     }
@@ -2178,6 +2324,7 @@ async function resolveSelections(
       const skillSelection = isSkillSelection(options, current.selection?.selection);
       const languageSelection = isLanguageSelection(current.selection?.selection);
       const keyAbilitySelection = isKeyAbilitySelection(current.selection?.selection);
+      const specialAttributeSelection = /\bapex\b/i.test(current.selection?.selection?.title ?? '');
       const implicitKeyAbilitySelection =
         attributeSelection &&
         current.path.startsWith('class_') &&
@@ -2205,35 +2352,43 @@ async function resolveSelections(
         .map((feat) => ({ name: feat.name, level: selectionLevel }));
 
       if (attributeSelection) {
-        const isClassAttributeSelection = current.path.startsWith('class_');
-        const isFirstClassAttributeSelection =
-          isClassAttributeSelection && classAttributeSelectionIndex === 0;
-        if (isFirstClassAttributeSelection) {
-          if (resolved.identity.keyAbility) {
-            requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: selectionLevel }];
-          } else if (options.length === 1) {
-            result = options[0];
-          } else {
-            // The key ability was omitted from the share. Leave it unresolved here
-            // so the preflight UI can ask the user rather than aborting the import.
-            requestedSelections = [];
-          }
-        } else if (keyAbilitySelection && resolved.identity.keyAbility) {
-          requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: selectionLevel }];
+        if (specialAttributeSelection) {
+          requestedSelections = getSpecialSelectionsForOperation(
+            current.selection?.selection,
+            selectionLevel,
+            resolved
+          );
         } else {
-          const origin = getAbilityBoostOriginForPath(current.path);
-          if (origin) {
-            const cursorKey = origin + ':' + selectionLevel;
-            const cursor = abilityBoostCursors.get(cursorKey) ?? 0;
-            const candidates = resolved.abilityBoosts.filter(
-              (boost) => boost.origin === origin && boost.level === selectionLevel
-            );
-            const candidate = candidates[cursor];
-            requestedSelections = candidate
-              ? [{ name: pathbuilderAbilityLabel(candidate.ability), level: candidate.level }]
-              : [];
+          const isClassAttributeSelection = current.path.startsWith('class_');
+          const isFirstClassAttributeSelection =
+            isClassAttributeSelection && classAttributeSelectionIndex === 0;
+          if (isFirstClassAttributeSelection) {
+            if (resolved.identity.keyAbility) {
+              requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: selectionLevel }];
+            } else if (options.length === 1) {
+              result = options[0];
+            } else {
+              // The key ability was omitted from the share. Leave it unresolved here
+              // so the preflight UI can ask the user rather than aborting the import.
+              requestedSelections = [];
+            }
+          } else if (keyAbilitySelection && resolved.identity.keyAbility) {
+            requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: selectionLevel }];
           } else {
-            requestedSelections = [];
+            const origin = getAbilityBoostOriginForPath(current.path);
+            if (origin) {
+              const cursorKey = origin + ':' + selectionLevel;
+              const cursor = abilityBoostCursors.get(cursorKey) ?? 0;
+              const candidates = resolved.abilityBoosts.filter(
+                (boost) => boost.origin === origin && boost.level === selectionLevel
+              );
+              const candidate = candidates[cursor];
+              requestedSelections = candidate
+                ? [{ name: pathbuilderAbilityLabel(candidate.ability), level: candidate.level }]
+                : [];
+            } else {
+              requestedSelections = [];
+            }
           }
         }
       } else if (skillSelection) {
@@ -2346,6 +2501,22 @@ async function resolveSelections(
           );
         }
       }
+      if (
+        attributeSelection &&
+        !implicitKeyAbilitySelection &&
+        !keyAbilitySelection &&
+        !specialAttributeSelection &&
+        requestedSelections.length === 0
+      ) {
+        throw new Error(
+          `Pathbuilder 1:1 ability boost mapping failed: no source boost matches WG selector at level ${selectionLevel} (${current.path})`
+        );
+      }
+      if (attributeSelection && requestedSelections.length > 0 && !result) {
+        throw new Error(
+          `Pathbuilder 1:1 ability boost mapping failed: WG has no legal option matching "${requestedSelections[0].name}" at level ${selectionLevel} (${current.path})`
+        );
+      }
       const manualSelectionUuid = selectionOverrides[trackingKey] ?? selectionOverrides[current.path];
       if (!result && manualSelectionUuid) {
         result = manualOptions.find((option) => option._select_uuid === manualSelectionUuid) ?? null;
@@ -2415,21 +2586,29 @@ async function resolveSelections(
         resolvedSelectionKeys.add(trackingKey);
         character.operation_data!.selections = cloneDeep(chosen);
 
-        if (attributeSelection) {
+        // A selector can reappear under a rebuilt parent path. Replay its saved
+        // UUID, but never consume the same source choice twice.
+        if (!selectionKeyWasResolved && attributeSelection) {
           if (current.path.startsWith('class_')) classAttributeSelectionIndex++;
         }
-        if (attributeSelection && !keyAbilitySelection && !(current.path.startsWith('class_') && classAttributeSelectionIndex === 1)) {
+        if (
+          !selectionKeyWasResolved &&
+          attributeSelection &&
+          !keyAbilitySelection &&
+          !specialAttributeSelection &&
+          !(current.path.startsWith('class_') && classAttributeSelectionIndex === 1)
+        ) {
           const origin = getAbilityBoostOriginForPath(current.path);
           if (origin) {
             const cursorKey = origin + ':' + selectionLevel;
             abilityBoostCursors.set(cursorKey, (abilityBoostCursors.get(cursorKey) ?? 0) + 1);
           }
         }
-        if (skillSelection) {
+        if (!selectionKeyWasResolved && skillSelection) {
           const cursor = skillCursors.get(selectionLevel) ?? 0;
           skillCursors.set(selectionLevel, cursor + 1);
         }
-        if (/\bfeat\b/i.test(current.selection?.selection?.title ?? '')) {
+        if (!selectionKeyWasResolved && /\bfeat\b/i.test(current.selection?.selection?.title ?? '')) {
           const key = current.path;
           featCursors.set(key, (featCursors.get(key) ?? 0) + 1);
         }
@@ -2454,6 +2633,31 @@ async function resolveSelections(
     }
     hasSelections = false;
   }
+
+  // A native operation tree can silently omit a boost selector even when all
+  // selectors it does expose were resolved. Compare every source boost at or
+  // below the character's current level with the number of distinct WG selectors
+  // that consumed it. Future planned boosts are intentionally not applied yet.
+  const expectedBoostCounts = new Map<string, number>();
+  for (const boost of resolved.abilityBoosts) {
+    if (boost.level > resolved.identity.level) continue;
+    const key = `${boost.origin}:${boost.level}`;
+    expectedBoostCounts.set(key, (expectedBoostCounts.get(key) ?? 0) + 1);
+  }
+  const boostKeys = new Set([...expectedBoostCounts.keys(), ...abilityBoostCursors.keys()]);
+  const boostMappingErrors = [...boostKeys]
+    .sort()
+    .flatMap((key) => {
+      const expected = expectedBoostCounts.get(key) ?? 0;
+      const mapped = abilityBoostCursors.get(key) ?? 0;
+      return expected === mapped ? [] : [`${key}: expected ${expected}, mapped ${mapped}`];
+    });
+  if (boostMappingErrors.length > 0) {
+    throw new Error(
+      `Pathbuilder 1:1 ability boost mapping failed: ${boostMappingErrors.join('; ')}`
+    );
+  }
+
   return null;
 }
 

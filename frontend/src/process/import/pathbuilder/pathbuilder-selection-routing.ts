@@ -17,6 +17,12 @@ export type PathbuilderSelectionChoice = {
 };
 
 const ANCESTRY_FEAT_SELECTOR_PREFIX = '9f26290c-a2db-4c45-9b34-5053e60c106d-';
+// These generated selectors end in an index, not a character level.
+const INDEXED_SELECTOR_PREFIXES = [
+  '720d2fe6-f042-4353-8313-1293375b1301-', // class skill-training choices
+  '957ee14b-c6dc-44eb-881b-e99a1b4e5118-', // ancestry bonus-language choices
+  '7be7c32a-5d54-4d20-8cda-3e4c7a0a0ba6-', // Automatic Bonus Progression apex attribute
+];
 
 /**
  * Level-specific operations encode their level after the final 12 hex digits
@@ -29,7 +35,11 @@ export function inferPathbuilderOperationLevel(path: string, fallback: number): 
   // that synthetic segment before inferring levels for any nested child selector.
   const levelPath = path
     .split('_')
-    .filter((segment) => !segment.startsWith(ANCESTRY_FEAT_SELECTOR_PREFIX))
+    .filter(
+      (segment) =>
+        !segment.startsWith(ANCESTRY_FEAT_SELECTOR_PREFIX) &&
+        !INDEXED_SELECTOR_PREFIXES.some((prefix) => segment.startsWith(prefix))
+    )
     .join('_');
   const matches = [...levelPath.matchAll(/-[0-9a-f]{12}-(\d+)(?=_|$)/gi)];
   const lastMatch = matches[matches.length - 1];

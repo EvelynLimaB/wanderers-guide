@@ -314,6 +314,7 @@ export const PathbuilderDerivedBuildSchema = z
       cha: z.number().optional(),
     }).passthrough().nullish(),
     proficiencies: z.record(z.string(), z.number()).nullish(),
+    lores: z.array(z.tuple([z.string(), z.number()])).nullish(),
     attributes: z.record(z.string(), z.number()).nullish(),
     acTotal: z.object({
       acProfBonus: z.number().optional(),

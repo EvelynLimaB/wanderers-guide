@@ -317,10 +317,9 @@ try {
   const certifiedBuild = structuredClone(fixture.build);
   certifiedBuild.characterData.keyability = 'str';
 
-  // Deliberately stale synthetic target for the warning-path regression only.
-  // The captured official json.php response is loaded separately below and is used
-  // for positive identity, ability, armor, rune, and AC parity assertions.
-  // This lets the test prove that source inconsistency warns without blocking import.
+  // Deliberately stale synthetic target for the fail-closed regression.
+  // A source mismatch must never create a character with unverified mechanics.
+  // This lets the test prove that source inconsistency blocks character creation.
   const staleDerivedFixture = {
     name: 'Kasane',
     class: 'Champion',
@@ -442,16 +441,13 @@ try {
   });
   assert.equal(shareRequests, 1);
   assert.equal(derivedRequests, 0);
-  assert.equal(certifiedOutcome.ok, true, certifiedOutcome.ok ? '' : certifiedOutcome.error);
-  assert.equal(certifiedOutcome.character?.name, 'Kasane');
-  const acWarning = certifiedOutcome.warnings.find((warning) => warning.startsWith('AC mismatch:'));
-  assert.ok(acWarning, 'an AC discrepancy should warn rather than block character creation');
-  assert.match(acWarning, /Pathbuilder JSON reports 24; Wanderer's Guide calculates 27/);
-  assert.match(acWarning, /share payload omitted the chassis armor name/i);
-  assert.ok(
-    certifiedOutcome.warnings.some((warning) => /reconstructed the automaton reinforced chassis/i.test(warning)),
-    'the warning details should explain the reconstructed armor state'
+  assert.equal(certifiedOutcome.ok, false, 'an AC mismatch must block character creation');
+  assert.match(
+    certifiedOutcome.error,
+    /AC mismatch: Pathbuilder JSON reports 24; Wanderer's Guide calculates 27/,
+    'the rejection must include both source and calculated AC'
   );
+  assert.match(certifiedOutcome.error, /share payload omitted the chassis armor name/i);
 
   // Regression: Pathbuilder represents the Remastered Automaton's Reinforced
   // Chassis as a synthetic worn-armor row. At level 7 it grants +4 AC, and the
@@ -563,7 +559,8 @@ try {
     derivedOverride: {
       ...staleDerivedFixture,
       armor: [{ name: 'Full Plate', pot: 1, res: 'resilient', worn: true }],
-      acTotal: { acTotal: 24 },
+      // This case tests armor identity, not a trusted AC oracle.
+      acTotal: undefined,
     },
   });
   assert.equal(fullPlateOutcome.ok, true, fullPlateOutcome.ok ? '' : fullPlateOutcome.error);

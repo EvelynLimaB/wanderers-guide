@@ -236,6 +236,11 @@ const resolved = resolveBuild(
   { characterData: pathbuilderCharacterData },
   { buildId: '1596127' }
 );
+resolved.specialSelections.push({
+  slot: 'Lore Selection',
+  prompt: 'Select a Lore',
+  value: 'Underworld Lore',
+});
 
 const WIZARD_TRAIT = 2001;
 const ANCESTRY_TRAIT = 2002;
@@ -247,6 +252,12 @@ const content = {
     {
       id: 1, name: 'Wizard', trait_id: WIZARD_TRAIT, skill_training_base: 0,
       operations: [
+        // Seed the selected skill ranks for the isolated operation-engine fixture.
+        ...['ARCANA', 'ATHLETICS', 'SOCIETY', 'STEALTH'].map((skill) => ({
+          id: `wizard-skill-${skill.toLowerCase()}-base`,
+          type: 'setValue',
+          data: { variable: `SKILL_${skill}`, value: { value: 'U' } },
+        })),
         { id: 'wizard-key', type: 'select', data: {
           title: 'Select Key Ability', modeType: 'FILTERED', optionType: 'ADJ_VALUE',
           optionsPredefined: [], optionsFilters: { id: 'wizard-key-filter', type: 'ADJ_VALUE', group: 'ATTRIBUTE', value: { value: 0 } },
@@ -255,7 +266,24 @@ const content = {
         attributeSelect('wizard-boost-2'),
         attributeSelect('wizard-boost-3'),
         attributeSelect('wizard-boost-4'),
-        { id: 'wizard-unarmored', type: 'adjValue', data: { variable: 'UNARMORED_DEFENSE', value: { value: 'T' } } },
+        { id: 'wizard-unarmored', type: 'setValue', data: { variable: 'UNARMORED_DEFENSE', value: { value: 'T' } } },
+        {
+          id: 'wizard-lore-selection',
+          type: 'select',
+          data: {
+            title: 'Select a Lore',
+            modeType: 'PREDEFINED',
+            optionType: 'CUSTOM',
+            optionsPredefined: [{
+              id: 'SKILL_LORE_UNDERWORLD',
+              type: 'CUSTOM',
+              title: 'Underworld Lore',
+              description: 'Arsene’s Lore proficiency',
+              operations: [],
+            }],
+          },
+        },
+        { id: 'wizard-class-hp', type: 'setValue', data: { variable: 'MAX_HEALTH_CLASS_PER_LEVEL', value: 6 } },
       ],
     },
   ],
@@ -263,6 +291,8 @@ const content = {
     {
       id: 2, name: 'Fleshwarp', trait_id: ANCESTRY_TRAIT,
       operations: [
+        { id: 'fleshwarp-ancestry-hp', type: 'setValue', data: { variable: 'MAX_HEALTH_ANCESTRY', value: 10 } },
+        { id: 'fleshwarp-speed', type: 'setValue', data: { variable: 'SPEED', value: 25 } },
         { id: 'fleshwarp-fixed-con', type: 'adjValue', data: { variable: 'ATTRIBUTE_CON', value: { value: 1 } } },
         attributeSelect('fleshwarp-free'),
       ],
@@ -272,8 +302,8 @@ const content = {
     {
       id: 3, name: 'Criminal',
       operations: [
-        { id: 'criminal-int', type: 'adjValue', data: { variable: 'ATTRIBUTE_INT', value: { value: 1 } } },
-        { id: 'criminal-dex', type: 'adjValue', data: { variable: 'ATTRIBUTE_DEX', value: { value: 1 } } },
+        attributeSelect('criminal-boost-1'),
+        attributeSelect('criminal-boost-2'),
       ],
     },
   ],
@@ -282,10 +312,16 @@ const content = {
       id: 4004, name: 'Ifrit', type: 'heritage', traits: [ANCESTRY_TRAIT],
       operations: [],
     },
+    // No-op choices satisfy WG's mandatory ancestry-feat slots in this isolated
+    // mechanics fixture. They are test scaffolding, not Arsene source selections.
+    { id: 4005, name: 'Test Fleshwarp Feat', type: 'feat', level: 1, traits: [ANCESTRY_TRAIT], operations: [], meta_data: {} },
+    { id: 4006, name: 'Test Fleshwarp Feat II', type: 'feat', level: 5, traits: [ANCESTRY_TRAIT], operations: [], meta_data: {} },
     {
       id: 5001, name: 'Rogue Dedication', type: 'feat', traits: [DEDICATION_TRAIT],
       operations: [
-        { id: 'rogue-light-armor', type: 'adjValue', data: { variable: 'LIGHT_ARMOR', value: { value: 'T' } } },
+        // Directly assign the resulting rank in this fixture. Production content
+        // supplies the native proficiency-adjustment operation.
+        { id: 'rogue-light-armor', type: 'setValue', data: { variable: 'LIGHT_ARMOR', value: { value: 'T' } } },
       ],
       meta_data: { archetype_trait: true },
     },
@@ -351,7 +387,23 @@ const content = {
 
 const derived = {
   abilities: { str: 10, dex: 16, con: 16, int: 20, wis: 12, cha: 12 },
-  acTotal: { acTotal: 24 },
+  proficiencies: { light: 2, unarmored: 2 },
+  lores: [['Underworld', 2]],
+  attributes: {
+    ancestryhp: 10,
+    classhp: 6,
+    bonushp: 0,
+    bonushpPerLevel: 0,
+    speed: 25,
+    speedBonus: 0,
+  },
+  acTotal: {
+    acProfBonus: 9,
+    acAbilityBonus: 3,
+    acItemBonus: 2,
+    acTotal: 24,
+    shieldBonus: null,
+  },
 };
 
 // This intentionally small content fixture does not contain every rule option
@@ -373,6 +425,146 @@ assert.ok(preflightOutcome.selection.path);
 assert.ok(preflightOutcome.selection.title);
 assert.ok(preflightOutcome.selection.level >= 1);
 assert.ok(Array.isArray(preflightOutcome.selection.options));
+
+// Complete only the two synthetic ancestry slots required by the WG builder.
+// All ability, background, key-ability, and armor choices remain Pathbuilder-backed.
+const completeArsene = structuredClone(resolved);
+// The isolated Wizard fixture exposes four native Int-based training slots.
+// Society and Stealth are no-op test choices for the third and fourth slots;
+// they are not claimed as original Arsene skill selections.
+completeArsene.trainedSkills.push('Society', 'Stealth');
+completeArsene.feats.push(
+  {
+    slot: 'Fleshwarp Feat',
+    level: 1,
+    category: 'ANCESTRY',
+    name: 'Test Fleshwarp Feat',
+    raw: 'FLESHWARP_Test Fleshwarp Feat',
+  },
+  {
+    slot: 'Fleshwarp Feat',
+    level: 5,
+    category: 'ANCESTRY',
+    name: 'Test Fleshwarp Feat II',
+    raw: 'FLESHWARP_Test Fleshwarp Feat II',
+  }
+);
+const selectionOverrides = {};
+const completePreflight = await buildCharacter(
+  completeArsene,
+  content,
+  new Map(),
+  new Map(),
+  null,
+  [],
+  derived,
+  { preflightOnly: true, selectionOverrides }
+);
+assert.equal(
+  completePreflight.status,
+  'ready',
+  completePreflight.status === 'selection-required'
+    ? `Arsene must resolve entirely from Pathbuilder data: ${JSON.stringify(completePreflight.selection)}`
+    : 'Arsene should resolve every required native WG selector'
+);
+
+const importedArsene = await buildCharacter(
+  completeArsene, content, new Map(), new Map(), null, [], derived,
+  { selectionOverrides }
+);
+assert.ok(importedArsene && importedArsene.id === 9001, 'the fully mapped Arsene character should be created');
+const paddedArmor = importedArsene.inventory.items.find(
+  (entry) => entry.is_equipped && entry.item?.name === 'Padded Armor'
+);
+assert.ok(paddedArmor, 'Padded Armor must be imported and equipped');
+assert.equal(paddedArmor.item.meta_data?.runes?.potency, 1, 'the +1 potency rune must survive import');
+assert.ok(
+  Object.keys(importedArsene.operation_data?.selections ?? {}).length > 0,
+  'native WG operation selections must be persisted on the imported character'
+);
+
+// A result of AC 12 must fail against Arsene's Pathbuilder AC 24 oracle.
+await assert.rejects(
+  buildCharacter(
+    completeArsene, content, new Map(), new Map(), null, [],
+    { ...derived, acTotal: { acTotal: 12 } },
+    { selectionOverrides }
+  ),
+  /AC mismatch: Pathbuilder JSON reports 12; Wanderer's Guide calculates 24/,
+  'the former AC 12 regression must not pass the import test'
+);
+
+// The same AC total cannot conceal an incorrect source breakdown.
+await assert.rejects(
+  buildCharacter(
+    completeArsene,
+    content,
+    new Map(),
+    new Map(),
+    null,
+    [],
+    {
+      ...derived,
+      acTotal: { acProfBonus: 8, acAbilityBonus: 3, acItemBonus: 3, acTotal: 24 },
+    },
+    { selectionOverrides }
+  ),
+  /AC proficiency: Pathbuilder 8, WG 9/,
+  'the AC components must match individually, even if a compensating item bonus preserves the total'
+);
+
+// Light Armor rank is checked independently from AC arithmetic.
+await assert.rejects(
+  buildCharacter(
+    completeArsene,
+    content,
+    new Map(),
+    new Map(),
+    null,
+    [],
+    { ...derived, proficiencies: { ...derived.proficiencies, light: 0 } },
+    { selectionOverrides }
+  ),
+  /proficiency light: Pathbuilder U, WG T/,
+  'the import must reject missing or substituted Light Armor training'
+);
+
+// The base values behind HP and Speed must also match Pathbuilder's derived sheet.
+await assert.rejects(
+  buildCharacter(
+    completeArsene,
+    content,
+    new Map(),
+    new Map(),
+    null,
+    [],
+    { ...derived, attributes: { ...derived.attributes, speed: 26 } },
+    { selectionOverrides }
+  ),
+  /attribute speed: Pathbuilder 26, WG 25/,
+  'a matching AC must not hide a different base Speed'
+);
+
+// If WG's native class tree omits a current-level boost selector, the import must
+// fail rather than silently create a sheet with fewer boosts than Pathbuilder.
+const missingLevelSevenBoostContent = structuredClone(content);
+missingLevelSevenBoostContent.abilityBlocks = missingLevelSevenBoostContent.abilityBlocks.filter(
+  (block) => block.id !== 6007
+);
+await assert.rejects(
+  buildCharacter(
+    completeArsene,
+    missingLevelSevenBoostContent,
+    new Map(),
+    new Map(),
+    null,
+    [],
+    derived,
+    { selectionOverrides }
+  ),
+  /Pathbuilder 1:1 ability boost mapping failed: levelled:7: expected 1, mapped 0/,
+  'every current-level Pathbuilder boost must be consumed by one distinct WG selector'
+);
 
 await rm(bundleDir, { recursive: true, force: true });
 
