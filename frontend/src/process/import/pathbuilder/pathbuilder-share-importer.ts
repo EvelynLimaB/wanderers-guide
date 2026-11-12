@@ -1727,6 +1727,9 @@ async function validatePathbuilderDerived(
       if (actual !== expected) {
         fatalMismatches.push(`attribute speed: Pathbuilder ${expected}, WG ${actual}`);
       }
+    } else if (sourceName === 'speedBonus' && typeof derived.attributes?.speed === 'number') {
+      // Already included above in the final Speed comparison.
+      continue;
     } else if (sourceValue !== 0) {
       fatalMismatches.push(
         `attribute ${sourceName}: non-zero Pathbuilder value ${sourceValue} has no native WG mapping`
