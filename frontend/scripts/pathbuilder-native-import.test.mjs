@@ -401,6 +401,10 @@ assert.ok(Array.isArray(preflightOutcome.selection.options));
 // Complete only the two synthetic ancestry slots required by the WG builder.
 // All ability, background, key-ability, and armor choices remain Pathbuilder-backed.
 const completeArsene = structuredClone(resolved);
+// The isolated Wizard fixture exposes three native Int-based training slots.
+// Society is a no-op test choice for the third slot; it is not claimed as an
+// original Arsene skill selection and does not affect the AC/attribute oracle.
+completeArsene.trainedSkills.push('Society');
 completeArsene.feats.push(
   {
     slot: 'Fleshwarp Feat',
