@@ -246,6 +246,111 @@ const WIZARD_TRAIT = 2001;
 const ANCESTRY_TRAIT = 2002;
 const DEDICATION_TRAIT = 1001;
 
+const arseneSourceProficiencies = {
+  classDC: 2,
+  perception: 2,
+  fortitude: 2,
+  reflex: 4,
+  will: 4,
+  heavy: 0,
+  medium: 0,
+  light: 2,
+  unarmored: 2,
+  advanced: 0,
+  martial: 0,
+  simple: 2,
+  unarmed: 2,
+  castingArcane: 4,
+  castingDivine: 0,
+  castingOccult: 0,
+  castingPrimal: 0,
+  acrobatics: 0,
+  arcana: 6,
+  athletics: 0,
+  crafting: 4,
+  deception: 2,
+  diplomacy: 2,
+  intimidation: 2,
+  medicine: 0,
+  nature: 2,
+  occultism: 2,
+  performance: 0,
+  religion: 2,
+  society: 2,
+  stealth: 2,
+  survival: 2,
+  thievery: 2,
+  piloting: 0,
+  computers: 0,
+};
+const arseneProficiencyVariables = {
+  classDC: 'CLASS_DC',
+  perception: 'PERCEPTION',
+  fortitude: 'SAVE_FORT',
+  reflex: 'SAVE_REFLEX',
+  will: 'SAVE_WILL',
+  heavy: 'HEAVY_ARMOR',
+  medium: 'MEDIUM_ARMOR',
+  light: 'LIGHT_ARMOR',
+  unarmored: 'UNARMORED_DEFENSE',
+  advanced: 'ADVANCED_WEAPONS',
+  martial: 'MARTIAL_WEAPONS',
+  simple: 'SIMPLE_WEAPONS',
+  unarmed: 'UNARMED_ATTACKS',
+  acrobatics: 'SKILL_ACROBATICS',
+  arcana: 'SKILL_ARCANA',
+  athletics: 'SKILL_ATHLETICS',
+  crafting: 'SKILL_CRAFTING',
+  deception: 'SKILL_DECEPTION',
+  diplomacy: 'SKILL_DIPLOMACY',
+  intimidation: 'SKILL_INTIMIDATION',
+  medicine: 'SKILL_MEDICINE',
+  nature: 'SKILL_NATURE',
+  occultism: 'SKILL_OCCULTISM',
+  performance: 'SKILL_PERFORMANCE',
+  religion: 'SKILL_RELIGION',
+  society: 'SKILL_SOCIETY',
+  stealth: 'SKILL_STEALTH',
+  survival: 'SKILL_SURVIVAL',
+  thievery: 'SKILL_THIEVERY',
+};
+const arseneRankTypes = { 0: 'U', 2: 'T', 4: 'E', 6: 'M', 8: 'L' };
+const arseneSkillAttributes = {
+  SKILL_ACROBATICS: 'ATTRIBUTE_DEX',
+  SKILL_ARCANA: 'ATTRIBUTE_INT',
+  SKILL_ATHLETICS: 'ATTRIBUTE_STR',
+  SKILL_CRAFTING: 'ATTRIBUTE_INT',
+  SKILL_DECEPTION: 'ATTRIBUTE_CHA',
+  SKILL_DIPLOMACY: 'ATTRIBUTE_CHA',
+  SKILL_INTIMIDATION: 'ATTRIBUTE_CHA',
+  SKILL_MEDICINE: 'ATTRIBUTE_WIS',
+  SKILL_NATURE: 'ATTRIBUTE_WIS',
+  SKILL_OCCULTISM: 'ATTRIBUTE_INT',
+  SKILL_PERFORMANCE: 'ATTRIBUTE_CHA',
+  SKILL_RELIGION: 'ATTRIBUTE_WIS',
+  SKILL_SOCIETY: 'ATTRIBUTE_INT',
+  SKILL_STEALTH: 'ATTRIBUTE_DEX',
+  SKILL_SURVIVAL: 'ATTRIBUTE_WIS',
+  SKILL_THIEVERY: 'ATTRIBUTE_DEX',
+};
+const arseneDerivedRankOperations = Object.entries(arseneSourceProficiencies)
+  .filter(([name]) => !['light', 'unarmored', 'piloting', 'computers'].includes(name))
+  .map(([name, rank]) => {
+    const variable = arseneProficiencyVariables[name];
+    return {
+      id: `arsene-derived-${variable}`,
+      type: 'setValue',
+      data: {
+        variable,
+        value: {
+          value: arseneRankTypes[rank],
+          increases: 0,
+          ...(arseneSkillAttributes[variable] ? { attribute: arseneSkillAttributes[variable] } : {}),
+        },
+      },
+    };
+  });
+
 const content = {
   defaultSources: { PAGE: [], INFO: [] },
   classes: [
@@ -331,6 +436,15 @@ const content = {
       ],
       meta_data: {},
     },
+    {
+      id: 6008,
+      name: 'Arsene Derived Rank Fixture',
+      type: 'class-feature',
+      level: 7,
+      traits: [WIZARD_TRAIT],
+      operations: arseneDerivedRankOperations,
+      meta_data: {},
+    },
     ...[2, 3, 4, 5, 7].map((level) => ({
       id: 6000 + level,
       name: 'Attribute Boosts',
@@ -392,7 +506,7 @@ const content = {
 
 const derived = {
   abilities: { str: 10, dex: 16, con: 16, int: 20, wis: 12, cha: 12 },
-  proficiencies: { light: 2, unarmored: 2 },
+  proficiencies: arseneSourceProficiencies,
   lores: [['Underworld', 2]],
   attributes: {
     ancestryhp: 10,
