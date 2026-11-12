@@ -2413,21 +2413,28 @@ async function resolveSelections(
         resolvedSelectionKeys.add(trackingKey);
         character.operation_data!.selections = cloneDeep(chosen);
 
-        if (attributeSelection) {
+        // A selector can reappear under a rebuilt parent path. Replay its saved
+        // UUID, but never consume the same source choice twice.
+        if (!selectionKeyWasResolved && attributeSelection) {
           if (current.path.startsWith('class_')) classAttributeSelectionIndex++;
         }
-        if (attributeSelection && !keyAbilitySelection && !(current.path.startsWith('class_') && classAttributeSelectionIndex === 1)) {
+        if (
+          !selectionKeyWasResolved &&
+          attributeSelection &&
+          !keyAbilitySelection &&
+          !(current.path.startsWith('class_') && classAttributeSelectionIndex === 1)
+        ) {
           const origin = getAbilityBoostOriginForPath(current.path);
           if (origin) {
             const cursorKey = origin + ':' + selectionLevel;
             abilityBoostCursors.set(cursorKey, (abilityBoostCursors.get(cursorKey) ?? 0) + 1);
           }
         }
-        if (skillSelection) {
+        if (!selectionKeyWasResolved && skillSelection) {
           const cursor = skillCursors.get(selectionLevel) ?? 0;
           skillCursors.set(selectionLevel, cursor + 1);
         }
-        if (/\bfeat\b/i.test(current.selection?.selection?.title ?? '')) {
+        if (!selectionKeyWasResolved && /\bfeat\b/i.test(current.selection?.selection?.title ?? '')) {
           const key = current.path;
           featCursors.set(key, (featCursors.get(key) ?? 0) + 1);
         }
@@ -2452,6 +2459,31 @@ async function resolveSelections(
     }
     hasSelections = false;
   }
+
+  // A native operation tree can silently omit a boost selector even when all
+  // selectors it does expose were resolved. Compare every source boost at or
+  // below the character's current level with the number of distinct WG selectors
+  // that consumed it. Future planned boosts are intentionally not applied yet.
+  const expectedBoostCounts = new Map<string, number>();
+  for (const boost of resolved.abilityBoosts) {
+    if (boost.level > resolved.identity.level) continue;
+    const key = `${boost.origin}:${boost.level}`;
+    expectedBoostCounts.set(key, (expectedBoostCounts.get(key) ?? 0) + 1);
+  }
+  const boostKeys = new Set([...expectedBoostCounts.keys(), ...abilityBoostCursors.keys()]);
+  const boostMappingErrors = [...boostKeys]
+    .sort()
+    .flatMap((key) => {
+      const expected = expectedBoostCounts.get(key) ?? 0;
+      const mapped = abilityBoostCursors.get(key) ?? 0;
+      return expected === mapped ? [] : [`${key}: expected ${expected}, mapped ${mapped}`];
+    });
+  if (boostMappingErrors.length > 0) {
+    throw new Error(
+      `Pathbuilder 1:1 ability boost mapping failed: ${boostMappingErrors.join('; ')}`
+    );
+  }
+
   return null;
 }
 
