@@ -272,8 +272,8 @@ const content = {
     {
       id: 3, name: 'Criminal',
       operations: [
-        { id: 'criminal-int', type: 'adjValue', data: { variable: 'ATTRIBUTE_INT', value: { value: 1 } } },
-        { id: 'criminal-dex', type: 'adjValue', data: { variable: 'ATTRIBUTE_DEX', value: { value: 1 } } },
+        attributeSelect('criminal-boost-1'),
+        attributeSelect('criminal-boost-2'),
       ],
     },
   ],
@@ -282,6 +282,10 @@ const content = {
       id: 4004, name: 'Ifrit', type: 'heritage', traits: [ANCESTRY_TRAIT],
       operations: [],
     },
+    // No-op choices satisfy WG's mandatory ancestry-feat slots in this isolated
+    // mechanics fixture. They are test scaffolding, not Arsene source selections.
+    { id: 4005, name: 'Test Fleshwarp Feat', type: 'feat', level: 1, traits: [ANCESTRY_TRAIT], operations: [], meta_data: {} },
+    { id: 4006, name: 'Test Fleshwarp Feat II', type: 'feat', level: 5, traits: [ANCESTRY_TRAIT], operations: [], meta_data: {} },
     {
       id: 5001, name: 'Rogue Dedication', type: 'feat', traits: [DEDICATION_TRAIT],
       operations: [
@@ -373,6 +377,88 @@ assert.ok(preflightOutcome.selection.path);
 assert.ok(preflightOutcome.selection.title);
 assert.ok(preflightOutcome.selection.level >= 1);
 assert.ok(Array.isArray(preflightOutcome.selection.options));
+
+// Complete only the two synthetic ancestry slots required by the WG builder.
+// All ability, background, key-ability, and armor choices remain Pathbuilder-backed.
+const completeArsene = structuredClone(resolved);
+completeArsene.feats.push(
+  {
+    slot: 'Fleshwarp Feat',
+    level: 1,
+    category: 'ANCESTRY',
+    name: 'Test Fleshwarp Feat',
+    raw: 'FLESHWARP_Test Fleshwarp Feat',
+  },
+  {
+    slot: 'Fleshwarp Feat',
+    level: 5,
+    category: 'ANCESTRY',
+    name: 'Test Fleshwarp Feat II',
+    raw: 'FLESHWARP_Test Fleshwarp Feat II',
+  }
+);
+const normalizeChoice = (value) => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+const selectionOverrides = {};
+let completePreflight = await buildCharacter(
+  completeArsene, content, new Map(), new Map(), null, [], derived,
+  { preflightOnly: true, selectionOverrides }
+);
+for (let attempt = 0; completePreflight.status === 'selection-required' && attempt < 16; attempt++) {
+  const prompt = completePreflight.selection;
+  const candidates = completeArsene.feats.filter((feat) => feat.level === prompt.level);
+  const matches = prompt.options.filter((option) =>
+    candidates.some((feat) => normalizeChoice(feat.name) === normalizeChoice(option.label))
+  );
+  assert.equal(
+    matches.length,
+    1,
+    `every required Arsene selection must map to exactly one recorded choice: ${JSON.stringify({
+      title: prompt.title,
+      level: prompt.level,
+      path: prompt.path,
+      choices: candidates.map((feat) => feat.name),
+      options: prompt.options.map((option) => option.label),
+    })}`
+  );
+  selectionOverrides[prompt.key] = matches[0].value;
+  completePreflight = await buildCharacter(
+    completeArsene, content, new Map(), new Map(), null, [], derived,
+    { preflightOnly: true, selectionOverrides }
+  );
+}
+assert.equal(
+  completePreflight.status,
+  'ready',
+  completePreflight.status === 'selection-required'
+    ? JSON.stringify(completePreflight.selection)
+    : 'Arsene should resolve every required native WG selector'
+);
+
+const importedArsene = await buildCharacter(
+  completeArsene, content, new Map(), new Map(), null, [], derived,
+  { selectionOverrides }
+);
+assert.ok(importedArsene && importedArsene.id === 9001, 'the fully mapped Arsene character should be created');
+const paddedArmor = importedArsene.inventory.items.find(
+  (entry) => entry.is_equipped && entry.item?.name === 'Padded Armor'
+);
+assert.ok(paddedArmor, 'Padded Armor must be imported and equipped');
+assert.equal(paddedArmor.item.meta_data?.runes?.potency, 1, 'the +1 potency rune must survive import');
+assert.ok(
+  Object.keys(importedArsene.operation_data?.selections ?? {}).length > 0,
+  'native WG operation selections must be persisted on the imported character'
+);
+
+// A result of AC 12 must fail against Arsene's Pathbuilder AC 24 oracle.
+await assert.rejects(
+  buildCharacter(
+    completeArsene, content, new Map(), new Map(), null, [],
+    { ...derived, acTotal: { acTotal: 12 } },
+    { selectionOverrides }
+  ),
+  /AC mismatch: Pathbuilder JSON reports 12; Wanderer's Guide calculates 24/,
+  'the former AC 12 regression must not pass the import test'
+);
 
 await rm(bundleDir, { recursive: true, force: true });
 

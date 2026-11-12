@@ -1634,7 +1634,7 @@ async function validatePathbuilderDerived(
               ? 'No reliable equipped armor reference was available to explain the difference.'
               : 'The resolved armor exists, but its rules calculation differs. Review armor statistics, proficiency, Dexterity cap, runes, shield state, and temporary bonuses.';
 
-      warnings.push(
+      fatalMismatches.push(
         `AC mismatch: Pathbuilder JSON reports ${sourceAc}; Wanderer's Guide calculates ${actualAc} (difference ${signedDifference}). ${explanation}`
       );
     }
