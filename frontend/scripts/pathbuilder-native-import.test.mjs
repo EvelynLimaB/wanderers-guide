@@ -279,6 +279,15 @@ const content = {
             }],
           },
         },
+        {
+          id: 'wizard-underworld-lore-base',
+          type: 'createValue',
+          data: {
+            variable: 'SKILL_LORE_UNDERWORLD',
+            type: 'prof',
+            value: { value: 'U', attribute: 'ATTRIBUTE_INT' },
+          },
+        },
         { id: 'wizard-underworld-lore', type: 'adjValue', data: { variable: 'SKILL_LORE_UNDERWORLD', value: { value: 'T' } } },
         { id: 'wizard-class-hp', type: 'setValue', data: { variable: 'MAX_HEALTH_CLASS_PER_LEVEL', value: 6 } },
       ],
@@ -316,7 +325,7 @@ const content = {
     {
       id: 5001, name: 'Rogue Dedication', type: 'feat', traits: [DEDICATION_TRAIT],
       operations: [
-        { id: 'rogue-light-armor', type: 'adjValue', data: { variable: 'LIGHT_ARMOR', value: { value: 2 } } },
+        { id: 'rogue-light-armor', type: 'adjValue', data: { variable: 'LIGHT_ARMOR', value: { value: 'T' } } },
       ],
       meta_data: { archetype_trait: true },
     },
