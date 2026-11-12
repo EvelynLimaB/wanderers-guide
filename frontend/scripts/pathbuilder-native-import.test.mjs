@@ -253,7 +253,7 @@ const content = {
       id: 1, name: 'Wizard', trait_id: WIZARD_TRAIT, skill_training_base: 0,
       operations: [
         // Seed the selected skill ranks for the isolated operation-engine fixture.
-        ...['ARCANA', 'ATHLETICS', 'SOCIETY'].map((skill) => ({
+        ...['ARCANA', 'ATHLETICS', 'SOCIETY', 'STEALTH'].map((skill) => ({
           id: `wizard-skill-${skill.toLowerCase()}-base`,
           type: 'setValue',
           data: { variable: `SKILL_${skill}`, value: { value: 'U' } },
@@ -429,10 +429,10 @@ assert.ok(Array.isArray(preflightOutcome.selection.options));
 // Complete only the two synthetic ancestry slots required by the WG builder.
 // All ability, background, key-ability, and armor choices remain Pathbuilder-backed.
 const completeArsene = structuredClone(resolved);
-// The isolated Wizard fixture exposes three native Int-based training slots.
-// Society is a no-op test choice for the third slot; it is not claimed as an
-// original Arsene skill selection and does not affect the AC/attribute oracle.
-completeArsene.trainedSkills.push('Society');
+// The isolated Wizard fixture exposes four native Int-based training slots.
+// Society and Stealth are no-op test choices for the third and fourth slots;
+// they are not claimed as original Arsene skill selections.
+completeArsene.trainedSkills.push('Society', 'Stealth');
 completeArsene.feats.push(
   {
     slot: 'Fleshwarp Feat',
