@@ -277,7 +277,6 @@ const content = {
             }],
           },
         },
-        { id: 'wizard-underworld-lore', type: 'adjValue', data: { variable: 'SKILL_LORE_UNDERWORLD', value: { value: 'T' } } },
         { id: 'wizard-class-hp', type: 'setValue', data: { variable: 'MAX_HEALTH_CLASS_PER_LEVEL', value: 6 } },
       ],
     },
@@ -321,6 +320,17 @@ const content = {
       meta_data: { archetype_trait: true },
     },
     { id: 5002, name: 'Synthetic Option', type: 'feat', level: 1, traits: [WIZARD_TRAIT], operations: [], meta_data: {} },
+    {
+      id: 6007,
+      name: 'Underworld Lore Training',
+      type: 'class-feature',
+      level: 7,
+      traits: [WIZARD_TRAIT],
+      operations: [
+        { id: 'wizard-underworld-lore', type: 'adjValue', data: { variable: 'SKILL_LORE_UNDERWORLD', value: { value: 'T' } } },
+      ],
+      meta_data: {},
+    },
     ...[2, 3, 4, 5, 7].map((level) => ({
       id: 6000 + level,
       name: 'Attribute Boosts',
@@ -420,14 +430,29 @@ assert.ok(preflightOutcome.selection.path);
 assert.ok(preflightOutcome.selection.title);
 assert.ok(preflightOutcome.selection.level >= 1);
 assert.ok(Array.isArray(preflightOutcome.selection.options));
+assert.equal(preflightOutcome.selection.title, 'Select a Skill to be Trained');
+assert.equal(preflightOutcome.snapshot.current.acTotal, 24, 'the native preflight must calculate Arsene AC 24');
+assert.equal(preflightOutcome.snapshot.target.ac.total, 24, 'the official JSON target for Arsene is AC 24');
+assert.deepEqual(
+  Object.fromEntries(preflightOutcome.snapshot.current.abilities.map(({ key, modifier }) => [
+    key.toUpperCase(),
+    10 + modifier * 2,
+  ])),
+  { STR: 10, DEX: 16, CON: 16, INT: 20, WIS: 12, CHA: 12 },
+  'the preflight attributes must match the Pathbuilder JSON before import'
+);
+await assert.rejects(
+  buildCharacter(resolved, content, new Map(), new Map(), null, [], derived),
+  /Pathbuilder 1:1 selection mapping failed/,
+  'an incomplete share must never create a character by guessing the missing class skill'
+);
 
-// Complete only the two synthetic ancestry slots required by the WG builder.
-// All ability, background, key-ability, and armor choices remain Pathbuilder-backed.
+// The synthetic share contains only two of the four native Wizard skill
+// choices. Society and Crafting are explicit test-only completions supported by
+// the derived sheet (trained and expert respectively); the source-only preflight
+// above proves the importer does not invent them when the share omits them.
 const completeArsene = structuredClone(resolved);
-// The isolated Wizard fixture exposes three native Int-based training slots.
-// Society is a no-op test choice for the third slot; it is not claimed as an
-// original Arsene skill selection and does not affect the AC/attribute oracle.
-completeArsene.trainedSkills.push('Society');
+completeArsene.trainedSkills.push('Society', 'Crafting');
 completeArsene.feats.push(
   {
     slot: 'Fleshwarp Feat',
