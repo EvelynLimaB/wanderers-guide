@@ -236,6 +236,11 @@ const resolved = resolveBuild(
   { characterData: pathbuilderCharacterData },
   { buildId: '1596127' }
 );
+resolved.specialSelections.push({
+  slot: 'Lore Selection',
+  prompt: 'Select a Lore',
+  value: 'Underworld Lore',
+});
 
 const WIZARD_TRAIT = 2001;
 const ANCESTRY_TRAIT = 2002;
@@ -247,6 +252,8 @@ const content = {
     {
       id: 1, name: 'Wizard', trait_id: WIZARD_TRAIT, skill_training_base: 0,
       operations: [
+        // Seed the untrained rank so Rogue Dedication can promote it.
+        { id: 'wizard-light-armor-base', type: 'createValue', data: { variable: 'LIGHT_ARMOR', type: 'prof', value: 'U' } },
         { id: 'wizard-key', type: 'select', data: {
           title: 'Select Key Ability', modeType: 'FILTERED', optionType: 'ADJ_VALUE',
           optionsPredefined: [], optionsFilters: { id: 'wizard-key-filter', type: 'ADJ_VALUE', group: 'ATTRIBUTE', value: { value: 0 } },
@@ -256,6 +263,22 @@ const content = {
         attributeSelect('wizard-boost-3'),
         attributeSelect('wizard-boost-4'),
         { id: 'wizard-unarmored', type: 'adjValue', data: { variable: 'UNARMORED_DEFENSE', value: { value: 'T' } } },
+        {
+          id: 'wizard-lore-selection',
+          type: 'select',
+          data: {
+            title: 'Select a Lore',
+            modeType: 'PREDEFINED',
+            optionType: 'CUSTOM',
+            optionsPredefined: [{
+              id: 'SKILL_LORE_UNDERWORLD',
+              type: 'CUSTOM',
+              title: 'Underworld Lore',
+              description: 'Arsene’s Lore proficiency',
+              operations: [],
+            }],
+          },
+        },
         { id: 'wizard-underworld-lore', type: 'adjValue', data: { variable: 'SKILL_LORE_UNDERWORLD', value: { value: 'T' } } },
         { id: 'wizard-class-hp', type: 'setValue', data: { variable: 'MAX_HEALTH_CLASS_PER_LEVEL', value: 6 } },
       ],
