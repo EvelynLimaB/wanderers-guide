@@ -256,6 +256,8 @@ const content = {
         attributeSelect('wizard-boost-3'),
         attributeSelect('wizard-boost-4'),
         { id: 'wizard-unarmored', type: 'adjValue', data: { variable: 'UNARMORED_DEFENSE', value: { value: 'T' } } },
+        { id: 'wizard-underworld-lore', type: 'adjValue', data: { variable: 'SKILL_LORE_UNDERWORLD', value: { value: 'T' } } },
+        { id: 'wizard-class-hp', type: 'setValue', data: { variable: 'MAX_HEALTH_CLASS_PER_LEVEL', value: 6 } },
       ],
     },
   ],
@@ -263,6 +265,8 @@ const content = {
     {
       id: 2, name: 'Fleshwarp', trait_id: ANCESTRY_TRAIT,
       operations: [
+        { id: 'fleshwarp-ancestry-hp', type: 'setValue', data: { variable: 'MAX_HEALTH_ANCESTRY', value: 10 } },
+        { id: 'fleshwarp-speed', type: 'setValue', data: { variable: 'SPEED', value: 25 } },
         { id: 'fleshwarp-fixed-con', type: 'adjValue', data: { variable: 'ATTRIBUTE_CON', value: { value: 1 } } },
         attributeSelect('fleshwarp-free'),
       ],
@@ -355,7 +359,23 @@ const content = {
 
 const derived = {
   abilities: { str: 10, dex: 16, con: 16, int: 20, wis: 12, cha: 12 },
-  acTotal: { acTotal: 24 },
+  proficiencies: { light: 2, unarmored: 2 },
+  lores: [['Underworld', 2]],
+  attributes: {
+    ancestryhp: 10,
+    classhp: 6,
+    bonushp: 0,
+    bonushpPerLevel: 0,
+    speed: 25,
+    speedBonus: 0,
+  },
+  acTotal: {
+    acProfBonus: 9,
+    acAbilityBonus: 3,
+    acItemBonus: 2,
+    acTotal: 24,
+    shieldBonus: null,
+  },
 };
 
 // This intentionally small content fixture does not contain every rule option
@@ -381,6 +401,10 @@ assert.ok(Array.isArray(preflightOutcome.selection.options));
 // Complete only the two synthetic ancestry slots required by the WG builder.
 // All ability, background, key-ability, and armor choices remain Pathbuilder-backed.
 const completeArsene = structuredClone(resolved);
+// The isolated Wizard fixture exposes three native Int-based training slots.
+// Society is a no-op test choice for the third slot; it is not claimed as an
+// original Arsene skill selection and does not affect the AC/attribute oracle.
+completeArsene.trainedSkills.push('Society');
 completeArsene.feats.push(
   {
     slot: 'Fleshwarp Feat',
@@ -473,6 +497,57 @@ await assert.rejects(
   ),
   /AC mismatch: Pathbuilder JSON reports 12; Wanderer's Guide calculates 24/,
   'the former AC 12 regression must not pass the import test'
+);
+
+// The same AC total cannot conceal an incorrect source breakdown.
+await assert.rejects(
+  buildCharacter(
+    completeArsene,
+    content,
+    new Map(),
+    new Map(),
+    null,
+    [],
+    {
+      ...derived,
+      acTotal: { acProfBonus: 8, acAbilityBonus: 3, acItemBonus: 3, acTotal: 24 },
+    },
+    { selectionOverrides }
+  ),
+  /AC proficiency: Pathbuilder 8, WG 9/,
+  'the AC components must match individually, even if a compensating item bonus preserves the total'
+);
+
+// Light Armor rank is checked independently from AC arithmetic.
+await assert.rejects(
+  buildCharacter(
+    completeArsene,
+    content,
+    new Map(),
+    new Map(),
+    null,
+    [],
+    { ...derived, proficiencies: { ...derived.proficiencies, light: 0 } },
+    { selectionOverrides }
+  ),
+  /proficiency light: Pathbuilder U, WG T/,
+  'the import must reject missing or substituted Light Armor training'
+);
+
+// The base values behind HP and Speed must also match Pathbuilder's derived sheet.
+await assert.rejects(
+  buildCharacter(
+    completeArsene,
+    content,
+    new Map(),
+    new Map(),
+    null,
+    [],
+    { ...derived, attributes: { ...derived.attributes, speed: 26 } },
+    { selectionOverrides }
+  ),
+  /attribute speed: Pathbuilder 26, WG 25/,
+  'a matching AC must not hide a different base Speed'
 );
 
 // If WG's native class tree omits a current-level boost selector, the import must
