@@ -314,8 +314,9 @@ const content = {
     {
       id: 5001, name: 'Rogue Dedication', type: 'feat', traits: [DEDICATION_TRAIT],
       operations: [
-        { id: 'rogue-light-armor-base', type: 'setValue', data: { variable: 'LIGHT_ARMOR', value: { value: 'U' } } },
-        { id: 'rogue-light-armor', type: 'adjValue', data: { variable: 'LIGHT_ARMOR', value: { value: '1' } } },
+        // Directly assign the resulting rank in this fixture. Production content
+        // supplies the native proficiency-adjustment operation.
+        { id: 'rogue-light-armor', type: 'setValue', data: { variable: 'LIGHT_ARMOR', value: { value: 'T' } } },
       ],
       meta_data: { archetype_trait: true },
     },
