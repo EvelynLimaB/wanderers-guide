@@ -421,55 +421,22 @@ completeArsene.feats.push(
     raw: 'FLESHWARP_Test Fleshwarp Feat II',
   }
 );
-const normalizeChoice = (value) => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 const selectionOverrides = {};
-let completePreflight = await buildCharacter(
-  completeArsene, content, new Map(), new Map(), null, [], derived,
+const completePreflight = await buildCharacter(
+  completeArsene,
+  content,
+  new Map(),
+  new Map(),
+  null,
+  [],
+  derived,
   { preflightOnly: true, selectionOverrides }
 );
-for (let attempt = 0; completePreflight.status === 'selection-required' && attempt < 16; attempt++) {
-  const prompt = completePreflight.selection;
-  assert.doesNotMatch(
-    prompt.title,
-    /attribute|key ability/i,
-    'attribute and key-ability selectors must resolve automatically from Pathbuilder boosts'
-  );
-  const promptText = `${prompt.title} ${prompt.description ?? ''}`;
-  const candidates = /language/i.test(promptText)
-    ? completeArsene.languages
-    : /skill/i.test(promptText)
-      ? [
-          ...completeArsene.trainedSkills,
-          ...completeArsene.skillIncreases.map((increase) => increase.skill),
-        ]
-      : completeArsene.feats
-          .filter((feat) => feat.level === prompt.level)
-          .map((feat) => feat.name);
-  const matches = prompt.options.filter((option) =>
-    candidates.some((name) => normalizeChoice(name) === normalizeChoice(option.label))
-  );
-  assert.equal(
-    matches.length,
-    1,
-    `every required Arsene selection must map to exactly one recorded choice: ${JSON.stringify({
-      title: prompt.title,
-      level: prompt.level,
-      path: prompt.path,
-      choices: candidates,
-      options: prompt.options.map((option) => option.label),
-    })}`
-  );
-  selectionOverrides[prompt.key] = matches[0].value;
-  completePreflight = await buildCharacter(
-    completeArsene, content, new Map(), new Map(), null, [], derived,
-    { preflightOnly: true, selectionOverrides }
-  );
-}
 assert.equal(
   completePreflight.status,
   'ready',
   completePreflight.status === 'selection-required'
-    ? JSON.stringify(completePreflight.selection)
+    ? `Arsene must resolve entirely from Pathbuilder data: ${JSON.stringify(completePreflight.selection)}`
     : 'Arsene should resolve every required native WG selector'
 );
 
