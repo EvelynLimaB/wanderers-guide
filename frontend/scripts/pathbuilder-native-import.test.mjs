@@ -252,8 +252,6 @@ const content = {
     {
       id: 1, name: 'Wizard', trait_id: WIZARD_TRAIT, skill_training_base: 0,
       operations: [
-        // Seed the untrained rank so Rogue Dedication can promote it.
-        { id: 'wizard-light-armor-base', type: 'setValue', data: { variable: 'LIGHT_ARMOR', value: 0 } },
         { id: 'wizard-key', type: 'select', data: {
           title: 'Select Key Ability', modeType: 'FILTERED', optionType: 'ADJ_VALUE',
           optionsPredefined: [], optionsFilters: { id: 'wizard-key-filter', type: 'ADJ_VALUE', group: 'ATTRIBUTE', value: { value: 0 } },
@@ -277,6 +275,15 @@ const content = {
               description: 'Arsene’s Lore proficiency',
               operations: [],
             }],
+          },
+        },
+                {
+          id: 'wizard-underworld-lore-base',
+          type: 'createValue',
+          data: {
+            variable: 'SKILL_LORE_UNDERWORLD',
+            type: 'prof',
+            value: { value: 'U', attribute: 'ATTRIBUTE_INT' },
           },
         },
         { id: 'wizard-underworld-lore', type: 'adjValue', data: { variable: 'SKILL_LORE_UNDERWORLD', value: { value: 'T' } } },
@@ -316,7 +323,7 @@ const content = {
     {
       id: 5001, name: 'Rogue Dedication', type: 'feat', traits: [DEDICATION_TRAIT],
       operations: [
-        { id: 'rogue-light-armor', type: 'adjValue', data: { variable: 'LIGHT_ARMOR', value: { value: 2 } } },
+        { id: 'rogue-light-armor', type: 'adjValue', data: { variable: 'LIGHT_ARMOR', value: { value: 'T' } } },
       ],
       meta_data: { archetype_trait: true },
     },
@@ -476,6 +483,10 @@ assert.equal(paddedArmor.item.meta_data?.runes?.potency, 1, 'the +1 potency rune
 assert.ok(
   Object.keys(importedArsene.operation_data?.selections ?? {}).length > 0,
   'native WG operation selections must be persisted on the imported character'
+);
+assert.ok(
+  Object.values(importedArsene.operation_data?.selections ?? {}).includes('SKILL_LORE_UNDERWORLD'),
+  'the Pathbuilder Underworld Lore choice must be persisted as a native selection'
 );
 
 // A result of AC 12 must fail against Arsene's Pathbuilder AC 24 oracle.
