@@ -256,6 +256,7 @@ const content = {
         attributeSelect('wizard-boost-3'),
         attributeSelect('wizard-boost-4'),
         { id: 'wizard-unarmored', type: 'adjValue', data: { variable: 'UNARMORED_DEFENSE', value: { value: 'T' } } },
+        { id: 'wizard-underworld-lore', type: 'adjValue', data: { variable: 'SKILL_LORE_UNDERWORLD', value: { value: 'T' } } },
         { id: 'wizard-class-hp', type: 'setValue', data: { variable: 'MAX_HEALTH_CLASS_PER_LEVEL', value: 6 } },
       ],
     },
@@ -359,6 +360,7 @@ const content = {
 const derived = {
   abilities: { str: 10, dex: 16, con: 16, int: 20, wis: 12, cha: 12 },
   proficiencies: { light: 2, unarmored: 2 },
+  lores: [['Underworld', 2]],
   attributes: {
     ancestryhp: 10,
     classhp: 6,
