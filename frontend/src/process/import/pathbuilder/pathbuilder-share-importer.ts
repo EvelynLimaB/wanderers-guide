@@ -1386,7 +1386,6 @@ export async function buildCharacter(
   const mechanicalWarnings = warnings.filter(
     (warning) =>
       !warning.startsWith('provenance:') &&
-      !warning.startsWith('AC mismatch:') &&
       !warning.startsWith('armor warning:')
   );
   if (mechanicalWarnings.length > 0) {
@@ -1578,9 +1577,8 @@ async function calculatePathbuilderCurrentSummary(
 
 /**
  * Compare Pathbuilder's calculated values with WG's native operation engine.
- * Ability-score mismatches remain fatal because they indicate the character's
- * core build was not reproduced. AC is a diagnostic instead: Pathbuilder share
- * links can lose armor state, so a mismatch must not prevent character creation.
+ * Ability-score and AC mismatches are fatal: the character must not be created
+ * when its core attributes or defense differ from the source calculation.
  */
 async function validatePathbuilderDerived(
   character: Character,

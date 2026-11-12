@@ -319,7 +319,7 @@ try {
 
   // Deliberately stale synthetic target for the fail-closed regression.
   // A source mismatch must never create a character with unverified mechanics.
-  // This lets the test prove that source inconsistency warns without blocking import.
+  // This lets the test prove that source inconsistency blocks character creation.
   const staleDerivedFixture = {
     name: 'Kasane',
     class: 'Champion',
