@@ -252,6 +252,12 @@ const content = {
     {
       id: 1, name: 'Wizard', trait_id: WIZARD_TRAIT, skill_training_base: 0,
       operations: [
+        // Seed the selected skill ranks for the isolated operation-engine fixture.
+        ...['ARCANA', 'ATHLETICS', 'SOCIETY'].map((skill) => ({
+          id: `wizard-skill-${skill.toLowerCase()}-base`,
+          type: 'setValue',
+          data: { variable: `SKILL_${skill}`, value: { value: 'U' } },
+        })),
         { id: 'wizard-key', type: 'select', data: {
           title: 'Select Key Ability', modeType: 'FILTERED', optionType: 'ADJ_VALUE',
           optionsPredefined: [], optionsFilters: { id: 'wizard-key-filter', type: 'ADJ_VALUE', group: 'ATTRIBUTE', value: { value: 0 } },
