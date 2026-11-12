@@ -32,6 +32,7 @@ import { defineDefaultSources, fetchContent, fetchContentPackage, fetchContentSo
 import { toMarkdown } from '@content/content-utils';
 import { findFirstSelection, findMatchingOption } from '@import/ftc/import-from-ftc';
 import { getBestArmor, isItemEquippable, isItemImplantable, isItemInvestable } from '@items/inv-utils';
+import { getAcParts } from '@items/armor-handler';
 import { hideNotification, showNotification } from '@mantine/notifications';
 import { ObjectWithUUID } from '@operations/operation-utils';
 import { executeOperations } from '@operations/operations.main';
@@ -39,7 +40,8 @@ import { makeRequest } from '@requests/request-manager';
 import { Character, InventoryItem, Item, ItemMetaCategorySchema, ItemMetaGroupSchema, OperationCharacterResultPackage, Spell, Trait } from '@schemas/content';
 import { Operation } from '@schemas/operations';
 import { getFinalAcValue, getFinalVariableValue } from '@variables/variable-helpers';
-import { labelToVariable } from '@variables/variable-utils';
+import { getVariable } from '@variables/variable-manager';
+import { compileProficiencyType, labelToVariable } from '@variables/variable-utils';
 import { cloneDeep } from 'lodash-es';
 
 import { extractBuildId, fetchPathbuilderDerived, fetchPathbuilderShare, getPathbuilderDerivedFetchError } from './fetch-pathbuilder-share';
@@ -1607,8 +1609,129 @@ async function validatePathbuilderDerived(
     }
   }
 
+
+  // Compare proficiency ranks independently from the final AC/roll totals.
+  // Pathbuilder serializes proficiency rank codes as 0/2/4/6/8 (U/T/E/M/L).
+  // This prevents an unrelated bonus from compensating for missing native training.
+  const proficiencyRanks: Record<number, string> = {
+    0: 'U',
+    2: 'T',
+    4: 'E',
+    6: 'M',
+    8: 'L',
+  };
+  const proficiencyNames: Record<string, string> = {
+    classDC: 'CLASS_DC',
+    perception: 'PERCEPTION',
+    fortitude: 'SAVE_FORT',
+    reflex: 'SAVE_REFLEX',
+    will: 'SAVE_WILL',
+    heavy: 'HEAVY_ARMOR',
+    medium: 'MEDIUM_ARMOR',
+    light: 'LIGHT_ARMOR',
+    unarmored: 'UNARMORED_DEFENSE',
+    advanced: 'ADVANCED_WEAPONS',
+    martial: 'MARTIAL_WEAPONS',
+    simple: 'SIMPLE_WEAPONS',
+    unarmed: 'UNARMED_ATTACKS',
+    acrobatics: 'SKILL_ACROBATICS',
+    arcana: 'SKILL_ARCANA',
+    athletics: 'SKILL_ATHLETICS',
+    crafting: 'SKILL_CRAFTING',
+    deception: 'SKILL_DECEPTION',
+    diplomacy: 'SKILL_DIPLOMACY',
+    intimidation: 'SKILL_INTIMIDATION',
+    medicine: 'SKILL_MEDICINE',
+    nature: 'SKILL_NATURE',
+    occultism: 'SKILL_OCCULTISM',
+    performance: 'SKILL_PERFORMANCE',
+    religion: 'SKILL_RELIGION',
+    society: 'SKILL_SOCIETY',
+    stealth: 'SKILL_STEALTH',
+    survival: 'SKILL_SURVIVAL',
+    thievery: 'SKILL_THIEVERY',
+  };
+
+  for (const [sourceName, sourceRank] of Object.entries(derived.proficiencies ?? {})) {
+    if (typeof sourceRank !== 'number') continue;
+    // These Starfinder-only skills have no PF2e variable and are untrained here.
+    if ((sourceName === 'piloting' || sourceName === 'computers') && sourceRank === 0) continue;
+
+    const variableName = sourceName.startsWith('casting')
+      ? sourceRank === 0 ? null : 'SPELL_ATTACK'
+      : proficiencyNames[sourceName];
+    if (!variableName) {
+      if (sourceRank !== 0) {
+        fatalMismatches.push(
+          `proficiency ${sourceName}: Pathbuilder rank code ${sourceRank} has no native WG mapping`
+        );
+      }
+      continue;
+    }
+
+    const expectedType = proficiencyRanks[sourceRank];
+    const variable = getVariable('CHARACTER', variableName);
+    if (!expectedType) {
+      fatalMismatches.push(`proficiency ${sourceName}: unsupported Pathbuilder rank code ${sourceRank}`);
+      continue;
+    }
+    if (!variable || variable.type !== 'prof') {
+      fatalMismatches.push(`proficiency ${sourceName}: native WG variable ${variableName} is missing`);
+      continue;
+    }
+
+    const actualType = compileProficiencyType(variable.value);
+    if (actualType !== expectedType) {
+      fatalMismatches.push(
+        `proficiency ${sourceName}: Pathbuilder ${expectedType}, WG ${actualType} (${variableName})`
+      );
+    }
+  }
+
+  // These base values are represented directly by native WG variables.
+  // Pathbuilder's speedBonus is included in the final Speed comparison.
+  const baseAttributeVariables: Record<string, string> = {
+    ancestryhp: 'MAX_HEALTH_ANCESTRY',
+    classhp: 'MAX_HEALTH_CLASS_PER_LEVEL',
+    bonushp: 'MAX_HEALTH_BONUS',
+  };
+  for (const [sourceName, sourceValue] of Object.entries(derived.attributes ?? {})) {
+    if (typeof sourceValue !== 'number') continue;
+    const variableName = baseAttributeVariables[sourceName];
+    if (variableName) {
+      const actual = getFinalVariableValue('CHARACTER', variableName).total;
+      if (actual !== sourceValue) {
+        fatalMismatches.push(
+          `attribute ${sourceName}: Pathbuilder ${sourceValue}, WG ${actual} (${variableName})`
+        );
+      }
+    } else if (sourceName === 'speed') {
+      const expected = sourceValue + (typeof derived.attributes?.speedBonus === 'number' ? derived.attributes.speedBonus : 0);
+      const actual = getFinalVariableValue('CHARACTER', 'SPEED').total;
+      if (actual !== expected) {
+        fatalMismatches.push(`attribute speed: Pathbuilder ${expected}, WG ${actual}`);
+      }
+    } else if (sourceValue !== 0) {
+      fatalMismatches.push(
+        `attribute ${sourceName}: non-zero Pathbuilder value ${sourceValue} has no native WG mapping`
+      );
+    }
+  }
+
   const armor = getBestArmor('CHARACTER', character.inventory)?.item;
   if (derived.acTotal?.acTotal !== undefined) {
+    const acParts = getAcParts('CHARACTER', armor);
+    const componentChecks = [
+      ['proficiency', derived.acTotal.acProfBonus, acParts.profBonus],
+      ['Dexterity', derived.acTotal.acAbilityBonus, acParts.dexBonus],
+      ['item', derived.acTotal.acItemBonus, acParts.armorBonus],
+    ] as const;
+    for (const [component, expected, actual] of componentChecks) {
+      if (expected !== undefined && expected !== actual) {
+        fatalMismatches.push(`AC ${component}: Pathbuilder ${expected}, WG ${actual}`);
+      }
+    }
+
     const actualAc = getFinalAcValue('CHARACTER', armor);
     const sourceAc = derived.acTotal.acTotal;
     if (actualAc !== sourceAc) {
@@ -1619,7 +1742,7 @@ async function validatePathbuilderDerived(
       );
       const chassisIsResolved = resolved.feats.some(
         (feat) => labelToVariable(feat.name) === 'REINFORCED_CHASSIS'
-      ) && /automaton\s+chassi/i.test(resolved.armor?.name ?? '');
+      ) && /automaton\\s+chassi/i.test(resolved.armor?.name ?? '');
       const hasUnnamedArmorRuneState =
         !resolved.armor && (resolved.armorPotency > 0 || resolved.armorRunes.length > 0);
       const explanation = reconstructedChassis
