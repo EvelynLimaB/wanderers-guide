@@ -272,6 +272,7 @@ const content = {
         attributeSelect('wizard-boost-3'),
         attributeSelect('wizard-boost-4'),
         { id: 'wizard-unarmored', type: 'adjValue', data: { variable: 'UNARMORED_DEFENSE', value: { value: 'T' } } },
+        { id: 'wizard-class-hp', type: 'adjValue', data: { variable: 'MAX_HEALTH_CLASS_PER_LEVEL', value: 6 } },
       ],
     },
   ],
@@ -279,6 +280,8 @@ const content = {
     {
       id: 2, name: 'Fleshwarp', trait_id: ANCESTRY_TRAIT,
       operations: [
+        { id: 'fleshwarp-ancestry-hp', type: 'adjValue', data: { variable: 'MAX_HEALTH_ANCESTRY', value: 10 } },
+        { id: 'fleshwarp-speed', type: 'setValue', data: { variable: 'SPEED', value: 25 } },
         { id: 'fleshwarp-fixed-con', type: 'adjValue', data: { variable: 'ATTRIBUTE_CON', value: { value: 1 } } },
         attributeSelect('fleshwarp-free'),
       ],
