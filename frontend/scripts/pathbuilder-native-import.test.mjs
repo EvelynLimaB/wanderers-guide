@@ -405,9 +405,24 @@ let completePreflight = await buildCharacter(
 );
 for (let attempt = 0; completePreflight.status === 'selection-required' && attempt < 16; attempt++) {
   const prompt = completePreflight.selection;
-  const candidates = completeArsene.feats.filter((feat) => feat.level === prompt.level);
+  assert.doesNotMatch(
+    prompt.title,
+    /attribute|key ability/i,
+    'attribute and key-ability selectors must resolve automatically from Pathbuilder boosts'
+  );
+  const promptText = `${prompt.title} ${prompt.description ?? ''}`;
+  const candidates = /language/i.test(promptText)
+    ? completeArsene.languages
+    : /skill/i.test(promptText)
+      ? [
+          ...completeArsene.trainedSkills,
+          ...completeArsene.skillIncreases.map((increase) => increase.skill),
+        ]
+      : completeArsene.feats
+          .filter((feat) => feat.level === prompt.level)
+          .map((feat) => feat.name);
   const matches = prompt.options.filter((option) =>
-    candidates.some((feat) => normalizeChoice(feat.name) === normalizeChoice(option.label))
+    candidates.some((name) => normalizeChoice(name) === normalizeChoice(option.label))
   );
   assert.equal(
     matches.length,
