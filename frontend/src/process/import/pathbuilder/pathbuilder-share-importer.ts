@@ -2176,6 +2176,7 @@ async function resolveSelections(
       const skillSelection = isSkillSelection(options, current.selection?.selection);
       const languageSelection = isLanguageSelection(current.selection?.selection);
       const keyAbilitySelection = isKeyAbilitySelection(current.selection?.selection);
+      const specialAttributeSelection = /\bapex\b/i.test(current.selection?.selection?.title ?? '');
       const implicitKeyAbilitySelection =
         attributeSelection &&
         current.path.startsWith('class_') &&
@@ -2203,35 +2204,43 @@ async function resolveSelections(
         .map((feat) => ({ name: feat.name, level: selectionLevel }));
 
       if (attributeSelection) {
-        const isClassAttributeSelection = current.path.startsWith('class_');
-        const isFirstClassAttributeSelection =
-          isClassAttributeSelection && classAttributeSelectionIndex === 0;
-        if (isFirstClassAttributeSelection) {
-          if (resolved.identity.keyAbility) {
-            requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: selectionLevel }];
-          } else if (options.length === 1) {
-            result = options[0];
-          } else {
-            // The key ability was omitted from the share. Leave it unresolved here
-            // so the preflight UI can ask the user rather than aborting the import.
-            requestedSelections = [];
-          }
-        } else if (keyAbilitySelection && resolved.identity.keyAbility) {
-          requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: selectionLevel }];
+        if (specialAttributeSelection) {
+          requestedSelections = getSpecialSelectionsForOperation(
+            current.selection?.selection,
+            selectionLevel,
+            resolved
+          );
         } else {
-          const origin = getAbilityBoostOriginForPath(current.path);
-          if (origin) {
-            const cursorKey = origin + ':' + selectionLevel;
-            const cursor = abilityBoostCursors.get(cursorKey) ?? 0;
-            const candidates = resolved.abilityBoosts.filter(
-              (boost) => boost.origin === origin && boost.level === selectionLevel
-            );
-            const candidate = candidates[cursor];
-            requestedSelections = candidate
-              ? [{ name: pathbuilderAbilityLabel(candidate.ability), level: candidate.level }]
-              : [];
+          const isClassAttributeSelection = current.path.startsWith('class_');
+          const isFirstClassAttributeSelection =
+            isClassAttributeSelection && classAttributeSelectionIndex === 0;
+          if (isFirstClassAttributeSelection) {
+            if (resolved.identity.keyAbility) {
+              requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: selectionLevel }];
+            } else if (options.length === 1) {
+              result = options[0];
+            } else {
+              // The key ability was omitted from the share. Leave it unresolved here
+              // so the preflight UI can ask the user rather than aborting the import.
+              requestedSelections = [];
+            }
+          } else if (keyAbilitySelection && resolved.identity.keyAbility) {
+            requestedSelections = [{ name: pathbuilderAbilityLabel(resolved.identity.keyAbility), level: selectionLevel }];
           } else {
-            requestedSelections = [];
+            const origin = getAbilityBoostOriginForPath(current.path);
+            if (origin) {
+              const cursorKey = origin + ':' + selectionLevel;
+              const cursor = abilityBoostCursors.get(cursorKey) ?? 0;
+              const candidates = resolved.abilityBoosts.filter(
+                (boost) => boost.origin === origin && boost.level === selectionLevel
+              );
+              const candidate = candidates[cursor];
+              requestedSelections = candidate
+                ? [{ name: pathbuilderAbilityLabel(candidate.ability), level: candidate.level }]
+                : [];
+            } else {
+              requestedSelections = [];
+            }
           }
         }
       } else if (skillSelection) {
@@ -2344,6 +2353,22 @@ async function resolveSelections(
           );
         }
       }
+      if (
+        attributeSelection &&
+        !implicitKeyAbilitySelection &&
+        !keyAbilitySelection &&
+        !specialAttributeSelection &&
+        requestedSelections.length === 0
+      ) {
+        throw new Error(
+          `Pathbuilder 1:1 ability boost mapping failed: no source boost matches WG selector at level ${selectionLevel} (${current.path})`
+        );
+      }
+      if (attributeSelection && requestedSelections.length > 0 && !result) {
+        throw new Error(
+          `Pathbuilder 1:1 ability boost mapping failed: WG has no legal option matching "${requestedSelections[0].name}" at level ${selectionLevel} (${current.path})`
+        );
+      }
       const manualSelectionUuid = selectionOverrides[trackingKey] ?? selectionOverrides[current.path];
       if (!result && manualSelectionUuid) {
         result = manualOptions.find((option) => option._select_uuid === manualSelectionUuid) ?? null;
@@ -2422,6 +2447,7 @@ async function resolveSelections(
           !selectionKeyWasResolved &&
           attributeSelection &&
           !keyAbilitySelection &&
+          !specialAttributeSelection &&
           !(current.path.startsWith('class_') && classAttributeSelectionIndex === 1)
         ) {
           const origin = getAbilityBoostOriginForPath(current.path);
