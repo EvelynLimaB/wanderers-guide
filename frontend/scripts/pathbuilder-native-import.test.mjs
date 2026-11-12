@@ -475,6 +475,27 @@ await assert.rejects(
   'the former AC 12 regression must not pass the import test'
 );
 
+// If WG's native class tree omits a current-level boost selector, the import must
+// fail rather than silently create a sheet with fewer boosts than Pathbuilder.
+const missingLevelSevenBoostContent = structuredClone(content);
+missingLevelSevenBoostContent.abilityBlocks = missingLevelSevenBoostContent.abilityBlocks.filter(
+  (block) => block.id !== 6007
+);
+await assert.rejects(
+  buildCharacter(
+    completeArsene,
+    missingLevelSevenBoostContent,
+    new Map(),
+    new Map(),
+    null,
+    [],
+    derived,
+    { selectionOverrides }
+  ),
+  /Pathbuilder 1:1 ability boost mapping failed: levelled:7: expected 1, mapped 0/,
+  'every current-level Pathbuilder boost must be consumed by one distinct WG selector'
+);
+
 await rm(bundleDir, { recursive: true, force: true });
 
 // TDD guard: an unresolved required selection must fail the import instead of becoming a warning
